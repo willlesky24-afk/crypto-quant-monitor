@@ -5,6 +5,7 @@ from data_loader import BinanceDataLoader
 from indicators import TechnicalIndicators
 from volume_profile import VolumeProfile
 from engine import MarketEngine
+from analyzer import MarketAnalyzer
 
 st.set_page_config(
     page_title="Crypto Quant Monitor",
@@ -180,12 +181,30 @@ st.plotly_chart(
 
 
 # ==========================
-# Reporte
+# Reporte Mentor
 # ==========================
 
-st.subheader("🧠 Análisis del mercado")
+analyzer = MarketAnalyzer()
 
-
-st.json(
+mentor = analyzer.generate_summary(
     analysis
 )
+
+
+st.subheader("🧠 Lectura del mercado")
+
+
+st.info(
+    mentor["summary"]
+)
+
+
+st.success(
+    mentor["conclusion"]
+)
+
+
+with st.expander("📊 Datos técnicos"):
+    st.json(
+        analysis
+    )
