@@ -6,6 +6,8 @@ from indicators import TechnicalIndicators
 from volume_profile import VolumeProfile
 from engine import MarketEngine
 from report import MarketReport
+from visuals import score_to_confidence
+from market_zone import get_market_zone
 
 
 st.set_page_config(
@@ -105,8 +107,18 @@ market_report = reporter.generate(
 )
 
 
+confidence = score_to_confidence(
+    market_report["score"]
+)
+
+
+market_zone = get_market_zone(
+    profile
+)
+
+
 # ==========================
-# Métricas
+# Métricas principales
 # ==========================
 
 col1, col2, col3, col4 = st.columns(4)
@@ -131,8 +143,53 @@ col3.metric(
 
 
 col4.metric(
-    "Score",
-    market_report["score"]
+    "Confianza",
+    f"{confidence['emoji']} {confidence['label']}"
+)
+
+
+# ==========================
+# Confianza
+# ==========================
+
+st.subheader("📊 Confianza del modelo")
+
+
+st.progress(
+    confidence["percent"] / 100
+)
+
+
+st.caption(
+    f"{confidence['percent']}% - {confidence['label']}"
+)
+
+
+# ==========================
+# Zona de mercado
+# ==========================
+
+st.subheader("📍 Zona de mercado")
+
+
+z1, z2, z3 = st.columns(3)
+
+
+z1.metric(
+    "POC",
+    f"${market_zone['poc']:,.2f}"
+)
+
+
+z2.metric(
+    "VAH",
+    f"${market_zone['vah']:,.2f}"
+)
+
+
+z3.metric(
+    "VAL",
+    f"${market_zone['val']:,.2f}"
 )
 
 
@@ -204,13 +261,50 @@ st.plotly_chart(
 
 
 # ==========================
-# Reporte Mentor
+# Diagnóstico Inteligente
 # ==========================
 
-st.subheader("🧠 Lectura del mercado")
+st.subheader("🧠 Diagnóstico del mercado")
 
 
 st.info(
+    market_report["state"]
+)
+
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    st.markdown("### 📈 Estructura")
+
+    st.write(
+        market_report["trend_analysis"]
+    )
+
+
+with col2:
+
+    st.markdown("### ⚠️ Riesgo")
+
+    st.write(
+        market_report["risk"]
+    )
+
+
+st.markdown("### 📌 Motivo")
+
+
+st.write(
+    market_report["risk_reason"]
+)
+
+
+st.markdown("### 💡 Lectura")
+
+
+st.write(
     market_report["summary"]
 )
 
@@ -229,3 +323,5 @@ with st.expander("📊 Datos técnicos"):
     st.json(
         analysis
     )
+
+    

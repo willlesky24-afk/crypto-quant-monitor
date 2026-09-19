@@ -1,5 +1,5 @@
-from src.analyzer import MarketAnalyzer
-from src.market_intelligence import MarketIntelligence
+from analyzer import MarketAnalyzer
+from market_intelligence import MarketIntelligence
 
 class MarketReport:
 
