@@ -115,6 +115,11 @@ market_zone = get_market_zone(
 )
 
 
+signal = market_report["signal"]
+
+risk_engine = market_report["risk_engine"]
+
+
 # ==========================
 # Métricas
 # ==========================
@@ -150,9 +155,6 @@ col4.metric(
 # Señal del mercado
 # ==========================
 
-signal = market_report["signal"]
-
-
 st.subheader("📈 Señal del mercado")
 
 
@@ -185,7 +187,52 @@ with col2:
 
     st.markdown("### ⚠️ Riesgos")
 
-    for item in signal["risks"]:
+    if signal["risks"]:
+
+        for item in signal["risks"]:
+
+            st.write(
+                "⚠ " + item
+            )
+
+    else:
+
+        st.write(
+            "Sin riesgos detectados"
+        )
+
+
+# ==========================
+# Gestión de riesgo
+# ==========================
+
+st.subheader("🛡️ Gestión de riesgo")
+
+
+r1, r2 = st.columns(2)
+
+
+with r1:
+
+    st.metric(
+        "Nivel de riesgo",
+        risk_engine["level"]
+    )
+
+
+with r2:
+
+    st.metric(
+        "Confianza ajustada",
+        f"{risk_engine['final_confidence']}%"
+    )
+
+
+if risk_engine["risks"]:
+
+    st.markdown("### Factores de riesgo")
+
+    for item in risk_engine["risks"]:
 
         st.write(
             "⚠ " + item
@@ -210,7 +257,7 @@ st.caption(
 
 
 # ==========================
-# Zona mercado
+# Zona de mercado
 # ==========================
 
 st.subheader("📍 Zona de mercado")

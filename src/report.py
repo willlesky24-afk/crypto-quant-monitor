@@ -2,6 +2,7 @@ from analyzer import MarketAnalyzer
 from market_intelligence import MarketIntelligence
 from alert_engine import AlertEngine
 from signal_engine import SignalEngine
+from risk_engine import RiskEngine
 
 
 class MarketReport:
@@ -16,6 +17,8 @@ class MarketReport:
         self.alert_engine = AlertEngine()
 
         self.signal_engine = SignalEngine()
+
+        self.risk_engine = RiskEngine()
 
 
 
@@ -44,6 +47,12 @@ class MarketReport:
 
 
         signal = self.signal_engine.evaluate(
+            analysis,
+            profile
+        )
+
+
+        risk = self.risk_engine.evaluate(
             analysis,
             profile
         )
@@ -102,7 +111,7 @@ class MarketReport:
 
 
             # ==========================
-            # Alerts
+            # Alert Engine
             # ==========================
 
             "alerts": alerts,
@@ -113,11 +122,18 @@ class MarketReport:
             # Signal Engine
             # ==========================
 
-            "signal": signal
+            "signal": signal,
+
+
+
+            # ==========================
+            # Risk Engine
+            # ==========================
+
+            "risk_engine": risk
 
         }
 
 
         return report
-        
 
