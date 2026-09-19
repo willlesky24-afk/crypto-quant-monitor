@@ -119,9 +119,11 @@ signal = market_report["signal"]
 
 risk_engine = market_report["risk_engine"]
 
+decision = market_report["decision"]
+
 
 # ==========================
-# Métricas
+# Métricas principales
 # ==========================
 
 col1, col2, col3, col4 = st.columns(4)
@@ -152,20 +154,26 @@ col4.metric(
 
 
 # ==========================
-# Señal del mercado
+# Decisión del sistema
 # ==========================
 
-st.subheader("📈 Señal del mercado")
+st.subheader("🎯 Decisión del sistema")
 
 
 st.info(
-    signal["state"]
+    decision["decision"]
 )
 
 
 st.metric(
-    "Confianza de señal",
-    f"{signal['confidence']}%"
+    "Confianza final",
+    f"{decision['confidence']}%"
+)
+
+
+st.write(
+    "Estado del mercado:",
+    decision["market_state"]
 )
 
 
@@ -176,7 +184,7 @@ with col1:
 
     st.markdown("### ✅ Factores positivos")
 
-    for item in signal["positives"]:
+    for item in decision["positives"]:
 
         st.write(
             "✓ " + item
@@ -185,11 +193,11 @@ with col1:
 
 with col2:
 
-    st.markdown("### ⚠️ Riesgos")
+    st.markdown("### ⚠️ Advertencias")
 
-    if signal["risks"]:
+    if decision["warnings"]:
 
-        for item in signal["risks"]:
+        for item in decision["warnings"]:
 
             st.write(
                 "⚠ " + item
@@ -198,8 +206,26 @@ with col2:
     else:
 
         st.write(
-            "Sin riesgos detectados"
+            "Sin advertencias"
         )
+
+
+# ==========================
+# Señal del mercado
+# ==========================
+
+st.subheader("📈 Señal del mercado")
+
+
+st.success(
+    signal["state"]
+)
+
+
+st.metric(
+    "Confianza de señal",
+    f"{signal['confidence']}%"
+)
 
 
 # ==========================
@@ -226,17 +252,6 @@ with r2:
         "Confianza ajustada",
         f"{risk_engine['final_confidence']}%"
     )
-
-
-if risk_engine["risks"]:
-
-    st.markdown("### Factores de riesgo")
-
-    for item in risk_engine["risks"]:
-
-        st.write(
-            "⚠ " + item
-        )
 
 
 # ==========================
