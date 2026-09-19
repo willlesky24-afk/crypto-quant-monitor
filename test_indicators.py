@@ -16,4 +16,13 @@ indicators = TechnicalIndicators()
 df = indicators.calculate_all(df)
 
 
-print(df.tail())
+print(
+    df[
+        [
+            "timestamp",
+            "close",
+            "ema_50",
+            "ema_200"
+        ]
+    ].tail()
+)

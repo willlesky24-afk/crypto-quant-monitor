@@ -72,5 +72,31 @@ class TechnicalIndicators:
         df = self.add_rsi(df)
         df = self.add_atr(df)
         df = self.add_volume_average(df)
+        df = self.add_ema(df)
+
+        return df
+
+
+    def add_ema(
+        self,
+        df: pd.DataFrame,
+        fast_period: int = 50,
+        slow_period: int = 200
+    ):
+        """
+        Calcula medias exponenciales para identificar tendencia.
+        """
+
+        df["ema_50"] = (
+            df["close"]
+            .ewm(span=fast_period, adjust=False)
+            .mean()
+        )
+
+        df["ema_200"] = (
+            df["close"]
+            .ewm(span=slow_period, adjust=False)
+            .mean()
+        )
 
         return df
