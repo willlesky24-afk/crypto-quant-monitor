@@ -5,7 +5,8 @@ from data_loader import BinanceDataLoader
 from indicators import TechnicalIndicators
 from volume_profile import VolumeProfile
 from engine import MarketEngine
-from analyzer import MarketAnalyzer
+from report import MarketReport
+
 
 st.set_page_config(
     page_title="Crypto Quant Monitor",
@@ -25,6 +26,7 @@ symbol = st.sidebar.text_input(
     "BTCUSDT"
 )
 
+
 interval = st.sidebar.selectbox(
     "Temporalidad",
     [
@@ -35,6 +37,7 @@ interval = st.sidebar.selectbox(
     ],
     index=1
 )
+
 
 limit = st.sidebar.slider(
     "Número de velas",
@@ -49,6 +52,7 @@ limit = st.sidebar.slider(
 # ==========================
 
 loader = BinanceDataLoader()
+
 
 df = loader.get_klines(
     symbol=symbol,
@@ -81,9 +85,23 @@ profile = vp.calculate(df)
 
 engine = MarketEngine()
 
+
 analysis = engine.analyze(
     df,
     profile
+)
+
+
+# ==========================
+# Report
+# ==========================
+
+reporter = MarketReport()
+
+
+market_report = reporter.generate(
+    symbol,
+    analysis
 )
 
 
@@ -96,22 +114,25 @@ col1, col2, col3, col4 = st.columns(4)
 
 col1.metric(
     "Precio",
-    f"${analysis['price']:,.2f}"
+    f"${market_report['price']:,.2f}"
 )
+
 
 col2.metric(
     "Tendencia",
-    analysis["trend"]
+    market_report["trend"]
 )
 
+
 col3.metric(
-    "RSI",
-    analysis["rsi"]
+    "Momentum",
+    market_report["momentum"]
 )
+
 
 col4.metric(
     "Score",
-    analysis["score"]
+    market_report["score"]
 )
 
 
@@ -157,10 +178,12 @@ fig.add_hline(
     annotation_text="POC"
 )
 
+
 fig.add_hline(
     y=profile["vah"],
     annotation_text="VAH"
 )
+
 
 fig.add_hline(
     y=profile["val"],
@@ -184,27 +207,25 @@ st.plotly_chart(
 # Reporte Mentor
 # ==========================
 
-analyzer = MarketAnalyzer()
-
-mentor = analyzer.generate_summary(
-    analysis
-)
-
-
 st.subheader("🧠 Lectura del mercado")
 
 
 st.info(
-    mentor["summary"]
+    market_report["summary"]
 )
 
 
 st.success(
-    mentor["conclusion"]
+    market_report["conclusion"]
 )
 
 
+# ==========================
+# Datos técnicos
+# ==========================
+
 with st.expander("📊 Datos técnicos"):
+
     st.json(
         analysis
     )

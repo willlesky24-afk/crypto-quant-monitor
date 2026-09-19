@@ -1,4 +1,4 @@
-from src.analyzer import MarketAnalyzer
+from analyzer import MarketAnalyzer
 
 
 class MarketReport:
