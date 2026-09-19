@@ -50,11 +50,10 @@ limit = st.sidebar.slider(
 
 
 # ==========================
-# Carga de datos
+# Datos
 # ==========================
 
 loader = BinanceDataLoader()
-
 
 df = loader.get_klines(
     symbol=symbol,
@@ -87,7 +86,6 @@ profile = vp.calculate(df)
 
 engine = MarketEngine()
 
-
 analysis = engine.analyze(
     df,
     profile
@@ -99,7 +97,6 @@ analysis = engine.analyze(
 # ==========================
 
 reporter = MarketReport()
-
 
 market_report = reporter.generate(
     symbol,
@@ -150,7 +147,53 @@ col4.metric(
 
 
 # ==========================
-# Confianza
+# Señal del mercado
+# ==========================
+
+signal = market_report["signal"]
+
+
+st.subheader("📈 Señal del mercado")
+
+
+st.info(
+    signal["state"]
+)
+
+
+st.metric(
+    "Confianza de señal",
+    f"{signal['confidence']}%"
+)
+
+
+col1, col2 = st.columns(2)
+
+
+with col1:
+
+    st.markdown("### ✅ Factores positivos")
+
+    for item in signal["positives"]:
+
+        st.write(
+            "✓ " + item
+        )
+
+
+with col2:
+
+    st.markdown("### ⚠️ Riesgos")
+
+    for item in signal["risks"]:
+
+        st.write(
+            "⚠ " + item
+        )
+
+
+# ==========================
+# Confianza modelo
 # ==========================
 
 st.subheader("📊 Confianza del modelo")
@@ -167,7 +210,7 @@ st.caption(
 
 
 # ==========================
-# Zona de mercado
+# Zona mercado
 # ==========================
 
 st.subheader("📍 Zona de mercado")
@@ -284,7 +327,7 @@ st.plotly_chart(
 
 
 # ==========================
-# Diagnóstico Inteligente
+# Diagnóstico
 # ==========================
 
 st.subheader("🧠 Diagnóstico del mercado")
@@ -346,5 +389,4 @@ with st.expander("📊 Datos técnicos"):
     st.json(
         analysis
     )
-
     

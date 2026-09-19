@@ -1,6 +1,7 @@
 from analyzer import MarketAnalyzer
 from market_intelligence import MarketIntelligence
 from alert_engine import AlertEngine
+from signal_engine import SignalEngine
 
 
 class MarketReport:
@@ -13,6 +14,8 @@ class MarketReport:
         self.intelligence = MarketIntelligence()
 
         self.alert_engine = AlertEngine()
+
+        self.signal_engine = SignalEngine()
 
 
 
@@ -35,6 +38,12 @@ class MarketReport:
 
 
         alerts = self.alert_engine.check(
+            analysis,
+            profile
+        )
+
+
+        signal = self.signal_engine.evaluate(
             analysis,
             profile
         )
@@ -96,10 +105,19 @@ class MarketReport:
             # Alerts
             # ==========================
 
-            "alerts": alerts
+            "alerts": alerts,
+
+
+
+            # ==========================
+            # Signal Engine
+            # ==========================
+
+            "signal": signal
 
         }
 
 
         return report
+        
 
