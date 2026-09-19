@@ -1,5 +1,7 @@
 from analyzer import MarketAnalyzer
 from market_intelligence import MarketIntelligence
+from alert_engine import AlertEngine
+
 
 class MarketReport:
 
@@ -10,12 +12,15 @@ class MarketReport:
 
         self.intelligence = MarketIntelligence()
 
+        self.alert_engine = AlertEngine()
+
 
 
     def generate(
         self,
         symbol: str,
-        analysis: dict
+        analysis: dict,
+        profile: dict
     ):
 
 
@@ -26,6 +31,12 @@ class MarketReport:
 
         intelligence = self.intelligence.evaluate(
             analysis
+        )
+
+
+        alerts = self.alert_engine.check(
+            analysis,
+            profile
         )
 
 
@@ -56,14 +67,20 @@ class MarketReport:
             "profile": analysis["profile"],
 
 
+
+            # ==========================
             # Mentor
+            # ==========================
 
             "summary": mentor["summary"],
 
             "conclusion": mentor["conclusion"],
 
 
+
+            # ==========================
             # Intelligence
+            # ==========================
 
             "state": intelligence["state"],
 
@@ -71,7 +88,15 @@ class MarketReport:
 
             "risk_reason": intelligence["risk_reason"],
 
-            "trend_analysis": intelligence["trend_analysis"]
+            "trend_analysis": intelligence["trend_analysis"],
+
+
+
+            # ==========================
+            # Alerts
+            # ==========================
+
+            "alerts": alerts
 
         }
 

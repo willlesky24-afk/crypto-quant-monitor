@@ -103,7 +103,8 @@ reporter = MarketReport()
 
 market_report = reporter.generate(
     symbol,
-    analysis
+    analysis,
+    profile
 )
 
 
@@ -118,7 +119,7 @@ market_zone = get_market_zone(
 
 
 # ==========================
-# Métricas principales
+# Métricas
 # ==========================
 
 col1, col2, col3, col4 = st.columns(4)
@@ -191,6 +192,28 @@ z3.metric(
     "VAL",
     f"${market_zone['val']:,.2f}"
 )
+
+
+# ==========================
+# Alertas
+# ==========================
+
+st.subheader("🚨 Alertas activas")
+
+
+if market_report["alerts"]:
+
+    for alert in market_report["alerts"]:
+
+        st.warning(
+            f"{alert['type']}: {alert['message']}"
+        )
+
+else:
+
+    st.success(
+        "Sin alertas activas"
+    )
 
 
 # ==========================
