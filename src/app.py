@@ -8,6 +8,7 @@ from engine import MarketEngine
 from report import MarketReport
 from visuals import score_to_confidence
 from market_zone import get_market_zone
+from signal_history import SignalHistory
 
 
 st.set_page_config(
@@ -125,7 +126,7 @@ quant_score = market_report["quant_score"]
 
 
 # ==========================
-# Métricas principales
+# Métricas
 # ==========================
 
 col1, col2, col3, col4 = st.columns(4)
@@ -155,6 +156,7 @@ col4.metric(
 )
 
 
+
 # ==========================
 # Quant Score
 # ==========================
@@ -173,9 +175,6 @@ st.info(
 )
 
 
-st.markdown("### 📊 Desglose")
-
-
 for key, value in quant_score["breakdown"].items():
 
     if value >= 0:
@@ -189,6 +188,7 @@ for key, value in quant_score["breakdown"].items():
         st.write(
             f"⚠ {key.capitalize()}: {value}"
         )
+
 
 
 # ==========================
@@ -215,6 +215,57 @@ st.write(
 )
 
 
+
+# ==========================
+# Historial reciente
+# ==========================
+
+st.subheader("📚 Historial reciente")
+
+
+history = SignalHistory()
+
+records = history.get_history(
+    limit=5
+)
+
+
+if records:
+
+    for record in records:
+
+        with st.expander(
+            f"{record[2]} | {record[1]}"
+        ):
+
+            st.write(
+                f"💰 Precio: ${record[3]:,.2f}"
+            )
+
+            st.write(
+                f"📈 Tendencia: {record[4]}"
+            )
+
+            st.write(
+                f"🎯 Decisión: {record[6]}"
+            )
+
+            st.write(
+                f"📊 Quant Score: {record[7]}"
+            )
+
+            st.write(
+                f"🛡️ Riesgo: {record[8]}"
+            )
+
+else:
+
+    st.info(
+        "Sin registros históricos todavía."
+    )
+
+
+
 # ==========================
 # Señal
 # ==========================
@@ -231,6 +282,7 @@ st.metric(
     "Fuerza del setup",
     f"{signal['confidence']}%"
 )
+
 
 
 # ==========================
@@ -258,22 +310,6 @@ with r2:
         f"{risk_engine['final_confidence']}%"
     )
 
-
-# ==========================
-# Confianza modelo
-# ==========================
-
-st.subheader("📊 Confianza del modelo")
-
-
-st.progress(
-    confidence["percent"] / 100
-)
-
-
-st.caption(
-    f"{confidence['percent']}% - {confidence['label']}"
-)
 
 
 # ==========================
@@ -304,6 +340,7 @@ z3.metric(
 )
 
 
+
 # ==========================
 # Alertas
 # ==========================
@@ -324,6 +361,7 @@ else:
     st.success(
         "Sin alertas activas"
     )
+
 
 
 # ==========================
@@ -393,6 +431,7 @@ st.plotly_chart(
 )
 
 
+
 # ==========================
 # Diagnóstico
 # ==========================
@@ -413,6 +452,7 @@ st.write(
 st.success(
     market_report["conclusion"]
 )
+
 
 
 # ==========================

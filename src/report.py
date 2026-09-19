@@ -5,6 +5,8 @@ from signal_engine import SignalEngine
 from risk_engine import RiskEngine
 from decision_engine import DecisionEngine
 from quant_score import QuantScore
+from signal_history import SignalHistory
+
 
 
 class MarketReport:
@@ -25,6 +27,8 @@ class MarketReport:
         self.decision_engine = DecisionEngine()
 
         self.quant_score = QuantScore()
+
+        self.signal_history = SignalHistory()
 
 
 
@@ -74,6 +78,19 @@ class MarketReport:
         quant_score = self.quant_score.calculate(
             analysis,
             signal,
+            risk
+        )
+
+
+        # ==========================
+        # Guardar historial
+        # ==========================
+
+        self.signal_history.save(
+            symbol,
+            analysis,
+            decision,
+            quant_score,
             risk
         )
 
@@ -132,7 +149,7 @@ class MarketReport:
 
 
             # ==========================
-            # Alert Engine
+            # Alertas
             # ==========================
 
             "alerts": alerts,
@@ -140,7 +157,7 @@ class MarketReport:
 
 
             # ==========================
-            # Signal Engine
+            # Señal
             # ==========================
 
             "signal": signal,
@@ -148,7 +165,7 @@ class MarketReport:
 
 
             # ==========================
-            # Risk Engine
+            # Riesgo
             # ==========================
 
             "risk_engine": risk,
@@ -156,7 +173,7 @@ class MarketReport:
 
 
             # ==========================
-            # Decision Engine
+            # Decisión
             # ==========================
 
             "decision": decision,
