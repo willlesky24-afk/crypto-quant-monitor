@@ -4,6 +4,7 @@ from alert_engine import AlertEngine
 from signal_engine import SignalEngine
 from risk_engine import RiskEngine
 from decision_engine import DecisionEngine
+from quant_score import QuantScore
 
 
 class MarketReport:
@@ -22,6 +23,8 @@ class MarketReport:
         self.risk_engine = RiskEngine()
 
         self.decision_engine = DecisionEngine()
+
+        self.quant_score = QuantScore()
 
 
 
@@ -66,6 +69,14 @@ class MarketReport:
             risk,
             intelligence
         )
+
+
+        quant_score = self.quant_score.calculate(
+            analysis,
+            signal,
+            risk
+        )
+
 
 
         report = {
@@ -121,7 +132,7 @@ class MarketReport:
 
 
             # ==========================
-            # Alerts
+            # Alert Engine
             # ==========================
 
             "alerts": alerts,
@@ -129,7 +140,7 @@ class MarketReport:
 
 
             # ==========================
-            # Signal
+            # Signal Engine
             # ==========================
 
             "signal": signal,
@@ -137,7 +148,7 @@ class MarketReport:
 
 
             # ==========================
-            # Risk
+            # Risk Engine
             # ==========================
 
             "risk_engine": risk,
@@ -145,10 +156,18 @@ class MarketReport:
 
 
             # ==========================
-            # Decision
+            # Decision Engine
             # ==========================
 
-            "decision": decision
+            "decision": decision,
+
+
+
+            # ==========================
+            # Quant Score
+            # ==========================
+
+            "quant_score": quant_score
 
         }
 

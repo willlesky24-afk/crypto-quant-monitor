@@ -121,6 +121,8 @@ risk_engine = market_report["risk_engine"]
 
 decision = market_report["decision"]
 
+quant_score = market_report["quant_score"]
+
 
 # ==========================
 # Métricas principales
@@ -154,7 +156,43 @@ col4.metric(
 
 
 # ==========================
-# Decisión del sistema
+# Quant Score
+# ==========================
+
+st.subheader("🎯 Quant Score")
+
+
+st.metric(
+    "Puntuación",
+    f"{quant_score['score']}/100"
+)
+
+
+st.info(
+    quant_score["label"]
+)
+
+
+st.markdown("### 📊 Desglose")
+
+
+for key, value in quant_score["breakdown"].items():
+
+    if value >= 0:
+
+        st.write(
+            f"✓ {key.capitalize()}: +{value}"
+        )
+
+    else:
+
+        st.write(
+            f"⚠ {key.capitalize()}: {value}"
+        )
+
+
+# ==========================
+# Decisión
 # ==========================
 
 st.subheader("🎯 Decisión del sistema")
@@ -177,41 +215,8 @@ st.write(
 )
 
 
-col1, col2 = st.columns(2)
-
-
-with col1:
-
-    st.markdown("### ✅ Factores positivos")
-
-    for item in decision["positives"]:
-
-        st.write(
-            "✓ " + item
-        )
-
-
-with col2:
-
-    st.markdown("### ⚠️ Advertencias")
-
-    if decision["warnings"]:
-
-        for item in decision["warnings"]:
-
-            st.write(
-                "⚠ " + item
-            )
-
-    else:
-
-        st.write(
-            "Sin advertencias"
-        )
-
-
 # ==========================
-# Señal del mercado
+# Señal
 # ==========================
 
 st.subheader("📈 Señal del mercado")
@@ -223,13 +228,13 @@ st.success(
 
 
 st.metric(
-    "Confianza de señal",
+    "Fuerza del setup",
     f"{signal['confidence']}%"
 )
 
 
 # ==========================
-# Gestión de riesgo
+# Riesgo
 # ==========================
 
 st.subheader("🛡️ Gestión de riesgo")
@@ -272,7 +277,7 @@ st.caption(
 
 
 # ==========================
-# Zona de mercado
+# Zona mercado
 # ==========================
 
 st.subheader("📍 Zona de mercado")
@@ -400,38 +405,6 @@ st.info(
 )
 
 
-col1, col2 = st.columns(2)
-
-
-with col1:
-
-    st.markdown("### 📈 Estructura")
-
-    st.write(
-        market_report["trend_analysis"]
-    )
-
-
-with col2:
-
-    st.markdown("### ⚠️ Riesgo")
-
-    st.write(
-        market_report["risk"]
-    )
-
-
-st.markdown("### 📌 Motivo")
-
-
-st.write(
-    market_report["risk_reason"]
-)
-
-
-st.markdown("### 💡 Lectura")
-
-
 st.write(
     market_report["summary"]
 )
@@ -451,4 +424,3 @@ with st.expander("📊 Datos técnicos"):
     st.json(
         analysis
     )
-    
