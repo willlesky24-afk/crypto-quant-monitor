@@ -86,7 +86,33 @@ Validación de cierre:
 - 86% de cobertura total (96%-100% en módulos del motor histórico);
 - Ruff sin advertencias ni errores.
 
-## Siguiente objetivo (Fase 3)
+## Fase 3 — Robust Backtesting Framework
 
-**Robust Backtesting Framework**: motor de simulación de estrategias cuantitativas sobre datasets históricos Parquet, cálculo de métricas de rendimiento (Sharpe, Max Drawdown, Win Rate, Profit Factor) y modelado de costos de ejecución (fees, slippage).
+Estado: **completada e integrada** (Tag: `v1.8-backtesting-framework`).
+
+Objetivos completados:
+
+1. modelos de datos inmutables y contratos de eventos tipados (`SignalEvent`, `OrderEvent`, `TradeResult`, `BacktestReport`);
+2. métricas de rendimiento y riesgo cuantitativo profesional (Win Rate, Profit Factor, Expectancy, Max Drawdown %, $, duración, MFE, MAE, Sharpe, Calmar);
+3. motor de simulación event-driven paso a paso cronológico con modelado de slippage y comisiones de exchange;
+4. orquestador de backtest integrado (`BacktestRunner`) acoplado con `HistoricalDatasetManager` y warm-up causal de indicadores;
+5. pruebas de integración multianual (2023-2025) validando consistencia determinista y reproducibilidad numérica.
+
+Reglas y conclusiones arquitectónicas aprendidas en Fase 3:
+
+- **Cero look-ahead bias**: las señales se generan exclusivamente en el cierre de la vela $T$; la ejecución de órdenes ocurre estrictamente en el precio de apertura de la vela $T+1$ más slippage.
+- **Resolución intra-barra conservadora**: ante escenarios donde el High alcanza el Take Profit y el Low alcanza el Stop Loss dentro de la misma barra, el simulador asume la ejecución del Stop Loss de manera prioritaria.
+- **Warm-up causal indispensable**: para indicadores con ventanas amplias (EMA 200, Volume Profile rodante), el backtest debe comenzar a generar señales únicamente tras completar el calentamiento requerido para prevenir valores vacíos o sesgos iniciales.
+- **Reportes serializables y desacoplados**: `BacktestReport` proporciona método `.to_dict()` completamente serializable a JSON, aislando el motor cuantitativo de interfaces Streamlit o APIs externas.
+
+Validación de cierre:
+
+- 150 pruebas automatizadas 100% offline y deterministas (0 fallos);
+- 90% de cobertura de código global (100% en módulos del backtesting framework);
+- Ruff limpio con 0 errores y 0 advertencias.
+
+## Siguiente objetivo (Fase 4)
+
+**Predictive Market Engine & Strategy Optimization**: modelado probabilístico de escenarios, cálculo de probabilidades de continuación/reversión, optimización paramétrica guiada por métricas cuantitativas y soporte para operaciones SHORT.
+
 

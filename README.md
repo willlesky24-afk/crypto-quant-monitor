@@ -7,19 +7,15 @@ Streamlit.
 
 ## Versión actual
 
-La base funcional es **v1.6 — Signal History**. Incluye:
+La versión actual es **v1.8 — Robust Backtesting Framework** (Tag: `v1.8-backtesting-framework`), construida sobre la arquitectura de monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2) y el framework de backtesting orientado a eventos (Fase 3). Incluye:
 
-- descarga de OHLCV desde la API pública de Binance;
-- RSI, ATR, volumen promedio y EMA 50/200;
-- Volume Profile con POC, VAH y VAL;
-- análisis de mercado, alertas, señal, riesgo y decisión;
-- Quant Score;
-- historial persistente en SQLite;
-- dashboard Streamlit.
-
-La Fase 1 de v1.7 estabiliza esta base con pruebas automatizadas, correcciones
-de consistencia y dependencias inyectables. El motor de backtesting se añadirá
-en fases posteriores.
+- descarga de OHLCV en vivo e histórica desde Binance con validación de integridad;
+- almacenamiento columnar optimizado en Apache Parquet con particionado anual;
+- RSI, ATR, volumen promedio, EMA 50/200 y Volume Profile (POC, VAH, VAL);
+- análisis de mercado, alertas, señal, riesgo, decisión y Quant Score;
+- motor de backtesting cronológico event-driven libre de look-ahead bias;
+- cálculo de métricas institucionales (Win Rate, Profit Factor, Expectancy, Drawdown, MFE, MAE);
+- historial persistente en SQLite con control de migraciones y dashboard Streamlit.
 
 ## Arquitectura v1.6
 
@@ -109,7 +105,45 @@ python scripts/diagnostics/test_engine.py
 - **Descarga Paginada (`HistoricalDataLoader`)**: Paginación en bloques de 1000 velas con control de rate limit, retroceso exponencial y exclusión de velas abiertas.
 - **Gestor Incremental (`HistoricalDatasetManager`)**: Sincronización inteligente que solo descarga las velas faltantes respecto a la caché local.
 
-## Próxima fase (Fase 3)
+## Robust Backtesting Framework v1.8
 
-**Robust Backtesting Framework**: motor de backtesting vectorizado y orientado a eventos, métricas de rendimiento cuantitativas (Sharpe Ratio, Max Drawdown, Calmar Ratio, Win Rate, Profit Factor), simulación de deslizamiento (slippage) y comisiones de exchange.
+La Fase 3 añade un motor de simulación cuantitativa riguroso orientado a eventos, desacoplado de la API y libre de sesgo de anticipación (*look-ahead bias*).
+
+### Características principales
+- **Ejecución estricta $T+1$**: Las señales se evalúan al cierre de la vela $T$; las órdenes se ejecutan en la apertura de $T+1$ aplicando deslizamiento (*slippage*).
+- **Modelado realista de costes**: Soporte de comisiones taker/maker y slippage configurable por operación.
+- **Resolución intra-barra conservadora**: En caso de ambigüedad intra-vela (donde tanto Take Profit como Stop Loss se tocan en la misma barra), se ejecuta prioritariamente el Stop Loss.
+- **Métricas institucionales**: Win Rate, Profit Factor, Expectancy ($ y %), Max Drawdown (% / $ / duración), Max Favorable Excursion (MFE), Max Adverse Excursion (MAE), Sharpe Ratio y Calmar Ratio anualizados.
+- **Warm-up causal de indicadores**: Calentamiento dinámico para asegurar la convergencia de EMA 200, ATR y Volume Profile antes de evaluar señales.
+- **Reportes estructurados**: Serialización completa a JSON / diccionarios para su consumo en reportes o paneles de visualización.
+
+### Arquitectura del Pipeline de Backtesting
+
+```text
+Historical Data
+      ↓
+ParquetStore
+      ↓
+HistoricalDatasetManager
+      ↓
+BacktestRunner
+      ↓
+SignalEngine / RiskEngine / DecisionEngine
+      ↓
+BacktestEngine
+      ↓
+BacktestMetricsCalculator
+      ↓
+BacktestReport
+```
+
+### Cobertura y Calidad
+- **150 pruebas automatizadas**: Cobertura integral 100% offline y determinista.
+- **90% de cobertura global**: 100% de cobertura de líneas y ramas en los módulos críticos del motor (`backtest_models.py`, `backtest_metrics.py`, `backtest_engine.py`, `backtest_runner.py`).
+- **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
+
+## Próxima fase (Fase 4)
+
+**Predictive Market Engine & Strategy Optimization**: Modelado probabilístico de escenarios, cálculo de probabilidades de continuación y reversión, optimización cuantitativa de parámetros TP/SL guiada por MFE/MAE y soporte para posiciones SHORT.
+
 

@@ -150,95 +150,60 @@ Métricas de Calidad y Verificación:
 
 
 
-\---
+---
 
+# FASE 3
 
+## Robust Backtesting Framework
 
-\# FASE 3
+ESTADO:
 
-\# Backtesting Engine
+COMPLETADO (Tag: `v1.8-backtesting-framework`)
 
+Objetivo:
 
+Responder rigurosamente "¿Qué ocurrió después de esta señal?" mediante un motor de simulación histórico cronológico orientado a eventos, desacoplado, libre de look-ahead bias y con modelado de comisiones y slippage.
 
+Commits realizados:
+- `1a54106`: `feat(backtest): add backtest data models, configuration, and event schemas` (`src/backtest_models.py`, `tests/unit/test_backtest_models.py`)
+- `0c6950d`: `feat(backtest): implement trade performance and risk metrics calculator (MFE, MAE, Expectancy, Drawdown)` (`src/backtest_metrics.py`, `tests/unit/test_backtest_metrics.py`)
+- `d2686fa`: `feat(backtest): implement chronological event-driven backtest simulation engine with fee/slippage modeling` (`src/backtest_engine.py`, `tests/unit/test_backtest_engine.py`)
+- `8a6e001`: `feat(backtest): add high-level BacktestRunner integrated with HistoricalDatasetManager` (`src/backtest_runner.py`, `tests/unit/test_backtest_runner.py`)
+- `d709537`: `test(backtest): add end-to-end multi-year backtesting pipeline integration tests` (`tests/integration/test_backtest_pipeline.py`)
 
+Componentes implementados:
 
-OBJETIVO:
+- **Modelos y Esquemas de Eventos (`src/backtest_models.py`)**:
+  - `SignalEvent`: evento de señal generado estrictamente al cierre de la vela $T$.
+  - `OrderEvent`: orden de mercado ejecutada en $Open(T+1)$ con ajuste por deslizamiento.
+  - `TradeResult`: registro inmutable del resultado de la operación (precios de entrada/salida, retornos brutos/netos, MFE, MAE, motivo de salida).
+  - `EquityPoint` y `BacktestReport`: serie temporal de capital y reporte cuantitativo final serializable a diccionario / JSON.
 
+- **Calculadora de Métricas de Rendimiento y Riesgo (`src/backtest_metrics.py`)**:
+  - Métricas básicas y avanzadas: Total Trades, Win Rate, Profit Factor, Expectancy ($ y %).
+  - Métricas de excursión de precio: Max Favorable Excursion (MFE) y Max Adverse Excursion (MAE) individuales y promedio.
+  - Métricas de riesgo y curvas de capital: Max Drawdown en porcentaje, monto absoluto en USD y duración en velas; Sharpe Ratio y Calmar Ratio anualizados.
 
+- **Motor de Simulación Cronológica Event-Driven (`src/backtest_engine.py`)**:
+  - Simulación paso a paso vela a vela sin filtración de datos futuros (zero look-ahead bias).
+  - Ejecución estricta $T+1$: señal generada en cierre de vela $T$, entrada en apertura de $T+1$.
+  - Modelado de costes: comisiones taker/maker y slippage porcentual configurable.
+  - Resolución conservadora intra-barra: en caso de que una vela toque simultáneamente Take Profit y Stop Loss, se asume la ejecución del Stop Loss primero.
+  - Manejo de cierres por límite de horizonte temporal (*max_holding_bars*) o fin de serie.
 
-Responder:
+- **Orquestador Integral (`src/backtest_runner.py`)**:
+  - Integración directa con `HistoricalDatasetManager` y `ParquetStore`.
+  - Ventana causal de calentamiento (*warm-up*) para asegurar estabilidad de indicadores técnicos (EMA 200, ATR, RSI, Volume Profile).
+  - Evaluación desacoplada y secuencial: generación de señales en tiempo real simulado -> simulación de órdenes en motor de backtest -> consolidación en reporte unificado.
 
+Métricas de Calidad y Verificación:
+- 150 pruebas automatizadas offline y deterministas pasando al 100% (0 fallos).
+- 90% de cobertura de código total en el repositorio.
+- 100% de cobertura en los 4 módulos críticos del motor de backtesting (`backtest_models.py`, `backtest_metrics.py`, `backtest_engine.py`, `backtest_runner.py`).
+- Ruff clean (0 errores y 0 advertencias).
+- Validación de pipeline multianual E2E (2023-2025) con pruebas de reproducibilidad numérica y consistencia determinista.
 
-
-
-
-"¿Qué ocurrió después de esta señal?"
-
-
-
-
-
-Crear:
-
-
-
-
-
-\## Signal Outcome Evaluator
-
-
-
-
-
-Medir:
-
-
-
-
-
-\- Movimiento posterior.
-
-\- Tiempo hasta objetivo.
-
-\- Máximo favorable.
-
-\- Máximo adverso.
-
-
-
-
-
-\---
-
-
-
-\## Metrics Engine
-
-
-
-
-
-Calcular:
-
-
-
-
-
-\- Win rate.
-
-\- Loss rate.
-
-\- Profit factor.
-
-\- Expectativa.
-
-\- Drawdown.
-
-
-
-
-
-\---
+---
 
 
 
