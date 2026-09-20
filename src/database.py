@@ -1,6 +1,5 @@
 import sqlite3
 
-
 DATABASE_NAME = "signals.db"
 
 
@@ -8,10 +7,12 @@ DATABASE_NAME = "signals.db"
 class Database:
 
 
-    def __init__(self):
+    def __init__(self, database_name=DATABASE_NAME):
+
+        self.database_name = database_name
 
         self.connection = sqlite3.connect(
-            DATABASE_NAME
+            database_name
         )
 
 
@@ -131,3 +132,28 @@ class Database:
 
 
         return cursor.fetchall()
+
+
+
+    def close(self):
+
+        self.connection.close()
+
+
+
+    def __enter__(self):
+
+        return self
+
+
+
+    def __exit__(
+        self,
+        exc_type,
+        exc_value,
+        traceback
+    ):
+
+        self.close()
+
+        return False

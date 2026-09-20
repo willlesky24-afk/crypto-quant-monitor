@@ -1,210 +1,113 @@
-\# 📊 Crypto Quant Monitor
+# Crypto Quant Monitor
 
+Crypto Quant Monitor es un sistema de análisis cuantitativo para mercados de
+criptomonedas. Combina indicadores técnicos, perfil de volumen, evaluación de
+riesgo, generación de señales y una capa de decisión presentada mediante
+Streamlit.
 
+## Versión actual
 
-\## Descripción
+La base funcional es **v1.6 — Signal History**. Incluye:
 
+- descarga de OHLCV desde la API pública de Binance;
+- RSI, ATR, volumen promedio y EMA 50/200;
+- Volume Profile con POC, VAH y VAL;
+- análisis de mercado, alertas, señal, riesgo y decisión;
+- Quant Score;
+- historial persistente en SQLite;
+- dashboard Streamlit.
 
+La Fase 1 de v1.7 estabiliza esta base con pruebas automatizadas, correcciones
+de consistencia y dependencias inyectables. El motor de backtesting se añadirá
+en fases posteriores.
 
-Crypto Quant Monitor es un sistema de análisis cuantitativo de mercados diseñado para interpretar datos de criptomonedas mediante indicadores técnicos, análisis de volumen, evaluación de riesgo y generación de decisiones inteligentes.
-
-
-
-El objetivo del proyecto es evolucionar hacia un motor cuantitativo capaz de analizar condiciones de mercado, almacenar históricos de señales y posteriormente realizar backtesting y evaluación estadística.
-
-
-
-\---
-
-
-
-\# 🚀 Versión actual
-
-
-
-\## v1.6 — Signal History
-
-
-
-Estado:
-
-
-
-✅ Motor analítico funcional  
-
-✅ Sistema de señales  
-
-✅ Gestión de riesgo  
-
-✅ Sistema de decisión  
-
-✅ Scoring cuantitativo  
-
-✅ Historial de señales  
-
-
-
-\---
-
-
-
-\# 🏗️ Arquitectura del sistema
-
-
+## Arquitectura v1.6
 
 ```text
-
-&#x20;                   Binance API
-
-&#x20;                        |
-
-&#x20;                        v
-
-
-
-&#x20;                Data Loader
-
-
-
-&#x20;                        |
-
-&#x20;                        v
-
-
-
-&#x20;             Technical Indicators
-
-
-
-&#x20;                        |
-
-&#x20;                        v
-
-
-
-&#x20;              Volume Profile
-
-
-
-&#x20;             POC / VAH / VAL
-
-
-
-&#x20;                        |
-
-&#x20;                        v
-
-
-
-&#x20;                 Market Engine
-
-
-
-&#x20;                        |
-
-&#x20;         --------------------------------
-
-
-
-&#x20;         |              |              |
-
-
-
-&#x20;         v              v              v
-
-
-
-&#x20;     Analyzer     Alert Engine   Signal Engine
-
-
-
-
-
-&#x20;                        |
-
-
-
-&#x20;                        v
-
-
-
-&#x20;                   Risk Engine
-
-
-
-
-
-&#x20;                        |
-
-
-
-&#x20;                        v
-
-
-
-&#x20;                Decision Engine
-
-
-
-
-
-&#x20;                        |
-
-
-
-&#x20;                        v
-
-
-
-&#x20;                 Quant Score
-
-
-
-
-
-&#x20;                        |
-
-
-
-&#x20;                        v
-
-
-
-&#x20;                   Report Layer
-
-
-
-
-
-&#x20;                        |
-
-
-
-&#x20;         ----------------------------
-
-
-
-&#x20;         |                          |
-
-
-
-&#x20;         v                          v
-
-
-
-&#x20;  Streamlit Dashboard        Signal History
-
-
-
-
-
-&#x20;                                     |
-
-
-
-&#x20;                                     v
-
-
-
-&#x20;                               SQLite Database
-
+Binance API
+    |
+    v
+Data Loader
+    |
+    +--> Technical Indicators
+    +--> Volume Profile (POC / VAH / VAL)
+              |
+              v
+         Market Engine
+              |
+              v
+         Market Report
+              |
+      +-------+-------------------------------+
+      |       |        |       |              |
+   Analyzer  Alerts   Signal   Risk      Intelligence
+                       |       |
+                       +---+---+
+                           |
+                     Decision Engine
+                           |
+                       Quant Score
+                           |
+                     Signal History
+                           |
+                        SQLite
+```
+
+Streamlit compone este flujo y muestra métricas, alertas, zonas de mercado,
+diagnóstico y el historial reciente.
+
+## Preparación del entorno
+
+Se recomienda usar un Python instalado directamente y no el alias de Microsoft
+Store. Desde la raíz del repositorio:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Para desarrollo y pruebas:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
+## Ejecutar el dashboard
+
+```powershell
+streamlit run src/app.py
+```
+
+La aplicación utiliza `signals.db` en el directorio de ejecución. Este archivo
+es local y está excluido de Git.
+
+## Pruebas y controles de calidad
+
+La suite automatizada es offline: simula la API y utiliza bases SQLite
+temporales.
+
+```powershell
+python -m pytest
+python -m pytest --cov=src --cov-report=term-missing
+python -m ruff check src tests
+```
+
+Los antiguos archivos `test_*.py` de la raíz se conservan como scripts de
+diagnóstico manual, pero no forman parte de la suite de pytest.
+
+## Limitaciones conocidas de v1.6
+
+- analiza principalmente la vela más reciente;
+- no descarga rangos históricos paginados;
+- no define todavía entradas, salidas y costes de una estrategia;
+- el historial actual no contiene todos los datos necesarios para reproducir
+  una señal;
+- no debe interpretarse como asesoría financiera ni como sistema de ejecución.
+
+## Próxima fase
+
+v1.7 incorporará datos históricos deterministas, señales asociadas a velas
+cerradas, evaluación de resultados, simulación de operaciones y métricas de
+backtesting reproducibles.

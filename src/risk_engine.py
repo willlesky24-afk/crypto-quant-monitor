@@ -1,3 +1,19 @@
+try:
+    from .constants import (
+        RISK_HIGH,
+        RISK_LOW,
+        RISK_MEDIUM,
+        VOLUME_ABOVE_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        RISK_HIGH,
+        RISK_LOW,
+        RISK_MEDIUM,
+        VOLUME_ABOVE_AVERAGE,
+    )
+
+
 class RiskEngine:
 
 
@@ -35,7 +51,7 @@ class RiskEngine:
         # Volumen
         # ==========================
 
-        if analysis["volume"] != "Superior al promedio":
+        if analysis["volume"] != VOLUME_ABOVE_AVERAGE:
 
             risk_score += 1
 
@@ -71,15 +87,15 @@ class RiskEngine:
 
         if risk_score >= 3:
 
-            level = "Alto"
+            level = RISK_HIGH
 
         elif risk_score >= 1:
 
-            level = "Medio"
+            level = RISK_MEDIUM
 
         else:
 
-            level = "Bajo"
+            level = RISK_LOW
 
 
 

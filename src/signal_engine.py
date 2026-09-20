@@ -1,3 +1,25 @@
+try:
+    from .constants import (
+        MOMENTUM_POSITIVE,
+        SIGNAL_BULLISH,
+        SIGNAL_MODERATE,
+        SIGNAL_WEAK,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_ABOVE_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        MOMENTUM_POSITIVE,
+        SIGNAL_BULLISH,
+        SIGNAL_MODERATE,
+        SIGNAL_WEAK,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_ABOVE_AVERAGE,
+    )
+
+
 class SignalEngine:
 
 
@@ -13,7 +35,7 @@ class SignalEngine:
 
         # Tendencia
 
-        if analysis["trend"] == "Alcista":
+        if analysis["trend"] == TREND_BULLISH:
 
             score += 1
 
@@ -22,7 +44,7 @@ class SignalEngine:
             )
 
 
-        elif analysis["trend"] == "Bajista":
+        elif analysis["trend"] == TREND_BEARISH:
 
             score -= 1
 
@@ -33,7 +55,7 @@ class SignalEngine:
 
         # Momentum
 
-        if analysis["momentum"] == "Positivo":
+        if analysis["momentum"] == MOMENTUM_POSITIVE:
 
             score += 1
 
@@ -71,7 +93,7 @@ class SignalEngine:
 
         # Volumen
 
-        if analysis["volume"] == "Superior al promedio":
+        if analysis["volume"] == VOLUME_ABOVE_AVERAGE:
 
             score += 1
 
@@ -91,15 +113,15 @@ class SignalEngine:
 
         if score >= 3:
 
-            state = "🟢 Señal alcista"
+            state = SIGNAL_BULLISH
 
         elif score >= 1:
 
-            state = "🟡 Señal moderada"
+            state = SIGNAL_MODERATE
 
         else:
 
-            state = "🔴 Señal débil"
+            state = SIGNAL_WEAK
 
 
 

@@ -1,18 +1,28 @@
-from analyzer import MarketAnalyzer
-from market_intelligence import MarketIntelligence
-from alert_engine import AlertEngine
-from signal_engine import SignalEngine
-from risk_engine import RiskEngine
-from decision_engine import DecisionEngine
-from quant_score import QuantScore
-from signal_history import SignalHistory
+if __package__:
+    from .alert_engine import AlertEngine
+    from .analyzer import MarketAnalyzer
+    from .decision_engine import DecisionEngine
+    from .market_intelligence import MarketIntelligence
+    from .quant_score import QuantScore
+    from .risk_engine import RiskEngine
+    from .signal_engine import SignalEngine
+    from .signal_history import SignalHistory
+else:  # pragma: no cover - exercised by subprocess import compatibility test.
+    from alert_engine import AlertEngine
+    from analyzer import MarketAnalyzer
+    from decision_engine import DecisionEngine
+    from market_intelligence import MarketIntelligence
+    from quant_score import QuantScore
+    from risk_engine import RiskEngine
+    from signal_engine import SignalEngine
+    from signal_history import SignalHistory
 
 
 
 class MarketReport:
 
 
-    def __init__(self):
+    def __init__(self, signal_history=None):
 
         self.analyzer = MarketAnalyzer()
 
@@ -28,7 +38,11 @@ class MarketReport:
 
         self.quant_score = QuantScore()
 
-        self.signal_history = SignalHistory()
+        self.signal_history = (
+            signal_history
+            if signal_history is not None
+            else SignalHistory()
+        )
 
 
 
@@ -91,7 +105,8 @@ class MarketReport:
             analysis,
             decision,
             quant_score,
-            risk
+            risk,
+            signal
         )
 
 

@@ -1,3 +1,27 @@
+try:
+    from .constants import (
+        INTELLIGENCE_HIGH_CONFLUENCE,
+        INTELLIGENCE_INTERESTING,
+        INTELLIGENCE_WEAK,
+        RISK_LOW,
+        RISK_MEDIUM,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_BELOW_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        INTELLIGENCE_HIGH_CONFLUENCE,
+        INTELLIGENCE_INTERESTING,
+        INTELLIGENCE_WEAK,
+        RISK_LOW,
+        RISK_MEDIUM,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_BELOW_AVERAGE,
+    )
+
+
 class MarketIntelligence:
 
 
@@ -12,18 +36,18 @@ class MarketIntelligence:
 
 
         if score >= 4:
-            state = "🟢 Alta confluencia"
+            state = INTELLIGENCE_HIGH_CONFLUENCE
 
         elif score >= 2:
-            state = "🟡 Contexto interesante"
+            state = INTELLIGENCE_INTERESTING
 
         else:
-            state = "🔴 Contexto débil"
+            state = INTELLIGENCE_WEAK
 
 
-        if volume == "Inferior al promedio":
+        if volume == VOLUME_BELOW_AVERAGE:
 
-            risk = "Medio"
+            risk = RISK_MEDIUM
 
             risk_reason = (
                 "El movimiento no está acompañado "
@@ -32,21 +56,21 @@ class MarketIntelligence:
 
         else:
 
-            risk = "Bajo"
+            risk = RISK_LOW
 
             risk_reason = (
                 "El volumen acompaña la estructura actual."
             )
 
 
-        if trend == "Alcista":
+        if trend == TREND_BULLISH:
 
             trend_text = (
                 "La estructura favorece compradores "
                 "mientras el precio mantiene tendencia positiva."
             )
 
-        elif trend == "Bajista":
+        elif trend == TREND_BEARISH:
 
             trend_text = (
                 "La estructura muestra presión vendedora."

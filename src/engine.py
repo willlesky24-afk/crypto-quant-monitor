@@ -1,5 +1,44 @@
 import pandas as pd
 
+try:
+    from .constants import (
+        MOMENTUM_BEARISH_PRESSURE,
+        MOMENTUM_EXTENDED,
+        MOMENTUM_POSITIVE,
+        MOMENTUM_WEAK,
+        PROFILE_ABOVE_VALUE_AREA,
+        PROFILE_BELOW_VALUE_AREA,
+        PROFILE_INSIDE_VALUE_AREA,
+        PROFILE_NO_DATA,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        TREND_SIDEWAYS,
+        VOLATILITY_HIGH,
+        VOLATILITY_LOW,
+        VOLATILITY_MODERATE,
+        VOLUME_ABOVE_AVERAGE,
+        VOLUME_BELOW_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        MOMENTUM_BEARISH_PRESSURE,
+        MOMENTUM_EXTENDED,
+        MOMENTUM_POSITIVE,
+        MOMENTUM_WEAK,
+        PROFILE_ABOVE_VALUE_AREA,
+        PROFILE_BELOW_VALUE_AREA,
+        PROFILE_INSIDE_VALUE_AREA,
+        PROFILE_NO_DATA,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        TREND_SIDEWAYS,
+        VOLATILITY_HIGH,
+        VOLATILITY_LOW,
+        VOLATILITY_MODERATE,
+        VOLUME_ABOVE_AVERAGE,
+        VOLUME_BELOW_AVERAGE,
+    )
+
 
 class MarketEngine:
 
@@ -29,13 +68,13 @@ class MarketEngine:
         # =========================
 
         if price > ema50 > ema200:
-            trend = "Alcista"
+            trend = TREND_BULLISH
 
         elif price < ema50 < ema200:
-            trend = "Bajista"
+            trend = TREND_BEARISH
 
         else:
-            trend = "Lateral"
+            trend = TREND_SIDEWAYS
 
 
         analysis["trend"] = trend
@@ -46,16 +85,16 @@ class MarketEngine:
         # =========================
 
         if rsi >= 70:
-            momentum = "Fuerte pero extendido"
+            momentum = MOMENTUM_EXTENDED
 
         elif rsi >= 50:
-            momentum = "Positivo"
+            momentum = MOMENTUM_POSITIVE
 
         elif rsi >= 30:
-            momentum = "Débil"
+            momentum = MOMENTUM_WEAK
 
         else:
-            momentum = "Presión bajista"
+            momentum = MOMENTUM_BEARISH_PRESSURE
 
 
         analysis["momentum"] = momentum
@@ -71,13 +110,13 @@ class MarketEngine:
 
 
         if atr_percent > 2:
-            volatility = "Alta"
+            volatility = VOLATILITY_HIGH
 
         elif atr_percent > 1:
-            volatility = "Moderada"
+            volatility = VOLATILITY_MODERATE
 
         else:
-            volatility = "Baja"
+            volatility = VOLATILITY_LOW
 
 
         analysis["volatility"] = volatility
@@ -88,10 +127,10 @@ class MarketEngine:
         # =========================
 
         if volume > avg_volume:
-            volume_state = "Superior al promedio"
+            volume_state = VOLUME_ABOVE_AVERAGE
 
         else:
-            volume_state = "Inferior al promedio"
+            volume_state = VOLUME_BELOW_AVERAGE
 
 
         analysis["volume"] = volume_state
@@ -101,7 +140,7 @@ class MarketEngine:
         # Volume Profile
         # =========================
 
-        profile_state = "Sin datos"
+        profile_state = PROFILE_NO_DATA
 
 
         if volume_profile:
@@ -113,17 +152,17 @@ class MarketEngine:
 
             if price > vah:
                 profile_state = (
-                    "Por encima del área de valor"
+                    PROFILE_ABOVE_VALUE_AREA
                 )
 
             elif price < val:
                 profile_state = (
-                    "Por debajo del área de valor"
+                    PROFILE_BELOW_VALUE_AREA
                 )
 
             else:
                 profile_state = (
-                    "Dentro del área de valor"
+                    PROFILE_INSIDE_VALUE_AREA
                 )
 
 
@@ -142,10 +181,10 @@ class MarketEngine:
         score = 0
 
 
-        if trend == "Alcista":
+        if trend == TREND_BULLISH:
             score += 2
 
-        elif trend == "Bajista":
+        elif trend == TREND_BEARISH:
             score -= 2
 
 
@@ -160,7 +199,7 @@ class MarketEngine:
             score += 1
 
 
-        if profile_state == "Dentro del área de valor":
+        if profile_state == PROFILE_INSIDE_VALUE_AREA:
             score += 1
 
 

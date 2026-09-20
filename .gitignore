@@ -1,9 +1,12 @@
 
- .venv/
+.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 logs/
 data/
 .env
 signals.db
- 

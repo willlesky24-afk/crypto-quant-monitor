@@ -1,3 +1,29 @@
+try:
+    from .constants import (
+        MOMENTUM_BEARISH_PRESSURE,
+        MOMENTUM_POSITIVE,
+        PROFILE_ABOVE_VALUE_AREA,
+        PROFILE_BELOW_VALUE_AREA,
+        RISK_LOW,
+        RISK_MEDIUM,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_ABOVE_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        MOMENTUM_BEARISH_PRESSURE,
+        MOMENTUM_POSITIVE,
+        PROFILE_ABOVE_VALUE_AREA,
+        PROFILE_BELOW_VALUE_AREA,
+        RISK_LOW,
+        RISK_MEDIUM,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_ABOVE_AVERAGE,
+    )
+
+
 class QuantScore:
 
 
@@ -17,11 +43,11 @@ class QuantScore:
         # Tendencia
         # ==========================
 
-        if analysis["trend"] == "Alcista":
+        if analysis["trend"] == TREND_BULLISH:
 
             breakdown["trend"] = 25
 
-        elif analysis["trend"] == "Bajista":
+        elif analysis["trend"] == TREND_BEARISH:
 
             breakdown["trend"] = -25
 
@@ -35,11 +61,11 @@ class QuantScore:
         # Momentum
         # ==========================
 
-        if analysis["momentum"] == "Positivo":
+        if analysis["momentum"] == MOMENTUM_POSITIVE:
 
             breakdown["momentum"] = 20
 
-        elif analysis["momentum"] == "Negativo":
+        elif analysis["momentum"] == MOMENTUM_BEARISH_PRESSURE:
 
             breakdown["momentum"] = -20
 
@@ -53,7 +79,7 @@ class QuantScore:
         # Volumen
         # ==========================
 
-        if analysis["volume"] == "Superior al promedio":
+        if analysis["volume"] == VOLUME_ABOVE_AVERAGE:
 
             breakdown["volume"] = 15
 
@@ -67,11 +93,11 @@ class QuantScore:
         # Zona de valor
         # ==========================
 
-        if "Por encima" in analysis["profile"]:
+        if analysis["profile"] == PROFILE_ABOVE_VALUE_AREA:
 
             breakdown["profile"] = 15
 
-        elif "Debajo" in analysis["profile"]:
+        elif analysis["profile"] == PROFILE_BELOW_VALUE_AREA:
 
             breakdown["profile"] = -15
 
@@ -85,11 +111,11 @@ class QuantScore:
         # Riesgo
         # ==========================
 
-        if risk["level"] == "Bajo":
+        if risk["level"] == RISK_LOW:
 
             breakdown["risk"] = 0
 
-        elif risk["level"] == "Medio":
+        elif risk["level"] == RISK_MEDIUM:
 
             breakdown["risk"] = -10
 

@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 class VolumeProfile:
@@ -15,6 +15,29 @@ class VolumeProfile:
         usando distribución de volumen por precio.
         """
 
+        required_columns = {"high", "low", "close", "volume"}
+        missing_columns = required_columns.difference(df.columns)
+
+        if missing_columns:
+            missing = ", ".join(sorted(missing_columns))
+            raise ValueError(f"Faltan columnas requeridas: {missing}")
+
+        if df.empty:
+            raise ValueError("No se puede calcular el perfil con datos vacíos")
+
+        if isinstance(bins, bool) or not isinstance(bins, (int, np.integer)):
+            raise ValueError("bins debe ser un entero mayor o igual a 2")
+
+        if bins < 2:
+            raise ValueError("bins debe ser un entero mayor o igual a 2")
+
+        values = df[["high", "low", "close", "volume"]].to_numpy(
+            dtype=float
+        )
+
+        if not np.isfinite(values).all():
+            raise ValueError("Los precios y el volumen deben ser valores finitos")
+
         prices = (
             df["high"] +
             df["low"] +
@@ -23,6 +46,16 @@ class VolumeProfile:
 
 
         volume = df["volume"]
+
+
+        if prices.min() == prices.max():
+            price = round(float(prices.iloc[0]), 2)
+
+            return {
+                "poc": price,
+                "vah": price,
+                "val": price
+            }
 
 
         price_range = np.linspace(
@@ -35,12 +68,22 @@ class VolumeProfile:
         volume_profile = []
 
 
+        last_interval = len(price_range) - 2
+
+
         for i in range(len(price_range)-1):
 
-            mask = (
-                (prices >= price_range[i]) &
-                (prices < price_range[i+1])
-            )
+            if i == last_interval:
+                mask = (
+                    (prices >= price_range[i]) &
+                    (prices <= price_range[i+1])
+                )
+
+            else:
+                mask = (
+                    (prices >= price_range[i]) &
+                    (prices < price_range[i+1])
+                )
 
             volume_profile.append(
                 volume[mask].sum()

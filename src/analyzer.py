@@ -1,3 +1,21 @@
+try:
+    from .constants import (
+        MOMENTUM_EXTENDED,
+        MOMENTUM_POSITIVE,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_BELOW_AVERAGE,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        MOMENTUM_EXTENDED,
+        MOMENTUM_POSITIVE,
+        TREND_BEARISH,
+        TREND_BULLISH,
+        VOLUME_BELOW_AVERAGE,
+    )
+
+
 class MarketAnalyzer:
 
 
@@ -18,13 +36,13 @@ class MarketAnalyzer:
 
         # Tendencia
 
-        if trend == "Alcista":
+        if trend == TREND_BULLISH:
 
             summary.append(
                 "El mercado mantiene una estructura alcista."
             )
 
-        elif trend == "Bajista":
+        elif trend == TREND_BEARISH:
 
             summary.append(
                 "El mercado presenta una estructura bajista."
@@ -39,14 +57,14 @@ class MarketAnalyzer:
 
         # Momentum
 
-        if momentum == "Fuerte pero extendido":
+        if momentum == MOMENTUM_EXTENDED:
 
             summary.append(
                 "El impulso es positivo, pero el movimiento "
                 "muestra señales de extensión."
             )
 
-        elif momentum == "Positivo":
+        elif momentum == MOMENTUM_POSITIVE:
 
             summary.append(
                 "El momentum acompaña el movimiento actual."
@@ -55,7 +73,7 @@ class MarketAnalyzer:
 
         # Volumen
 
-        if volume == "Inferior al promedio":
+        if volume == VOLUME_BELOW_AVERAGE:
 
             summary.append(
                 "El volumen actual está por debajo del promedio, "

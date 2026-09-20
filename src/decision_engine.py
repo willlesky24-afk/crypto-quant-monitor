@@ -1,3 +1,19 @@
+try:
+    from .constants import (
+        DECISION_FAVORABLE,
+        DECISION_WAIT_CONFIRMATION,
+        DECISION_WEAK_CONTEXT,
+        RISK_LOW,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import (
+        DECISION_FAVORABLE,
+        DECISION_WAIT_CONFIRMATION,
+        DECISION_WEAK_CONTEXT,
+        RISK_LOW,
+    )
+
+
 class DecisionEngine:
 
 
@@ -43,19 +59,19 @@ class DecisionEngine:
         # Decisión final
 
 
-        if confidence >= 80 and risk["level"] == "Bajo":
+        if confidence >= 80 and risk["level"] == RISK_LOW:
 
-            decision = "🟢 Condición favorable"
+            decision = DECISION_FAVORABLE
 
 
         elif confidence >= 60:
 
-            decision = "🟡 Esperar confirmación"
+            decision = DECISION_WAIT_CONFIRMATION
 
 
         else:
 
-            decision = "🔴 Contexto débil"
+            decision = DECISION_WEAK_CONTEXT
 
 
 

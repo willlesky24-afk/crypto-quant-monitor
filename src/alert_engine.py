@@ -1,3 +1,9 @@
+try:
+    from .constants import VOLUME_ABOVE_AVERAGE
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import VOLUME_ABOVE_AVERAGE
+
+
 class AlertEngine:
 
 
@@ -74,7 +80,7 @@ class AlertEngine:
 
         # Volumen
 
-        if volume == "Superior al promedio":
+        if volume == VOLUME_ABOVE_AVERAGE:
 
             alerts.append({
 
