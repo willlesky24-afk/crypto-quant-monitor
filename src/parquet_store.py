@@ -89,6 +89,62 @@ class ParquetStore:
 
         return target_file
 
+    def save_dataset(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        interval: str,
+        partition_by: str = "year",
+        source: str = "binance_public_rest",
+        dataset_version: str = DATASET_SCHEMA_VERSION,
+        extra_manifest_metadata: dict | None = None,
+    ) -> list[Path]:
+        """Saves a multi-candle DataFrame partitioned by year (or single partition)."""
+        if df.empty:
+            return []
+
+        prepared = df.copy()
+        if "timestamp" in prepared.columns:
+            prepared["timestamp"] = pd.to_datetime(prepared["timestamp"], utc=True)
+            prepared = prepared.sort_values("timestamp").reset_index(drop=True)
+
+        saved_files = []
+        if partition_by == "year" and "timestamp" in prepared.columns:
+            years = prepared["timestamp"].dt.year.unique()
+            for yr in sorted(years):
+                sub_df = prepared[prepared["timestamp"].dt.year == yr].copy()
+                path = self.save_partition(
+                    df=sub_df,
+                    symbol=symbol,
+                    interval=interval,
+                    partition_name=f"{yr}.parquet",
+                    source=source,
+                    dataset_version=dataset_version,
+                )
+                saved_files.append(path)
+        else:
+            path = self.save_partition(
+                df=prepared,
+                symbol=symbol,
+                interval=interval,
+                partition_name="all.parquet",
+                source=source,
+                dataset_version=dataset_version,
+            )
+            saved_files.append(path)
+
+        if extra_manifest_metadata:
+            manifest = self.read_manifest(symbol, interval)
+            if manifest:
+                manifest.setdefault("extra_metadata", {}).update(extra_manifest_metadata)
+                self._write_manifest(symbol, interval, manifest)
+
+        return saved_files
+
+    # Aliases for API convenience
+    write_dataset = save_dataset
+    get_manifest = read_manifest
+
     def _update_manifest_after_save(
         self,
         symbol: str,
@@ -113,6 +169,7 @@ class ParquetStore:
                 "latest_timestamp": None,
                 "total_candles": 0,
                 "partitions": {},
+                "extra_metadata": {},
             }
 
         earliest = (
@@ -129,7 +186,7 @@ class ParquetStore:
         manifest["dataset_version"] = dataset_version
         manifest["source"] = source
         manifest["last_updated_at"] = now_iso
-        manifest["partitions"][partition_file] = {
+        manifest.setdefault("partitions", {})[partition_file] = {
             "rows": len(df_partition),
             "earliest_timestamp": earliest,
             "latest_timestamp": latest,
@@ -215,3 +272,6 @@ class ParquetStore:
                             }
                         )
         return datasets
+
+    read_dataset = load_dataset
+    list_datasets = list_available_datasets
