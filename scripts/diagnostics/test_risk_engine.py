@@ -1,5 +1,6 @@
-from src.risk_engine import RiskEngine
+import _bootstrap  # noqa: F401
 
+from src.risk_engine import RiskEngine
 
 analysis = {
 

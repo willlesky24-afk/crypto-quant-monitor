@@ -1,6 +1,6 @@
+import _bootstrap  # noqa: F401
+
 from src.signal_history import SignalHistory
-
-
 
 analysis = {
 

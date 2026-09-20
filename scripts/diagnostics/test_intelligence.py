@@ -1,5 +1,6 @@
-from src.market_intelligence import MarketIntelligence
+import _bootstrap  # noqa: F401
 
+from src.market_intelligence import MarketIntelligence
 
 analysis = {
 

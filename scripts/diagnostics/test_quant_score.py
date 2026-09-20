@@ -1,5 +1,6 @@
-from src.quant_score import QuantScore
+import _bootstrap  # noqa: F401
 
+from src.quant_score import QuantScore
 
 analysis = {
 

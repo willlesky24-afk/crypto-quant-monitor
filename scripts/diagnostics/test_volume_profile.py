@@ -1,6 +1,7 @@
+import _bootstrap  # noqa: F401
+
 from src.data_loader import BinanceDataLoader
 from src.volume_profile import VolumeProfile
-
 
 loader = BinanceDataLoader()
 

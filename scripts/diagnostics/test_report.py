@@ -1,5 +1,6 @@
-from src.report import MarketReport
+import _bootstrap  # noqa: F401
 
+from src.report import MarketReport
 
 analysis = {
 

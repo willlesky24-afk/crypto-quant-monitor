@@ -1,5 +1,6 @@
-from src.decision_engine import DecisionEngine
+import _bootstrap  # noqa: F401
 
+from src.decision_engine import DecisionEngine
 
 signal = {
 

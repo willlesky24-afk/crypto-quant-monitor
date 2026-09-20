@@ -1,5 +1,6 @@
-from src.analyzer import MarketAnalyzer
+import _bootstrap  # noqa: F401
 
+from src.analyzer import MarketAnalyzer
 
 analysis = {
     "trend": "Alcista",

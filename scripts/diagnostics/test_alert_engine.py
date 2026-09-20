@@ -1,5 +1,6 @@
-from src.alert_engine import AlertEngine
+import _bootstrap  # noqa: F401
 
+from src.alert_engine import AlertEngine
 
 analysis = {
 
