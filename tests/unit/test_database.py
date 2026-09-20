@@ -20,6 +20,8 @@ def make_database(path: Path) -> Database:
 def signal_row(index: int) -> dict:
     return {
         "timestamp": f"2025-01-01 00:00:0{index}",
+        "candle_timestamp": f"2025-01-01 00:00:0{index}",
+        "timeframe": "1h",
         "symbol": "BTCUSDT",
         "price": 100.0 + index,
         "trend": "Alcista",
@@ -38,13 +40,14 @@ def test_database_uses_injected_path_and_honors_recent_limit(tmp_path: Path):
             db.insert_signal(signal_row(index))
         rows = db.get_recent_signals(limit=2)
         assert len(rows) == 2
-        assert [row[3] for row in rows] == [102.0, 101.0]
+        # In new schema: index 4 is price, index 3 is candle_timestamp
+        assert [row[4] for row in rows] == [102.0, 101.0]
         assert db_path.exists()
     finally:
         db.connection.close()
 
 
-def test_database_schema_is_v16_compatible(tmp_path: Path):
+def test_database_schema_has_quant_integrity_fields(tmp_path: Path):
     db = make_database(tmp_path / "schema.db")
     try:
         columns = [
@@ -53,15 +56,41 @@ def test_database_schema_is_v16_compatible(tmp_path: Path):
         ]
         assert columns == [
             "id",
-            "timestamp",
             "symbol",
+            "timeframe",
+            "candle_timestamp",
             "price",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
             "trend",
             "signal",
             "decision",
             "quant_score",
             "risk",
+            "created_at",
+            "is_legacy",
         ]
+    finally:
+        db.connection.close()
+
+
+def test_database_enforces_idempotency_unique_constraint(tmp_path: Path):
+    db = make_database(tmp_path / "idempotency.db")
+    try:
+        row = signal_row(1)
+        # First insert succeeds
+        first_inserted = db.insert_signal(row)
+        assert first_inserted is True
+
+        # Second insert with same (symbol, timeframe, candle_timestamp) is ignored
+        second_inserted = db.insert_signal(row)
+        assert second_inserted is False
+
+        rows = db.get_recent_signals(limit=10)
+        assert len(rows) == 1
     finally:
         db.connection.close()
 
@@ -79,3 +108,4 @@ def test_database_context_manager_closes_connection(tmp_path: Path):
         pass
     else:
         raise AssertionError("Database.__exit__ debe cerrar la conexión")
+

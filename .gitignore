@@ -3,6 +3,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.pytest_temp/
 .ruff_cache/
 .coverage
 htmlcov/
@@ -10,3 +11,5 @@ logs/
 data/
 .env
 signals.db
+*.bak
+

@@ -36,9 +36,28 @@ def test_history_persists_real_signal_separately_from_decision(
             {"score": 55},
             {"level": "Medio"},
             signal=signal,
+            timeframe="4h",
+            candle_timestamp="2026-01-01 12:00:00",
         )
         assert saved["signal"] == signal["state"]
         assert saved["decision"] == decision["decision"]
+        assert saved["timeframe"] == "4h"
+        assert saved["candle_timestamp"] == "2026-01-01 12:00:00"
+        assert saved["inserted"] is True
+        assert len(history.get_history()) == 1
+
+        # Second save with exact same candle_timestamp and timeframe -> ignored (inserted=False)
+        saved_duplicate = history.save(
+            "BTCUSDT",
+            analysis_factory(),
+            decision,
+            {"score": 55},
+            {"level": "Medio"},
+            signal=signal,
+            timeframe="4h",
+            candle_timestamp="2026-01-01 12:00:00",
+        )
+        assert saved_duplicate["inserted"] is False
         assert len(history.get_history()) == 1
     finally:
         history.db.connection.close()
@@ -56,6 +75,8 @@ def test_legacy_save_signature_remains_valid(tmp_path, analysis_factory):
             {"level": "Medio"},
         )
         assert saved["decision"] == decision["decision"]
+        assert saved["timeframe"] == "1h"
+        assert saved["inserted"] is True
     finally:
         history.db.connection.close()
 
@@ -85,3 +106,4 @@ def test_history_rejects_database_and_database_name_together(tmp_path):
             raise AssertionError("Debe rechazar dos fuentes de base simultáneas")
     finally:
         database.close()
+
