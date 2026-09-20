@@ -209,48 +209,42 @@ Métricas de Calidad y Verificación:
 
 \# FASE 4
 
-\# Predictive Market Engine
+## Predictive Market Engine & Strategy Optimization
 
+ESTADO:
+COMPLETADO ✅
 
+Objetivo:
+Evolucionar desde el análisis descriptivo hacia una arquitectura probabilística causal y optimización empírica de parámetros sin look-ahead bias ni overfitting.
 
+Componentes Implementados:
+- **Aceleración de Volume Profile**: Vectorización con `np.histogram` alcanzando de 4x a 9x de aceleración (`VolumeProfile.calculate`).
+- **Soporte Bidireccional y Futuros Perpetuos**: Posiciones LONG/SHORT, comisiones de perpetuos (`MarketType.PERP`) y funding fees de 8h (`src/backtest_engine.py`).
+- **Clasificador Causal de Regímenes de Mercado (`src/regime_classifier.py`)**: Identificación determinista en vela $T$ de `TRENDING_BULL`, `TRENDING_BEAR`, `RANGING_CONSOLIDATION`, `HIGH_VOLATILITY_EXPANSION`.
+- **Motor Predictivo de Escenarios (`src/predictive_engine.py`)**: Estimación empírica de $P(\text{continuation})$ y $P(\text{reversal})$ con suavizado de Laplace y cálculo ponderado de `PredictiveScore` $\in [0, 1]$.
+- **Optimizador Empírico de Estrategias (`src/strategy_optimizer.py`)**: Análisis de distribución MFE/MAE, calibración de TP/SL por régimen, Walk-Forward Validation (TRAIN: 2023-2024 vs VALIDATION: 2025) y controles anti-overfitting.
+- **Capa de Decisión Mejorada (`src/decision_engine.py`)**: Ponderación adaptativa ($W_{\text{tech}} = 0.60$, $W_{\text{pred}} = 0.40$), asignación LONG/SHORT y compatibilidad legacy total (`DecisionResult`).
+- **Integración de Backtesting E2E (`src/backtest_runner.py`)**: Orquestación de pipeline predictivo multianual sobre datasets Parquet.
 
+Commits Realizados:
+- `e27d103` perf(volume-profile): profile and optimize Volume Profile calculation with vectorized binning
+- `075ab1a` feat(backtest): implement SHORT positions, perpetual futures fees, and funding rate modeling
+- `e839eaa` feat(regime): implement market regime classifier (trend, range, volatility expansion)
+- `ca97f72` feat(predictive): implement predictive market engine and conditional probability scoring
+- `72e46a1` feat(optimizer): implement MFE/MAE empirical parameter optimizer with walk-forward validation
+- `0456802` feat(strategy): implement predictive-enhanced strategy decision logic
+- `83fe25d` test(integration): create end-to-end predictive backtest pipeline validation
 
-OBJETIVO:
-
-
-
-
-
-Pasar de análisis descriptivo a probabilístico.
-
-
-
-
-
-Crear:
-
-
-
-
-
-\- Probabilidad de continuación.
-
-\- Probabilidad de reversión.
-
-\- Zonas futuras.
-
-\- Escenarios.
-
-
-
-
-
-\---
+Métricas de Calidad y Verificación:
+- 204 pruebas automatizadas offline y deterministas pasando al 100% (0 fallos).
+- 92% de cobertura de código global (100% en módulos del backtesting framework y módulos optimizados).
+- Ruff clean (0 errores y 0 advertencias).
+- Validación de pipeline multianual E2E (2023-2025) con pruebas de no-lookahead bias y determinismo.
+-
 
 
 
 \# FASE 5
-
 \# Notification System
 
 

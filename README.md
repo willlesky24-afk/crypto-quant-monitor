@@ -7,13 +7,17 @@ Streamlit.
 
 ## Versión actual
 
-La versión actual es **v1.8 — Robust Backtesting Framework** (Tag: `v1.8-backtesting-framework`), construida sobre la arquitectura de monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2) y el framework de backtesting orientado a eventos (Fase 3). Incluye:
+La versión actual es **v1.9 — Predictive Market Engine & Strategy Optimization** (Tag: `v1.9-predictive-market-engine`), construida sobre la arquitectura del monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2) y el framework de backtesting orientado a eventos (Fase 3). Incluye:
 
 - descarga de OHLCV en vivo e histórica desde Binance con validación de integridad;
 - almacenamiento columnar optimizado en Apache Parquet con particionado anual;
-- RSI, ATR, volumen promedio, EMA 50/200 y Volume Profile (POC, VAH, VAL);
+- RSI, ATR, volumen promedio, EMA 50/200 y Volume Profile vectorizado de alta velocidad (`np.histogram`);
 - análisis de mercado, alertas, señal, riesgo, decisión y Quant Score;
-- motor de backtesting cronológico event-driven libre de look-ahead bias;
+- motor de backtesting cronológico event-driven libre de look-ahead bias con soporte LONG/SHORT y contratos perpetuos;
+- clasificación causal de regímenes de mercado (`RegimeClassifier`);
+- capa probabilística y estimación condicional de escenarios (`PredictiveEngine`);
+- optimización empírica de parámetros TP/SL basada en MFE/MAE con Walk-Forward Validation (`StrategyOptimizer`);
+- capa de decisión adaptativa (`Enhanced DecisionEngine`) con trazabilidad completa (`DecisionResult`);
 - cálculo de métricas institucionales (Win Rate, Profit Factor, Expectancy, Drawdown, MFE, MAE);
 - historial persistente en SQLite con control de migraciones y dashboard Streamlit.
 
@@ -142,8 +146,27 @@ BacktestReport
 - **90% de cobertura global**: 100% de cobertura de líneas y ramas en los módulos críticos del motor (`backtest_models.py`, `backtest_metrics.py`, `backtest_engine.py`, `backtest_runner.py`).
 - **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
 
-## Próxima fase (Fase 4)
+## Predictive Market Engine & Strategy Optimization (v1.9)
+ 
+La Fase 4 expande el sistema incorporando análisis de contexto causal, estimación probabilística de escenarios y calibración empírica de parámetros de riesgo.
 
-**Predictive Market Engine & Strategy Optimization**: Modelado probabilístico de escenarios, cálculo de probabilidades de continuación y reversión, optimización cuantitativa de parámetros TP/SL guiada por MFE/MAE y soporte para posiciones SHORT.
+### Características principales
+- **Clasificador causal de regímenes (`RegimeClassifier`)**: Detección determinista de regímenes de mercado (`TRENDING_BULL`, `TRENDING_BEAR`, `RANGING_CONSOLIDATION`, `HIGH_VOLATILITY_EXPANSION`) evaluada estrictamente en $t \le T$.
+- **Motor probabilístico (`PredictiveEngine`)**: Estimación empírica de probabilidades condicionales de continuación y reversión mediante suavizado de Laplace y `PredictiveScore` $\in [0, 1]$.
+- **Soporte bidireccional y futuros perpetuos**: Simulación completa de operaciones LONG y SHORT, comisiones de contratos perpetuos (`MarketType.PERP`) y ciclos de financiación (*funding rate* de 8h).
+- **Optimización paramétrica MFE/MAE (`StrategyOptimizer`)**: Calibración dinámica de Take Profit y Stop Loss guiada por las distribuciones históricas de excursión máxima favorable (MFE) y adversa (MAE).
+- **Validación Walk-Forward**: División causal obligatoria In-Sample (TRAIN: 2023-2024) y Out-of-Sample (VALIDATION: 2025) para prevenir sobreajuste (*overfitting*).
+- **Capa de decisión mejorada (`Enhanced DecisionEngine`)**: Ponderación adaptativa configurable ($W_{\text{tech}} = 0.60, W_{\text{pred}} = 0.40$), filtrado preventivo contra tendencia y compatibilidad legacy retroactiva bit a bit.
+- **Pipeline E2E validado**: Integración multianual fluida desde Parquet hasta el reporte final del backtest.
+
+### Cobertura y Calidad
+- **204 pruebas automatizadas**: Cobertura integral 100% offline y determinista.
+- **92% de cobertura global**: 100% en módulos del framework de backtesting y 98%-100% en los nuevos componentes predictivos y de optimización.
+- **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
+
+## Próxima fase (Fase 5)
+
+**Notification System & Live Streaming**: Sistema de alertas automáticas multicanal (Discord / Telegram), streaming continuo en tiempo real vía WebSocket y panel interactivo avanzado de métricas de backtesting en Streamlit.
+
 
 

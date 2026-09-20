@@ -111,8 +111,32 @@ Validación de cierre:
 - 90% de cobertura de código global (100% en módulos del backtesting framework);
 - Ruff limpio con 0 errores y 0 advertencias.
 
-## Siguiente objetivo (Fase 4)
+## Fase 4 — Predictive Market Engine & Strategy Optimization
 
-**Predictive Market Engine & Strategy Optimization**: modelado probabilístico de escenarios, cálculo de probabilidades de continuación/reversión, optimización paramétrica guiada por métricas cuantitativas y soporte para operaciones SHORT.
+Estado: **completada e integrada** (Tag: `v1.9-predictive-market-engine`).
+
+Estructura Arquitectónica Actual:
+- **Capa descriptiva**: `MarketAnalyzer`, `MarketReport`, `QuantScore`.
+- **Capa contextual**: `RegimeClassifier` (`TRENDING_BULL`, `TRENDING_BEAR`, `RANGING_CONSOLIDATION`, `HIGH_VOLATILITY_EXPANSION`).
+- **Capa probabilística**: `PredictiveEngine` (estimación causal de $P(\text{continuation})$ y $P(\text{reversal})$ con suavizado de Laplace).
+- **Capa de optimización**: `StrategyOptimizer` (calibración empírica MFE/MAE de TP/SL, Walk-Forward Validation TRAIN 2023-2024 vs VALIDATION 2025).
+- **Capa de decisión**: `Enhanced DecisionEngine` (fusión adaptativa $W_{\text{tech}}=0.60, W_{\text{pred}}=0.40$, soporte LONG/SHORT, `DecisionResult`).
+- **Capa de simulación y backtest**: `BacktestEngine`, `BacktestRunner`, `BacktestMetricsCalculator`.
+
+Reglas y conclusiones arquitectónicas aprendidas en Fase 4:
+- **Separación analítica estricta**: `PredictiveEngine` no reemplaza ni modifica el análisis técnico existente de $t \le T$; actúa como una capa probabilística desacoplada proyectando escenarios $t > T$.
+- **Optimización causal fuera de muestra**: La calibración de parámetros se realiza estrictamente en el período de entrenamiento y se valida fuera de muestra, evitando el sesgo de sobreajuste (*overfitting*).
+- **Soporte bidireccional y derivados**: Modelado completo de posiciones SHORT, contratos perpetuos (`MarketType.PERP`) y liquidación periódica de comisiones de financiamiento (*funding fees*).
+- **Eficiencia computacional**: Volume Profile optimizado mediante `np.histogram` alcanzando de 4x a 9x de aceleración conservando estricta identidad matemática (POC, VAH, VAL).
+
+Validación de cierre:
+- 204 pruebas automatizadas 100% offline y deterministas (0 fallos);
+- 92% de cobertura de código global (100% en módulos del backtesting framework y módulos optimizados);
+- Ruff limpio con 0 errores y 0 advertencias.
+
+## Siguiente objetivo (Fase 5)
+
+**Notification System & Live Streaming**: Sistema de alertas automáticas multicanal (Discord / Telegram), streaming en tiempo real vía WebSocket y panel interactivo de backtesting en Streamlit.
+
 
 

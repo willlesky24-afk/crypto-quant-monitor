@@ -8,7 +8,10 @@
 
 Versión actual:
 
-v1.8 Backtesting Framework (Tag: v1.8-backtesting-framework)
+v1.9 Predictive Market Engine & Strategy Optimization (Tag: v1.9-predictive-market-engine)
+
+Estado:
+FASE 4 COMPLETADA ✅
 
 
 
@@ -165,9 +168,7 @@ El sistema actualmente cuenta con:
 
 
 
-## Pipeline de Backtesting y Validación Histórica
-
-
+## Pipeline de Backtesting y Validación Histórica (Fase 4)
 
 ```text
 Historical Data
@@ -176,16 +177,26 @@ ParquetStore
       ↓
 HistoricalDatasetManager
       ↓
+RegimeClassifier
+      ↓
+PredictiveEngine
+      ↓
+StrategyOptimizer
+      ↓
+Enhanced DecisionEngine
+      ↓
 BacktestRunner
-      ↓
-SignalEngine / RiskEngine / DecisionEngine
-      ↓
-BacktestEngine
-      ↓
-BacktestMetricsCalculator
       ↓
 BacktestReport
 ```
+
+### Principios Fundamentales Mantenidos
+- **Zero look-ahead bias**: Las señales se calculan estrictamente con datos disponibles en el cierre de la vela $T$.
+- **Ejecución en Open($T+1$)**: Simulación de órdenes en apertura de la vela siguiente con deslizamiento (*slippage*).
+- **Walk-forward validation**: Parámetros calibrados exclusivamente en período de entrenamiento (2023-2024) y evaluados fuera de muestra en validación (2025).
+- **Separación de capas**: Desacoplamiento estricto entre análisis descriptivo (`MarketReport`/`QuantScore`) y la capa probabilística (`PredictiveEngine`).
+- **Determinismo reproducible**: Mismos datos históricos producen idénticas métricas, órdenes y reportes serializables en JSON.
+
 
 
 
@@ -280,15 +291,26 @@ Fase 3 Robust Backtesting Framework completada:
 
 ---
 
+Fase 4 Predictive Market Engine & Strategy Optimization completada:
+- Aceleración vectorizada de Volume Profile mediante `np.histogram` (4x-9x de velocidad manteniendo 100% identidad matemática).
+- Soporte para posiciones SHORT, comisiones de futuros perpetuos (`MarketType.PERP`) y ciclos de financiación (*funding fees* cada 8h).
+- Clasificador causal de regímenes de mercado (`RegimeClassifier`): `TRENDING_BULL`, `TRENDING_BEAR`, `RANGING_CONSOLIDATION`, `HIGH_VOLATILITY_EXPANSION`.
+- Motor predictivo desacoplado (`PredictiveEngine`) con cálculo empírico de probabilidades condicionales de continuación/reversión y `PredictiveScore` en $[0, 1]$.
+- Optimizador empírico de parámetros de riesgo (`StrategyOptimizer`) basado en distribución MFE/MAE con Walk-Forward Validation (TRAIN: 2023-2024 vs VALIDATION: 2025) y protecciones anti-overfitting.
+- Capa de decisión mejorada (`Enhanced DecisionEngine`) con ponderación adaptativa ($W_{\text{tech}} = 0.60$, $W_{\text{pred}} = 0.40$), asignación LONG/SHORT y compatibilidad retroactiva legacy certificada.
+- Validación de pipeline multianual E2E en `test_predictive_backtest_pipeline.py`.
+- Cobertura global: 92%, 204 tests automatizados pasando al 100%, Ruff limpio con 0 errores y 0 advertencias.
+
+---
+
 # 6. PROBLEMAS PENDIENTES / PRÓXIMAS FASES
 
 Actualmente:
 
-1. Optimización iterativa de Volume Profile sobre ventanas rodantes de muy largo plazo (oportunidad de aceleración en memoria / vectorización).
-2. Soporte para estrategias SHORT en el motor de backtesting (actualmente LONG-only).
-3. Motor probabilístico y predictivo de escenarios (Fase 4: Predictive Market Engine).
-4. Optimización de parámetros de Take Profit / Stop Loss basada en métricas de expectativa y MFE/MAE.
-5. Sistema de notificaciones automáticas y multicanal (Fase 5: Notification System).
+1. Sistema de notificaciones automáticas y multicanal (Fase 5: Notification System - Discord / Telegram).
+2. Panel visual interactivo de métricas de backtesting en Streamlit (curvas de capital, drawdown submarino, distribución MFE/MAE).
+3. Integración en tiempo real de WebSocket con Binance para streaming continuo de velas.
+
 
 ---
 
