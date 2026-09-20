@@ -100,14 +100,25 @@ class BacktestEngine:
                     actual_capital_invested = allocated_cash - fee_entry
                     size_units = actual_capital_invested / entry_price
 
-                    # Multipliers based on signal ATR
+                    # Multipliers based on signal ATR (custom signal multiples or config defaults)
                     atr_val = max(pending_signal.atr, entry_price * 0.005)  # Safe fallback if ATR is 0
+                    tp_mult = (
+                        pending_signal.tp_atr_multiple
+                        if getattr(pending_signal, "tp_atr_multiple", None) is not None
+                        else self.config.tp_atr_multiple
+                    )
+                    sl_mult = (
+                        pending_signal.sl_atr_multiple
+                        if getattr(pending_signal, "sl_atr_multiple", None) is not None
+                        else self.config.sl_atr_multiple
+                    )
+
                     if not is_short:
-                        tp_price = entry_price + (self.config.tp_atr_multiple * atr_val)
-                        sl_price = entry_price - (self.config.sl_atr_multiple * atr_val)
+                        tp_price = entry_price + (tp_mult * atr_val)
+                        sl_price = entry_price - (sl_mult * atr_val)
                     else:
-                        tp_price = entry_price - (self.config.tp_atr_multiple * atr_val)
-                        sl_price = entry_price + (self.config.sl_atr_multiple * atr_val)
+                        tp_price = entry_price - (tp_mult * atr_val)
+                        sl_price = entry_price + (sl_mult * atr_val)
 
                     active_position = Position(
                         position_id=f"pos-{len(closed_trades) + 1}",

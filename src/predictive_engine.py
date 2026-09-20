@@ -59,17 +59,15 @@ class PredictiveEngine:
         self.horizon_bars = horizon_bars
         self.min_history_bars = min_history_bars
 
-    def evaluate(self, df: pd.DataFrame) -> PredictiveResult:
-        """Estimates conditional probabilities and calculates PredictiveScore for candle T.
-
-        Parameters:
-        - df: OHLCV DataFrame strictly up to candle T.
-
-        Returns:
-        - PredictiveResult with probabilities, score in [0, 1], and factor attribution.
-        """
+    def evaluate(
+        self,
+        df: pd.DataFrame,
+        current_regime_res: RegimeResult | None = None,
+        precomputed_past_regimes: list[RegimeResult] | None = None,
+    ) -> PredictiveResult:
+        """Evaluates causal conditional continuation/reversal probabilities for candle T."""
         if df.empty:
-            raise ValueError("No se puede evaluar un DataFrame vacío")
+            raise ValueError("No se puede evaluar predictivamente un DataFrame vacío")
 
         required_cols = {"timestamp", "high", "low", "close", "volume"}
         missing = required_cols.difference(set(df.columns))
@@ -77,9 +75,12 @@ class PredictiveEngine:
             missing_str = ", ".join(sorted(missing))
             raise ValueError(f"Faltan columnas requeridas para evaluación predictiva: {missing_str}")
 
-        candles = df.copy()
-        candles["timestamp"] = pd.to_datetime(candles["timestamp"], utc=True)
-        candles = candles.sort_values("timestamp").reset_index(drop=True)
+        if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
+            candles = df.copy()
+            candles["timestamp"] = pd.to_datetime(candles["timestamp"], utc=True)
+            candles = candles.sort_values("timestamp").reset_index(drop=True)
+        else:
+            candles = df
 
         last_ts = candles["timestamp"].iloc[-1]
         n_bars = len(candles)
@@ -107,7 +108,10 @@ class PredictiveEngine:
             enriched = candles
 
         # 2. Causal Market Regime Classification at T
-        regime_res: RegimeResult = self.regime_classifier.classify(enriched)
+        if current_regime_res is not None:
+            regime_res = current_regime_res
+        else:
+            regime_res = self.regime_classifier.classify(enriched)
         current_regime = regime_res.regime
 
         # 3. Determine Directional Bias from Regime and Technical Indicators
@@ -135,7 +139,10 @@ class PredictiveEngine:
         # Fast vectorized matching over past history where outcome is known
         if eligible_end > 25:
             past_sub = enriched.iloc[:eligible_end]
-            past_regimes = self.regime_classifier.classify_series(past_sub, warmup_bars=25)
+            if precomputed_past_regimes is not None:
+                past_regimes = precomputed_past_regimes
+            else:
+                past_regimes = self.regime_classifier.classify_series(past_sub, warmup_bars=25)
 
             start_idx = 24
             for offset, r in enumerate(past_regimes):

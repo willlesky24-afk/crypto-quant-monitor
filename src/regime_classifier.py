@@ -69,9 +69,12 @@ class RegimeClassifier:
             missing_str = ", ".join(sorted(missing))
             raise ValueError(f"Faltan columnas requeridas para clasificar régimen: {missing_str}")
 
-        candles = df.copy()
-        candles["timestamp"] = pd.to_datetime(candles["timestamp"], utc=True)
-        candles = candles.sort_values("timestamp").reset_index(drop=True)
+        if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
+            candles = df.copy()
+            candles["timestamp"] = pd.to_datetime(candles["timestamp"], utc=True)
+            candles = candles.sort_values("timestamp").reset_index(drop=True)
+        else:
+            candles = df
 
         last_ts = candles["timestamp"].iloc[-1]
 

@@ -48,6 +48,8 @@ class SignalEvent:
     vah: float
     val: float
     direction: str = TradeDirection.LONG.value
+    tp_atr_multiple: float | None = None
+    sl_atr_multiple: float | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)

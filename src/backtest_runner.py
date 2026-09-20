@@ -15,8 +15,10 @@ from .engine import MarketEngine
 from .indicators import TechnicalIndicators
 from .market_intelligence import MarketIntelligence
 from .quant_score import QuantScore
+from .regime_classifier import RegimeClassifier
 from .risk_engine import RiskEngine
 from .signal_engine import SignalEngine
+from .strategy_optimizer import StrategyOptimizer
 from .volume_profile import VolumeProfile
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,10 @@ class BacktestRunner:
         decision_engine: DecisionEngine | None = None,
         quant_score: QuantScore | None = None,
         market_intelligence: MarketIntelligence | None = None,
+        regime_classifier: RegimeClassifier | None = None,
+        predictive_engine: Any | None = None,
+        strategy_optimizer: StrategyOptimizer | None = None,
+        predictive_mode: bool = False,
     ):
         self.config = config or BacktestConfig()
         self.dataset_manager = dataset_manager or HistoricalDatasetManager()
@@ -51,6 +57,15 @@ class BacktestRunner:
         self.decision_engine = decision_engine or DecisionEngine()
         self.quant_score = quant_score or QuantScore()
         self.intelligence = market_intelligence or MarketIntelligence()
+        self.regime_classifier = regime_classifier or RegimeClassifier()
+        if predictive_engine is None:
+            from .predictive_engine import PredictiveEngine
+
+            self.predictive_engine = PredictiveEngine()
+        else:
+            self.predictive_engine = predictive_engine
+        self.strategy_optimizer = strategy_optimizer or StrategyOptimizer()
+        self.predictive_mode = predictive_mode
         self.engine = BacktestEngine(config=self.config)
 
     def run_backtest(
@@ -61,6 +76,8 @@ class BacktestRunner:
         end_time: str | datetime | pd.Timestamp | int | None = None,
         warmup_bars: int = 200,
         df: pd.DataFrame | None = None,
+        predictive_mode: bool | None = None,
+        calibrated_params: dict[str, Any] | None = None,
     ) -> BacktestReport:
         """Executes a full backtest pipeline for a given symbol and interval.
 
@@ -71,6 +88,8 @@ class BacktestRunner:
         - end_time: Optional end timestamp slice.
         - warmup_bars: Minimum closed candles before generating trade signals (ensures EMA 200 convergence).
         - df: Optional in-memory DataFrame (if provided, bypasses disk dataset loading).
+        - predictive_mode: Optional flag to enable predictive-enhanced decision flow (overrides instance default).
+        - calibrated_params: Optional dictionary of OptimizedParameters by regime.
 
         Returns:
         - BacktestReport containing trade log, performance metrics, and equity curve.
@@ -116,6 +135,13 @@ class BacktestRunner:
         # 3. Generate Signals Step-by-Step with Strict Look-Ahead Bias Prevention
         signals: list[SignalEvent] = []
         total_bars = len(enriched_df)
+        use_predictive = (
+            predictive_mode if predictive_mode is not None else self.predictive_mode
+        )
+
+        all_regimes = []
+        if use_predictive and total_bars >= 25:
+            all_regimes = self.regime_classifier.classify_series(enriched_df, warmup_bars=25)
 
         for t_idx in range(warmup_bars - 1, total_bars):
             sub_df = enriched_df.iloc[: t_idx + 1]
@@ -124,8 +150,48 @@ class BacktestRunner:
             signal = self.signal_engine.evaluate(analysis, profile)
             risk = self.risk_engine.evaluate(analysis, profile)
             intel = self.intelligence.evaluate(analysis)
-            decision = self.decision_engine.evaluate(signal, risk, intel)
             score = self.quant_score.calculate(analysis, signal, risk)
+
+            if use_predictive:
+                reg_offset = t_idx - 24
+                regime_res = all_regimes[reg_offset] if (all_regimes and 0 <= reg_offset < len(all_regimes)) else self.regime_classifier.classify(sub_df)
+                h = self.predictive_engine.horizon_bars
+                past_cutoff = max(0, reg_offset - h + 1)
+                past_regimes = all_regimes[:past_cutoff] if all_regimes else None
+                pred_res = self.predictive_engine.evaluate(
+                    sub_df,
+                    current_regime_res=regime_res,
+                    precomputed_past_regimes=past_regimes,
+                )
+                opt_param = (
+                    calibrated_params.get(regime_res.regime.value)
+                    if calibrated_params
+                    else None
+                )
+                decision = self.decision_engine.evaluate(
+                    signal,
+                    risk,
+                    intel,
+                    predictive=pred_res,
+                    optimized_params=opt_param,
+                    regime=regime_res.regime,
+                    technical_score=score["score"],
+                    predictive_mode=True,
+                )
+                sig_dir = (
+                    TradeDirection.SHORT.value
+                    if decision.direction == "SHORT"
+                    else TradeDirection.LONG.value
+                )
+                tp_atr_mult = decision.tp_multiplier
+                sl_atr_mult = decision.sl_multiplier
+                quant_score_val = float(decision.final_score)
+            else:
+                decision = self.decision_engine.evaluate(signal, risk, intel)
+                sig_dir = TradeDirection.LONG.value
+                tp_atr_mult = None
+                sl_atr_mult = None
+                quant_score_val = float(score["score"])
 
             last_bar = sub_df.iloc[-1]
             sig_event = SignalEvent(
@@ -137,13 +203,15 @@ class BacktestRunner:
                 signal_state=signal["state"],
                 confidence=float(decision["confidence"]),
                 decision=decision["decision"],
-                quant_score=float(score["score"]),
+                quant_score=quant_score_val,
                 risk_level=risk["level"],
                 atr=float(last_bar.get("atr", 0.0)),
                 poc=float(profile["poc"]),
                 vah=float(profile["vah"]),
                 val=float(profile["val"]),
-                direction=TradeDirection.LONG.value,
+                direction=sig_dir,
+                tp_atr_multiple=tp_atr_mult,
+                sl_atr_multiple=sl_atr_mult,
             )
             signals.append(sig_event)
 

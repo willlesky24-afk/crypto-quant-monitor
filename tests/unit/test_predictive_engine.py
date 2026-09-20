@@ -189,3 +189,20 @@ def test_predictive_engine_precalculated_indicators():
     assert isinstance(res, PredictiveResult)
     assert res.predictive_score > 0.0
 
+
+def test_predictive_engine_string_timestamps():
+    from src.regime_classifier import RegimeClassifier
+
+    df = make_predictive_candles(n_candles=60, pattern="bull")
+    df_str = df.copy()
+    df_str["timestamp"] = df_str["timestamp"].astype(str)
+
+    engine = PredictiveEngine()
+    res = engine.evaluate(df_str)
+    assert isinstance(res, PredictiveResult)
+
+    classifier = RegimeClassifier()
+    reg_res = classifier.classify(df_str)
+    assert reg_res.regime is not None
+
+
