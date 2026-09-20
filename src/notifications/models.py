@@ -202,10 +202,13 @@ class NotificationResult:
     delivered_at: pd.Timestamp | None = None
     retry_count: int = 0
     event_id: str = ""
+    latency_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert dispatch result to a JSON-serializable dictionary."""
         d = asdict(self)
         d["channel"] = self.channel.value
         d["delivered_at"] = str(self.delivered_at) if self.delivered_at is not None else None
+        d["latency_ms"] = self.latency_ms
         return d
+
