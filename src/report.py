@@ -50,159 +50,55 @@ class MarketReport:
         self,
         symbol: str,
         analysis: dict,
-        profile: dict
+        profile: dict,
+        auto_save: bool = False,
     ):
+        mentor = self.analyzer.generate_summary(analysis)
+        intelligence = self.intelligence.evaluate(analysis)
+        alerts = self.alert_engine.check(analysis, profile)
+        signal = self.signal_engine.evaluate(analysis, profile)
+        risk = self.risk_engine.evaluate(analysis, profile)
+        decision = self.decision_engine.evaluate(signal, risk, intelligence)
+        quant_score = self.quant_score.calculate(analysis, signal, risk)
 
-
-        mentor = self.analyzer.generate_summary(
-            analysis
-        )
-
-
-        intelligence = self.intelligence.evaluate(
-            analysis
-        )
-
-
-        alerts = self.alert_engine.check(
-            analysis,
-            profile
-        )
-
-
-        signal = self.signal_engine.evaluate(
-            analysis,
-            profile
-        )
-
-
-        risk = self.risk_engine.evaluate(
-            analysis,
-            profile
-        )
-
-
-        decision = self.decision_engine.evaluate(
-            signal,
-            risk,
-            intelligence
-        )
-
-
-        quant_score = self.quant_score.calculate(
-            analysis,
-            signal,
-            risk
-        )
-
-
-        # ==========================
-        # Guardar historial
-        # ==========================
-
-        self.signal_history.save(
-            symbol,
-            analysis,
-            decision,
-            quant_score,
-            risk,
-            signal
-        )
-
-
+        # Optional persistence, disabled by default for analytical purity
+        if auto_save and self.signal_history is not None:
+            self.signal_history.save(
+                symbol,
+                analysis,
+                decision,
+                quant_score,
+                risk,
+                signal,
+            )
 
         report = {
-
-
             "symbol": symbol,
-
-
             "price": analysis["price"],
-
-
             "trend": analysis["trend"],
-
-
             "momentum": analysis["momentum"],
-
-
             "volatility": analysis["volatility"],
-
-
             "volume": analysis["volume"],
-
-
             "score": analysis["score"],
-
-
             "profile": analysis["profile"],
-
-
-
-            # ==========================
             # Mentor
-            # ==========================
-
             "summary": mentor["summary"],
-
             "conclusion": mentor["conclusion"],
-
-
-
-            # ==========================
             # Intelligence
-            # ==========================
-
             "state": intelligence["state"],
-
             "risk": intelligence["risk"],
-
             "risk_reason": intelligence["risk_reason"],
-
             "trend_analysis": intelligence["trend_analysis"],
-
-
-
-            # ==========================
             # Alertas
-            # ==========================
-
             "alerts": alerts,
-
-
-
-            # ==========================
             # Señal
-            # ==========================
-
             "signal": signal,
-
-
-
-            # ==========================
             # Riesgo
-            # ==========================
-
             "risk_engine": risk,
-
-
-
-            # ==========================
             # Decisión
-            # ==========================
-
             "decision": decision,
-
-
-
-            # ==========================
             # Quant Score
-            # ==========================
-
-            "quant_score": quant_score
-
+            "quant_score": quant_score,
         }
 
-
         return report
-

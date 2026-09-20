@@ -42,10 +42,10 @@ interval = st.sidebar.selectbox(
 
 
 limit = st.sidebar.slider(
-    "Número de velas",
-    50,
-    500,
-    200
+    "Número de velas (mínimo 250 para EMA 200)",
+    250,
+    1000,
+    300
 )
 
 
@@ -53,13 +53,21 @@ limit = st.sidebar.slider(
 # Datos
 # ==========================
 
-loader = BinanceDataLoader()
+try:
+    loader = BinanceDataLoader()
+    df = loader.get_klines(
+        symbol=symbol.strip().upper(),
+        interval=interval,
+        limit=limit,
+        include_open_candle=False,
+    )
+except Exception as exc:
+    st.error(f"Error al obtener datos de mercado: {exc}")
+    st.stop()
 
-df = loader.get_klines(
-    symbol=symbol,
-    interval=interval,
-    limit=limit
-)
+if df.empty or len(df) < 50:
+    st.warning("Datos insuficientes para realizar el análisis cuantitativo.")
+    st.stop()
 
 
 # ==========================
@@ -99,7 +107,7 @@ analysis = engine.analyze(
 reporter = MarketReport()
 
 market_report = reporter.generate(
-    symbol,
+    symbol.strip().upper(),
     analysis,
     profile
 )
@@ -122,6 +130,31 @@ risk_engine = market_report["risk_engine"]
 decision = market_report["decision"]
 
 quant_score = market_report["quant_score"]
+
+
+# ==========================
+# Persistencia explícita e idempotente (por vela cerrada)
+# ==========================
+
+latest_candle = df.iloc[-1]
+candle_ts = str(latest_candle["timestamp"])
+
+history = SignalHistory()
+history.save(
+    symbol=symbol.strip().upper(),
+    analysis=analysis,
+    decision=decision,
+    quant_score=quant_score,
+    risk=risk_engine,
+    signal=signal,
+    timeframe=interval,
+    candle_timestamp=candle_ts,
+    open=float(latest_candle["open"]),
+    high=float(latest_candle["high"]),
+    low=float(latest_candle["low"]),
+    close=float(latest_candle["close"]),
+    volume=float(latest_candle["volume"]),
+)
 
 
 # ==========================
@@ -222,8 +255,6 @@ st.write(
 st.subheader("📚 Historial reciente")
 
 
-history = SignalHistory()
-
 records = history.get_history(
     limit=5
 )
@@ -232,30 +263,31 @@ records = history.get_history(
 if records:
 
     for record in records:
+        # Compatibility with both new schema (17 cols) and legacy
+        if len(record) >= 15:
+            rec_symbol = record[1]
+            rec_tf = record[2]
+            rec_ts = record[3]
+            rec_price = record[4]
+            rec_trend = record[10]
+            rec_decision = record[12]
+            rec_score = record[13]
+            rec_risk = record[14]
+            header = f"{rec_symbol} ({rec_tf}) | {rec_ts}"
+        else:
+            rec_price = record[3]
+            rec_trend = record[4]
+            rec_decision = record[6]
+            rec_score = record[7]
+            rec_risk = record[8]
+            header = f"{record[2]} | {record[1]}"
 
-        with st.expander(
-            f"{record[2]} | {record[1]}"
-        ):
-
-            st.write(
-                f"💰 Precio: ${record[3]:,.2f}"
-            )
-
-            st.write(
-                f"📈 Tendencia: {record[4]}"
-            )
-
-            st.write(
-                f"🎯 Decisión: {record[6]}"
-            )
-
-            st.write(
-                f"📊 Quant Score: {record[7]}"
-            )
-
-            st.write(
-                f"🛡️ Riesgo: {record[8]}"
-            )
+        with st.expander(header):
+            st.write(f"💰 Precio: ${rec_price:,.2f}")
+            st.write(f"📈 Tendencia: {rec_trend}")
+            st.write(f"🎯 Decisión: {rec_decision}")
+            st.write(f"📊 Quant Score: {rec_score}")
+            st.write(f"🛡️ Riesgo: {rec_risk}")
 
 else:
 
@@ -462,4 +494,4 @@ with st.expander("📊 Datos técnicos"):
 
     st.json(
         analysis
-    )
+    )

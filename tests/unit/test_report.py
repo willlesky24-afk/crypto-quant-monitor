@@ -31,7 +31,7 @@ def make_report(history):
     raise AssertionError("MarketReport debe permitir inyectar SignalHistory")
 
 
-def test_report_contract_and_single_persistence(tmp_path, analysis_factory, profile):
+def test_report_contract_is_pure_by_default(tmp_path, analysis_factory, profile):
     history = make_history(tmp_path)
     report_engine = make_report(history)
     try:
@@ -57,10 +57,25 @@ def test_report_contract_and_single_persistence(tmp_path, analysis_factory, prof
             "decision",
             "quant_score",
         }
+        # Analytical purity: no side effects in database by default
+        rows = history.get_history()
+        assert len(rows) == 0
+    finally:
+        history.db.connection.close()
+
+
+def test_report_auto_save_persists_when_enabled(tmp_path, analysis_factory, profile):
+    history = make_history(tmp_path)
+    report_engine = make_report(history)
+    try:
+        report = report_engine.generate(
+            "BTCUSDT", analysis_factory(), profile, auto_save=True
+        )
         rows = history.get_history()
         assert len(rows) == 1
-        assert rows[0][5] == report["signal"]["state"]
-        assert rows[0][6] == report["decision"]["decision"]
+        # In new schema: index 11 is signal, index 12 is decision
+        assert rows[0][11] == report["signal"]["state"]
+        assert rows[0][12] == report["decision"]["decision"]
     finally:
         history.db.connection.close()
 
@@ -69,3 +84,4 @@ def test_report_keeps_default_history_factory_compatible(monkeypatch):
     sentinel = object()
     monkeypatch.setattr("src.report.SignalHistory", lambda: sentinel)
     assert MarketReport().signal_history is sentinel
+
