@@ -9,7 +9,9 @@ from .backtest_metrics import BacktestMetricsCalculator
 from .backtest_models import (
     BacktestConfig,
     EquityPoint,
+    MarketType,
     Position,
+    PositionSide,
     SignalEvent,
     TradeExitReason,
     TradeResult,
@@ -22,7 +24,8 @@ class BacktestEngine:
     """Chronological event-driven simulation engine for trading strategies.
 
     Executes entries at Open(T+1) strictly after signal confirmation at Close(T),
-    models taker/maker transaction fees and execution slippage, tracks MFE/MAE excursions,
+    supports bidirectional positions (LONG and SHORT), models taker/maker transaction fees,
+    execution slippage, perpetual futures funding rates (every 8h), tracks MFE/MAE excursions,
     and applies conservative worst-case intrabar stop resolution.
     """
 
@@ -81,7 +84,14 @@ class BacktestEngine:
             # -----------------------------------------------------------------
             if active_position is None and pending_signal is not None:
                 slip = self.config.slippage_pct
-                entry_price = bar_open * (1.0 + slip)
+                sig_dir = pending_signal.direction.upper()
+                is_short = ("SHORT" in sig_dir) or ("SELL" in sig_dir)
+                pos_side = PositionSide.SHORT.value if is_short else PositionSide.LONG.value
+
+                if not is_short:
+                    entry_price = bar_open * (1.0 + slip)
+                else:
+                    entry_price = bar_open * (1.0 - slip)
 
                 # Position sizing based on available cash
                 allocated_cash = current_cash * max(0.0, min(1.0, self.config.position_size_pct))
@@ -92,8 +102,12 @@ class BacktestEngine:
 
                     # Multipliers based on signal ATR
                     atr_val = max(pending_signal.atr, entry_price * 0.005)  # Safe fallback if ATR is 0
-                    tp_price = entry_price + (self.config.tp_atr_multiple * atr_val)
-                    sl_price = entry_price - (self.config.sl_atr_multiple * atr_val)
+                    if not is_short:
+                        tp_price = entry_price + (self.config.tp_atr_multiple * atr_val)
+                        sl_price = entry_price - (self.config.sl_atr_multiple * atr_val)
+                    else:
+                        tp_price = entry_price - (self.config.tp_atr_multiple * atr_val)
+                        sl_price = entry_price + (self.config.sl_atr_multiple * atr_val)
 
                     active_position = Position(
                         position_id=f"pos-{len(closed_trades) + 1}",
@@ -105,6 +119,9 @@ class BacktestEngine:
                         tp_price=tp_price,
                         sl_price=sl_price,
                         fee_entry=fee_entry,
+                        side=pos_side,
+                        funding_fees_accumulated=0.0,
+                        last_funding_time=bar_ts,
                         highest_price=bar_high,
                         lowest_price=bar_low,
                     )
@@ -117,77 +134,156 @@ class BacktestEngine:
             if active_position is not None:
                 active_position.bars_held += 1
                 active_position.update_excursions(high=bar_high, low=bar_low)
+                is_short_pos = active_position.side == PositionSide.SHORT.value
 
-                # Optional Trailing Stop / Break-Even adjustment
+                # A. Apply Perpetual Funding Fees if applicable (every 8h: 00:00, 08:00, 16:00 UTC)
+                is_perp = self.config.market_type.upper() == MarketType.PERP.value
+                if is_perp and self.config.funding_rate_8h != 0.0:
+                    if bar_ts > active_position.entry_timestamp:
+                        # Check 8h settlement boundary (00:00, 08:00, 16:00 UTC)
+                        if (bar_ts.hour % 8 == 0 and bar_ts.minute == 0) and (
+                            active_position.last_funding_time is None or bar_ts > active_position.last_funding_time
+                        ):
+                            current_notional = active_position.size_units * bar_close
+                            if not is_short_pos:
+                                funding_fee = current_notional * self.config.funding_rate_8h
+                            else:
+                                funding_fee = -current_notional * self.config.funding_rate_8h
+                            active_position.funding_fees_accumulated += funding_fee
+                            active_position.last_funding_time = bar_ts
+
+                # B. Optional Trailing Stop / Break-Even adjustment
                 if self.config.enable_trailing_stop:
-                    initial_risk = active_position.entry_price - (
-                        active_position.entry_price - (self.config.sl_atr_multiple * max(active_position.signal.atr, 1e-6))
-                    )
-                    if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
-                        active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
+                    initial_risk = abs(active_position.entry_price - active_position.sl_price)
+                    if not is_short_pos:
+                        if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
+                            active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
+                    else:
+                        if bar_low <= active_position.entry_price - (self.config.trailing_stop_activation_r * initial_risk):
+                            active_position.sl_price = min(active_position.sl_price, active_position.entry_price)
 
                 exit_triggered = False
                 exit_price = bar_close
                 exit_reason = TradeExitReason.TIME_HORIZON.value
 
-                # Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
-                if bar_low <= active_position.sl_price and bar_high >= active_position.tp_price:
-                    exit_triggered = True
-                    exit_price = active_position.sl_price * (1.0 - self.config.slippage_pct)
-                    exit_reason = TradeExitReason.STOP_LOSS.value
+                if not is_short_pos:
+                    # LONG Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
+                    if bar_low <= active_position.sl_price and bar_high >= active_position.tp_price:
+                        exit_triggered = True
+                        exit_price = active_position.sl_price * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
 
-                # Case B: Stop Loss touched
-                elif bar_low <= active_position.sl_price:
-                    exit_triggered = True
-                    # If opened below SL (gap down), execute at open with slippage
-                    effective_sl = min(bar_open, active_position.sl_price)
-                    exit_price = effective_sl * (1.0 - self.config.slippage_pct)
-                    exit_reason = TradeExitReason.STOP_LOSS.value
+                    # LONG Case B: Stop Loss touched
+                    elif bar_low <= active_position.sl_price:
+                        exit_triggered = True
+                        effective_sl = min(bar_open, active_position.sl_price)
+                        exit_price = effective_sl * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
 
-                # Case C: Take Profit touched
-                elif bar_high >= active_position.tp_price:
-                    exit_triggered = True
-                    effective_tp = max(bar_open, active_position.tp_price)
-                    exit_price = effective_tp * (1.0 - self.config.slippage_pct)
-                    exit_reason = TradeExitReason.TAKE_PROFIT.value
+                    # LONG Case C: Take Profit touched
+                    elif bar_high >= active_position.tp_price:
+                        exit_triggered = True
+                        effective_tp = max(bar_open, active_position.tp_price)
+                        exit_price = effective_tp * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.TAKE_PROFIT.value
 
-                # Case D: Time Horizon expired (Max holding bars reached or end of series)
-                elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
-                    exit_triggered = True
-                    exit_price = bar_close * (1.0 - self.config.slippage_pct)
-                    exit_reason = TradeExitReason.TIME_HORIZON.value
+                    # LONG Case D: Time Horizon expired (Max holding bars reached or end of series)
+                    elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
+                        exit_triggered = True
+                        exit_price = bar_close * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.TIME_HORIZON.value
+
+                else:
+                    # SHORT Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
+                    if bar_high >= active_position.sl_price and bar_low <= active_position.tp_price:
+                        exit_triggered = True
+                        exit_price = active_position.sl_price * (1.0 + self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
+
+                    # SHORT Case B: Stop Loss touched
+                    elif bar_high >= active_position.sl_price:
+                        exit_triggered = True
+                        effective_sl = max(bar_open, active_position.sl_price)
+                        exit_price = effective_sl * (1.0 + self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
+
+                    # SHORT Case C: Take Profit touched
+                    elif bar_low <= active_position.tp_price:
+                        exit_triggered = True
+                        effective_tp = min(bar_open, active_position.tp_price)
+                        exit_price = effective_tp * (1.0 + self.config.slippage_pct)
+                        exit_reason = TradeExitReason.TAKE_PROFIT.value
+
+                    # SHORT Case D: Time Horizon expired (Max holding bars reached or end of series)
+                    elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
+                        exit_triggered = True
+                        exit_price = bar_close * (1.0 + self.config.slippage_pct)
+                        exit_reason = TradeExitReason.TIME_HORIZON.value
 
                 if exit_triggered:
                     notional_exit = active_position.size_units * exit_price
                     fee_exit = notional_exit * self.config.taker_fee_pct
-                    gross_pnl = notional_exit - active_position.notional_entry
-                    net_pnl = gross_pnl - active_position.fee_entry - fee_exit
 
-                    current_cash += notional_exit - fee_exit
+                    if not is_short_pos:
+                        gross_pnl = active_position.size_units * (exit_price - active_position.entry_price)
+                    else:
+                        gross_pnl = active_position.size_units * (active_position.entry_price - exit_price)
+
+                    funding_fee_total = active_position.funding_fees_accumulated
+                    net_pnl = gross_pnl - active_position.fee_entry - fee_exit - funding_fee_total
+
+                    # Return collateral + profit - exit fee - funding
+                    current_cash += (active_position.notional_entry + gross_pnl) - fee_exit - funding_fee_total
 
                     # Performance ratios
-                    initial_risk = active_position.entry_price - (
-                        active_position.entry_price - (self.config.sl_atr_multiple * max(active_position.signal.atr, 1e-6))
+                    initial_risk = abs(
+                        active_position.entry_price
+                        - (
+                            active_position.entry_price
+                            + (-1.0 if not is_short_pos else 1.0)
+                            * (self.config.sl_atr_multiple * max(active_position.signal.atr, 1e-6))
+                        )
                     )
-                    r_multiple = ((exit_price - active_position.entry_price) / initial_risk) if initial_risk > 0 else 0.0
-                    net_return_pct = (net_pnl / active_position.notional_entry * 100.0) if active_position.notional_entry > 0 else 0.0
+                    if initial_risk > 0:
+                        if not is_short_pos:
+                            r_multiple = (exit_price - active_position.entry_price) / initial_risk
+                        else:
+                            r_multiple = (active_position.entry_price - exit_price) / initial_risk
+                    else:
+                        r_multiple = 0.0
 
-                    mfe_pct = (
-                        ((active_position.highest_price - active_position.entry_price) / active_position.entry_price * 100.0)
-                        if active_position.entry_price > 0
-                        else 0.0
+                    net_return_pct = (
+                        (net_pnl / active_position.notional_entry * 100.0) if active_position.notional_entry > 0 else 0.0
                     )
-                    mae_pct = (
-                        ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
-                        if active_position.entry_price > 0
-                        else 0.0
-                    )
+
+                    if not is_short_pos:
+                        mfe_pct = (
+                            ((active_position.highest_price - active_position.entry_price) / active_position.entry_price * 100.0)
+                            if active_position.entry_price > 0
+                            else 0.0
+                        )
+                        mae_pct = (
+                            ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
+                            if active_position.entry_price > 0
+                            else 0.0
+                        )
+                    else:
+                        mfe_pct = (
+                            ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
+                            if active_position.entry_price > 0
+                            else 0.0
+                        )
+                        mae_pct = (
+                            ((active_position.highest_price - active_position.entry_price) / active_position.entry_price * 100.0)
+                            if active_position.entry_price > 0
+                            else 0.0
+                        )
 
                     trade_result = TradeResult(
                         trade_id=f"trade-{len(closed_trades) + 1}",
                         symbol=active_position.signal.symbol,
                         timeframe=active_position.signal.timeframe,
-                        direction=self.config.direction,
+                        direction=active_position.side,
                         signal_timestamp=active_position.signal.candle_timestamp,
                         entry_timestamp=active_position.entry_timestamp,
                         exit_timestamp=bar_ts,
@@ -207,6 +303,8 @@ class BacktestEngine:
                         mfe_pct=mfe_pct,
                         mae_pct=mae_pct,
                         is_win=net_pnl > 0,
+                        side=active_position.side,
+                        funding_fees=funding_fee_total,
                     )
                     closed_trades.append(trade_result)
                     active_position = None
@@ -214,13 +312,23 @@ class BacktestEngine:
             # -----------------------------------------------------------------
             # 3. Record Mark-to-Market Equity Point
             # -----------------------------------------------------------------
-            unrealized_notional = 0.0
+            unrealized_equity = 0.0
             if active_position is not None:
-                unrealized_notional = active_position.size_units * bar_close
-                estimated_exit_fee = unrealized_notional * self.config.taker_fee_pct
-                unrealized_notional -= estimated_exit_fee
+                is_short_pos = active_position.side == PositionSide.SHORT.value
+                if not is_short_pos:
+                    unrealized_gross = active_position.size_units * (bar_close - active_position.entry_price)
+                else:
+                    unrealized_gross = active_position.size_units * (active_position.entry_price - bar_close)
 
-            bar_equity = current_cash + unrealized_notional
+                estimated_exit_fee = (active_position.size_units * bar_close) * self.config.taker_fee_pct
+                unrealized_equity = (
+                    active_position.notional_entry
+                    + unrealized_gross
+                    - estimated_exit_fee
+                    - active_position.funding_fees_accumulated
+                )
+
+            bar_equity = current_cash + unrealized_equity
             raw_equity_curve.append(
                 {
                     "timestamp": bar_ts,
@@ -256,8 +364,15 @@ class BacktestEngine:
 
     def _passes_signal_filters(self, signal: SignalEvent) -> bool:
         """Applies configured strategy filters to determine signal viability."""
-        if signal.direction.upper() != self.config.direction.upper():
-            return False
+        sig_dir = signal.direction.upper()
+        cfg_dir = self.config.direction.upper()
+
+        if cfg_dir != "BOTH":
+            is_short_sig = ("SHORT" in sig_dir) or ("SELL" in sig_dir)
+            is_short_cfg = ("SHORT" in cfg_dir) or ("SELL" in cfg_dir)
+            if is_short_sig != is_short_cfg:
+                return False
+
         if signal.quant_score < self.config.min_quant_score:
             return False
         if self.config.require_favorable_decision and signal.decision != "FAVORABLE":

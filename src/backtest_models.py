@@ -13,8 +13,20 @@ class TradeExitReason(str, Enum):
     SIGNAL_INVALIDATION = "SIGNAL_INVALIDATION"
 
 
+class PositionSide(str, Enum):
+    LONG = "LONG"
+    SHORT = "SHORT"
+
+
+class MarketType(str, Enum):
+    SPOT = "SPOT"
+    PERP = "PERP"
+
+
 class TradeDirection(str, Enum):
     LONG = "LONG"
+    SHORT = "SHORT"
+    BOTH = "BOTH"
 
 
 @dataclass(frozen=True)
@@ -52,12 +64,15 @@ class BacktestConfig:
     maker_fee_pct: float = 0.0002  # 0.02%
     taker_fee_pct: float = 0.0005  # 0.05%
     slippage_pct: float = 0.0005  # 0.05%
-    tp_atr_multiple: float = 2.0  # Take profit = Entry + (tp_atr_multiple * ATR)
-    sl_atr_multiple: float = 1.0  # Stop loss = Entry - (sl_atr_multiple * ATR)
+    tp_atr_multiple: float = 2.0  # Take profit ATR multiple
+    sl_atr_multiple: float = 1.0  # Stop loss ATR multiple
     max_holding_bars: int = 24  # Max time horizon in bars (e.g. 24h on 1h candles)
     enable_trailing_stop: bool = False
     trailing_stop_activation_r: float = 1.0  # Move SL to break-even after +1R gain
-    direction: str = TradeDirection.LONG.value  # Phase 3 is LONG ONLY
+    direction: str = TradeDirection.LONG.value  # "LONG", "SHORT", or "BOTH"
+    market_type: str = MarketType.SPOT.value  # "SPOT" or "PERP"
+    funding_rate_8h: float = 0.0001  # 0.01% per 8h funding cycle on PERP
+    leverage: float = 1.0
     min_quant_score: float = 60.0
     require_favorable_decision: bool = True
 
@@ -78,6 +93,9 @@ class Position:
     tp_price: float
     sl_price: float
     fee_entry: float
+    side: str = PositionSide.LONG.value
+    funding_fees_accumulated: float = 0.0
+    last_funding_time: pd.Timestamp | None = None
     bars_held: int = 0
     highest_price: float = field(default=0.0)
     lowest_price: float = field(default=0.0)
@@ -124,6 +142,8 @@ class TradeResult:
     mfe_pct: float  # Max Favorable Excursion (% gain potential)
     mae_pct: float  # Max Adverse Excursion (% loss potential / trade drawdown)
     is_win: bool
+    side: str = PositionSide.LONG.value
+    funding_fees: float = 0.0
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -178,6 +198,7 @@ class BacktestReport:
     total_fees_paid: float
     total_net_pnl: float
     return_on_capital_pct: float
+    total_funding_fees: float = 0.0
     sharpe_ratio: float | None = None
     calmar_ratio: float | None = None
     trades: list[TradeResult] = field(default_factory=list)

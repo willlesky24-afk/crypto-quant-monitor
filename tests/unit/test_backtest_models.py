@@ -52,6 +52,9 @@ def test_backtest_config_defaults_and_custom():
     default_cfg = BacktestConfig()
     assert default_cfg.initial_capital == 10_000.0
     assert default_cfg.direction == "LONG"
+    assert default_cfg.market_type == "SPOT"
+    assert default_cfg.funding_rate_8h == 0.0001
+    assert default_cfg.leverage == 1.0
     assert default_cfg.tp_atr_multiple == 2.0
     assert default_cfg.sl_atr_multiple == 1.0
     assert default_cfg.taker_fee_pct == 0.0005
@@ -59,15 +62,24 @@ def test_backtest_config_defaults_and_custom():
 
     custom_cfg = BacktestConfig(
         initial_capital=50_000.0,
+        direction="SHORT",
+        market_type="PERP",
+        funding_rate_8h=0.0002,
+        leverage=2.0,
         tp_atr_multiple=3.0,
         sl_atr_multiple=1.5,
         max_holding_bars=48,
     )
     assert custom_cfg.initial_capital == 50_000.0
+    assert custom_cfg.direction == "SHORT"
+    assert custom_cfg.market_type == "PERP"
+    assert custom_cfg.funding_rate_8h == 0.0002
+    assert custom_cfg.leverage == 2.0
     assert custom_cfg.tp_atr_multiple == 3.0
     assert custom_cfg.sl_atr_multiple == 1.5
     assert custom_cfg.max_holding_bars == 48
     assert "initial_capital" in custom_cfg.to_dict()
+    assert custom_cfg.to_dict()["market_type"] == "PERP"
 
 
 def test_position_tracking_and_excursions():
@@ -210,3 +222,45 @@ def test_equity_point_and_backtest_report_serialization():
     assert d_rep["profit_factor"] == 1.85
     assert len(d_rep["equity_curve"]) == 1
     assert d_rep["config"]["initial_capital"] == 10_000.0
+
+
+def test_short_trade_result_and_funding_serialization():
+    sig_ts = pd.to_datetime("2024-01-01 12:00:00", utc=True)
+    entry_ts = pd.to_datetime("2024-01-01 13:00:00", utc=True)
+    exit_ts = pd.to_datetime("2024-01-01 21:00:00", utc=True)
+
+    trade = TradeResult(
+        trade_id="tr-short-1",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        direction="SHORT",
+        signal_timestamp=sig_ts,
+        entry_timestamp=entry_ts,
+        exit_timestamp=exit_ts,
+        entry_price=42000.0,
+        exit_price=40000.0,
+        size_units=0.238,
+        notional_entry=10000.0,
+        notional_exit=9520.0,
+        gross_pnl=476.0,
+        fee_entry=5.0,
+        fee_exit=4.76,
+        net_pnl=465.24,
+        net_return_pct=4.6524,
+        r_multiple=2.0,
+        bars_held=8,
+        exit_reason=TradeExitReason.TAKE_PROFIT.value,
+        mfe_pct=4.8,
+        mae_pct=0.5,
+        is_win=True,
+        side="SHORT",
+        funding_fees=1.0,
+    )
+
+    assert trade.side == "SHORT"
+    assert trade.funding_fees == 1.0
+    d = trade.to_dict()
+    assert d["side"] == "SHORT"
+    assert d["funding_fees"] == 1.0
+    assert d["direction"] == "SHORT"
+

@@ -132,7 +132,8 @@ class BacktestMetricsCalculator:
 
         # Totals
         total_gross_pnl = sum(t.gross_pnl for t in trades)
-        total_fees = sum(t.fee_entry + t.fee_exit for t in trades)
+        total_funding_fees = sum(t.funding_fees for t in trades)
+        total_fees = sum(t.fee_entry + t.fee_exit + t.funding_fees for t in trades)
         total_net_pnl = sum(t.net_pnl for t in trades)
         return_on_capital = (total_net_pnl / initial_capital * 100.0) if initial_capital > 0 else 0.0
 
@@ -175,6 +176,7 @@ class BacktestMetricsCalculator:
             "avg_bars_held": round(avg_bars, 2),
             "total_gross_pnl": round(total_gross_pnl, 2),
             "total_fees_paid": round(total_fees, 2),
+            "total_funding_fees": round(total_funding_fees, 2),
             "total_net_pnl": round(total_net_pnl, 2),
             "return_on_capital_pct": round(return_on_capital, 2),
             "sharpe_ratio": round(sharpe_ratio, 2) if sharpe_ratio is not None else None,
