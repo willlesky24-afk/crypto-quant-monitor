@@ -38,18 +38,18 @@ class VolumeProfile:
         if not np.isfinite(values).all():
             raise ValueError("Los precios y el volumen deben ser valores finitos")
 
-        prices = (
-            df["high"] +
-            df["low"] +
-            df["close"]
-        ) / 3
+        high = values[:, 0]
+        low = values[:, 1]
+        close = values[:, 2]
+        volume = values[:, 3]
 
+        prices = (high + low + close) / 3.0
 
-        volume = df["volume"]
+        p_min = float(prices.min())
+        p_max = float(prices.max())
 
-
-        if prices.min() == prices.max():
-            price = round(float(prices.iloc[0]), 2)
+        if p_min == p_max:
+            price = round(float(prices[0]), 2)
 
             return {
                 "poc": price,
@@ -57,87 +57,53 @@ class VolumeProfile:
                 "val": price
             }
 
-
         price_range = np.linspace(
-            prices.min(),
-            prices.max(),
+            p_min,
+            p_max,
             bins
         )
 
-
-        volume_profile = []
-
-
-        last_interval = len(price_range) - 2
-
-
-        for i in range(len(price_range)-1):
-
-            if i == last_interval:
-                mask = (
-                    (prices >= price_range[i]) &
-                    (prices <= price_range[i+1])
-                )
-
-            else:
-                mask = (
-                    (prices >= price_range[i]) &
-                    (prices < price_range[i+1])
-                )
-
-            volume_profile.append(
-                volume[mask].sum()
-            )
-
-
-        volume_profile = np.array(
-            volume_profile
+        volume_profile, _ = np.histogram(
+            prices,
+            bins=price_range,
+            weights=volume
         )
 
-
-        max_index = np.argmax(
+        max_index = int(np.argmax(
             volume_profile
-        )
-
+        ))
 
         poc = (
             price_range[max_index] +
             price_range[max_index + 1]
-        ) / 2
+        ) / 2.0
 
-
-        total_volume = volume_profile.sum()
-
+        total_volume = float(volume_profile.sum())
 
         target_volume = total_volume * 0.70
 
-
-        accumulated = 0
+        accumulated = 0.0
 
         low_index = max_index
         high_index = max_index
-
 
         while accumulated < target_volume:
 
             if low_index > 0:
                 low_index -= 1
 
-            if high_index < len(volume_profile)-1:
+            if high_index < len(volume_profile) - 1:
                 high_index += 1
 
-
-            accumulated = volume_profile[
-                low_index:high_index+1
-            ].sum()
-
+            accumulated = float(volume_profile[
+                low_index:high_index + 1
+            ].sum())
 
         val = price_range[low_index]
 
         vah = price_range[
             high_index + 1
         ]
-
 
         return {
             "poc": round(float(poc), 2),
