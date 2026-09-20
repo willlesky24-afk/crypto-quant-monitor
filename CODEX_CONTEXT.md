@@ -52,42 +52,27 @@ Mientras se prepara v1.7 deben conservarse:
 Los parámetros nuevos deben ser opcionales. Las pruebas deben usar bases
 temporales y no modificar `signals.db`.
 
-## Fase 1 — Base de calidad
+## Fase 1.5 — Quant Integrity
 
-Estado: **implementada y validada localmente; pendiente de commit**.
+Estado: **completada e integrada**.
 
-Objetivos:
+Objetivos completados:
 
-1. crear una suite pytest offline y determinista;
-2. corregir inconsistencias confirmadas de Quant Score;
-3. incluir el precio máximo en Volume Profile;
-4. separar correctamente señal y decisión en registros nuevos;
-5. permitir inyección de la base SQLite para pruebas;
-6. soportar imports como paquete y ejecución desde `src`;
-7. centralizar estados internos sin cambiar sus valores visibles.
-
-Esta fase no implementa todavía el motor de backtesting ni cambia el esquema de
-SQLite.
+1. evaluación estricta de velas cerradas (`include_open_candle=False`);
+2. desacoplamiento de `MarketReport` (generación analítica pura);
+3. nuevo esquema de persistencia con `UNIQUE(symbol, timeframe, candle_timestamp)`;
+4. migración SQLite transaccional con backup `.bak`, validación de conteo y rollback;
+5. marcado de registros heredados v1.6 como `is_legacy = 1`;
+6. reubicación de scripts de diagnóstico en `scripts/diagnostics/` con soporte UTF-8.
 
 Validación de cierre:
 
-- 76 pruebas automatizadas offline;
-- 80% de cobertura total, con al menos 89% en cada módulo funcional modificado;
+- 84 pruebas automatizadas offline;
+- 80%+ de cobertura total;
 - Ruff sin errores;
-- imports compatibles como paquete y desde `src`;
-- `signals.db` sin modificaciones.
+- `signals.db` migrada de forma segura e idempotente.
 
-## Reglas de desarrollo
+## Siguiente objetivo (Fase 2)
 
-- Mantener arquitectura modular y separación de responsabilidades.
-- Evitar red y estado persistente en pruebas automáticas.
-- No incorporar datos futuros a cálculos históricos.
-- Hacer cambios funcionales acompañados de pruebas de regresión.
-- No cambiar pesos o reglas de estrategia sin documentar su efecto.
-- Mantener Streamlit como capa de presentación, no como núcleo del motor.
+v1.7 continuará con la construcción del **Historical Data Engine**: datasets históricos reproducibles, almacenamiento en Parquet, particionado y validación de continuidad de velas antes del motor de backtesting.
 
-## Siguiente objetivo
-
-Después de completar la Fase 1, v1.7 añadirá datos históricos reproducibles,
-un pipeline puro por vela, eventos de señal idempotentes, evaluación de
-resultados y métricas de backtesting.

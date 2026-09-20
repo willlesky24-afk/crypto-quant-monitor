@@ -54,6 +54,54 @@ Incluye:
 
 
 
+\# FASE 1.5
+
+\## Quant Integrity
+
+
+
+ESTADO:
+
+
+
+COMPLETADO
+
+
+
+Objetivo:
+
+
+
+Sanear la integridad de datos, eliminar sesgo de repintado y garantizar trazabilidad antes del backtesting.
+
+
+
+Incluye:
+
+
+
+\- Evaluación estricta de velas cerradas en DataLoader (`include_open_candle=False`).
+
+\- Desacoplamiento de `MarketReport` (función analítica pura).
+
+\- Migración transaccional de SQLite con backup `.bak`, validación de registros y rollback.
+
+\- Registro de versiones de esquema (`schema_migrations`).
+
+\- Idempotencia en persistencia con clave `UNIQUE(symbol, timeframe, candle_timestamp)`.
+
+\- Marcado explícito de datos históricos v1.6 como `is_legacy = 1`.
+
+\- Reubicación de scripts de diagnóstico en `scripts/diagnostics/`.
+
+
+
+
+
+\---
+
+
+
 \# FASE 2
 
 \# Historical Data Engine

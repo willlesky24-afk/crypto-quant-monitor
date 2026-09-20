@@ -6,7 +6,8 @@
 
 Versión actual:
 
-v1.7 Phase 1 Quality Baseline
+v1.7 Quant Integrity
+
 
 
 
@@ -310,7 +311,7 @@ Fase 1 completada:
 
 
 
-\- Tests automatizados.
+\- Tests automatizados (suite offline).
 
 \- Cobertura aproximada 80%.
 
@@ -323,6 +324,30 @@ Fase 1 completada:
 \- SQLite inyectable.
 
 \- Validación offline.
+
+
+
+
+
+Fase 1.5 Quant Integrity completada:
+
+
+
+
+
+\- Evaluación estricta de velas cerradas (anti-repainting).
+
+\- Desacoplamiento de generación de reportes y persistencia (MarketReport puro).
+
+\- Migración transaccional de SQLite con backup automático, validación de conteo y rollback.
+
+\- Control de versiones de esquema en `schema_migrations`.
+
+\- Idempotencia en persistencia por `(symbol, timeframe, candle_timestamp)`.
+
+\- Marcado explícito de registros históricos heredados como `is_legacy = 1`.
+
+\- Reorganización de scripts de diagnóstico en `scripts/diagnostics/` con soporte UTF-8.
 
 
 

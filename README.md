@@ -91,23 +91,23 @@ temporales.
 ```powershell
 python -m pytest
 python -m pytest --cov=src --cov-report=term-missing
-python -m ruff check src tests
+python -m ruff check src tests scripts
 ```
 
-Los antiguos archivos `test_*.py` de la raíz se conservan como scripts de
-diagnóstico manual, pero no forman parte de la suite de pytest.
+Los scripts de diagnóstico manual interactivos residen en `scripts/diagnostics/` y
+pueden ejecutarse directamente:
 
-## Limitaciones conocidas de v1.6
+```powershell
+python scripts/diagnostics/test_engine.py
+```
 
-- analiza principalmente la vela más reciente;
-- no descarga rangos históricos paginados;
-- no define todavía entradas, salidas y costes de una estrategia;
-- el historial actual no contiene todos los datos necesarios para reproducir
-  una señal;
-- no debe interpretarse como asesoría financiera ni como sistema de ejecución.
+## Limitaciones resueltas en Fase 1.5
 
-## Próxima fase
+- Las señales e indicadores se calculan estrictamente sobre **velas cerradas** (`include_open_candle=False`), eliminando repainting.
+- `MarketReport.generate` es una función analítica pura; la persistencia es explícita e idempotente por vela.
+- `signals.db` incluye trazabilidad completa (`timeframe`, `candle_timestamp`, OHLCV, `is_legacy`).
 
-v1.7 incorporará datos históricos deterministas, señales asociadas a velas
-cerradas, evaluación de resultados, simulación de operaciones y métricas de
-backtesting reproducibles.
+## Próxima fase (Fase 2)
+
+**Historical Data Engine**: datasets históricos reproducibles, almacenamiento en Parquet, particionado y validación de continuidad de velas antes del motor de backtesting.
+
