@@ -60,3 +60,37 @@ def synthetic_ohlcv() -> pd.DataFrame:
         }
     )
 
+
+@pytest.fixture
+def make_synthetic_candles() -> Callable[..., pd.DataFrame]:
+    """Generates synthetic, deterministic OHLCV datasets across arbitrary dates/intervals."""
+
+    def _build(
+        start: str = "2024-01-01",
+        periods: int = 500,
+        freq: str = "1h",
+        base_price: float = 100.0,
+    ) -> pd.DataFrame:
+        timestamps = pd.date_range(start, periods=periods, freq=freq, tz="UTC")
+        trend = np.linspace(base_price, base_price * 1.5, periods)
+        cycle = np.sin(np.arange(periods) / 10.0) * 2.0
+        close = trend + cycle
+        open_ = close - 0.5
+        high = np.maximum(open_, close) + 1.5
+        low = np.minimum(open_, close) - 1.5
+        volume = 500.0 + (np.arange(periods) % 50) * 10.0
+
+        return pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "volume": volume,
+            }
+        )
+
+    return _build
+
+
