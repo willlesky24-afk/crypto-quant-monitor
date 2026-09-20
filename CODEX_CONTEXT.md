@@ -67,12 +67,26 @@ Objetivos completados:
 
 Validación de cierre:
 
-- 84 pruebas automatizadas offline;
-- 80%+ de cobertura total;
-- Ruff sin errores;
-- `signals.db` migrada de forma segura e idempotente.
+## Fase 2 — Historical Data Engine
 
-## Siguiente objetivo (Fase 2)
+Estado: **completada e integrada**.
 
-v1.7 continuará con la construcción del **Historical Data Engine**: datasets históricos reproducibles, almacenamiento en Parquet, particionado y validación de continuidad de velas antes del motor de backtesting.
+Objetivos completados:
+
+1. almacenamiento columnar estructurado en Apache Parquet con particionado anual (`YYYY.parquet`);
+2. manifiesto de metadatos (`manifest.json`) y versionado de datasets (`1.0`);
+3. validador de continuidad temporal y coherencia de precios OHLCV (`CandleValidator`);
+4. cargador histórico paginado con control de rate limits y filtro anti-repintado (`HistoricalDataLoader`);
+5. orquestador de datasets con sincronización incremental y caché local (`HistoricalDatasetManager`);
+6. pruebas de integración de extremo a extremo multiaño (2023-2025) compatibles con motores cuantitativos.
+
+Validación de cierre:
+
+- 125 pruebas automatizadas 100% offline y deterministas;
+- 86% de cobertura total (96%-100% en módulos del motor histórico);
+- Ruff sin advertencias ni errores.
+
+## Siguiente objetivo (Fase 3)
+
+**Robust Backtesting Framework**: motor de simulación de estrategias cuantitativas sobre datasets históricos Parquet, cálculo de métricas de rendimiento (Sharpe, Max Drawdown, Win Rate, Profit Factor) y modelado de costos de ejecución (fees, slippage).
 

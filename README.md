@@ -101,13 +101,15 @@ pueden ejecutarse directamente:
 python scripts/diagnostics/test_engine.py
 ```
 
-## Limitaciones resueltas en Fase 1.5
+## Capacidades incorporadas en Fase 2 (Historical Data Engine)
 
-- Las señales e indicadores se calculan estrictamente sobre **velas cerradas** (`include_open_candle=False`), eliminando repainting.
-- `MarketReport.generate` es una función analítica pura; la persistencia es explícita e idempotente por vela.
-- `signals.db` incluye trazabilidad completa (`timeframe`, `candle_timestamp`, OHLCV, `is_legacy`).
+- **Almacenamiento columnar Parquet**: Formato Apache Parquet con compresión Snappy y particionado por año (`YYYY.parquet`) en `data/historical/`.
+- **Versionado y Metadatos**: Manifiestos `manifest.json` que registran versión de esquema (`1.0`), origen de datos, rangos temporales y métricas de calidad.
+- **Validador de Velas (`CandleValidator`)**: Detección de huecos (*gaps*), saneamiento de límites de precio OHLCV y eliminación de marcas temporales duplicadas.
+- **Descarga Paginada (`HistoricalDataLoader`)**: Paginación en bloques de 1000 velas con control de rate limit, retroceso exponencial y exclusión de velas abiertas.
+- **Gestor Incremental (`HistoricalDatasetManager`)**: Sincronización inteligente que solo descarga las velas faltantes respecto a la caché local.
 
-## Próxima fase (Fase 2)
+## Próxima fase (Fase 3)
 
-**Historical Data Engine**: datasets históricos reproducibles, almacenamiento en Parquet, particionado y validación de continuidad de velas antes del motor de backtesting.
+**Robust Backtesting Framework**: motor de backtesting vectorizado y orientado a eventos, métricas de rendimiento cuantitativas (Sharpe Ratio, Max Drawdown, Calmar Ratio, Win Rate, Profit Factor), simulación de deslizamiento (slippage) y comisiones de exchange.
 

@@ -63,15 +63,35 @@ El sistema actualmente cuenta con:
 
 
 
-\## Capa de datos
+\## Capa de datos en vivo e histórica
 
 
 
-\- Data Loader
+\- Data Loader (tiempo real)
+
+
 
 \- Indicadores técnicos
 
+
+
 \- Volume Profile
+
+
+
+\- **Historical Data Loader (`src/historical_data_loader.py`)** (descarga paginada, throttling, retries)
+
+
+
+\- **Candle Validator (`src/candle_validator.py`)** (continuidad, detección de gaps, anomalías OHLCV)
+
+
+
+\- **Parquet Store (`src/parquet_store.py`)** (almacenamiento columnar anual, manifests, escrituras atómicas)
+
+
+
+\- **Historical Dataset Manager (`src/dataset_manager.py`)** (sincronización incremental y caché local)
 
 
 

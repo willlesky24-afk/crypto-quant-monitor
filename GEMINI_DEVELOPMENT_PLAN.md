@@ -104,99 +104,47 @@ Incluye:
 
 \# FASE 2
 
-\# Historical Data Engine
-
-
-
-
-
-OBJETIVO:
-
-
-
-Crear la infraestructura histórica.
-
-
-
-
-
-Construir:
-
-
-
-
-
-\## Historical Data Loader
-
-
-
-
-
-Debe permitir:
-
-
-
-
-
-\- Descargar datos históricos.
-
-\- Trabajar por fechas.
-
-\- Guardar datasets.
-
-\- Evitar depender siempre de API.
-
-
-
-
-
-\---
-
-
-
-\## Data Storage
-
-
-
-
-
-Implementar:
-
-
-
-
-
-\- Parquet.
-
-\- Cache histórico.
-
-\- Versionado de datasets.
-
-
-
-
-
-\---
-
-
-
-\## Candle Validation
-
-
-
-
-
-Controlar:
-
-
-
-
-
-\- Velas incompletas.
-
-\- Datos faltantes.
-
-\- Errores.
+## Historical Data Engine
+
+ESTADO:
+
+COMPLETADO
+
+Objetivo:
+
+Crear la infraestructura histórica columnar, de alta velocidad y libre de sesgo para soportar análisis cuantitativo multiaño y backtesting offline reproducible.
+
+Componentes implementados:
+
+- **Almacenamiento Columnar Parquet (`src/parquet_store.py`)**:
+  - Formato Apache Parquet con compresión Snappy.
+  - Particionado anual (`YYYY.parquet`) bajo `data/historical/{symbol}/{interval}/`.
+  - Escritura atómica mediante archivos temporales `.tmp` para evitar corrupción por caídas.
+  - Versionado de datasets (`dataset_version: 1.0`) y metadatos en `manifest.json`.
+
+- **Validador de Calidad y Continuidad (`src/candle_validator.py`)**:
+  - Detección precisa de huecos temporales (gaps) adaptada a cada intervalo (`1m` a `1w`).
+  - Detección y descarte automático de velas duplicadas con ordenamiento cronológico.
+  - Saneamiento de límites OHLC (High >= Open, Close; Low <= Open, Close) y volumen no negativo.
+  - Modos estricto (`strict=True`) y permisivo/reparación (`repair=True`).
+  - Reporte de calidad estructurado (`CandleQualityReport`).
+
+- **Descarga Paginada y Control de Rate Limit (`src/historical_data_loader.py`)**:
+  - Descarga paginada en bloques de hasta 1000 velas por solicitud.
+  - Reintentos con retroceso exponencial (*exponential backoff*) ante fallos transitorios.
+  - Detección de encabezado de carga de Binance (`x-mbx-used-weight-1m`) y throttling automático.
+  - Filtro estricto anti-repintado de velas en formación (`include_open_candle=False`).
+
+- **Gestor de Datasets (`src/dataset_manager.py`)**:
+  - Orquestación unificada de descarga, validación y almacenamiento en disco.
+  - Sincronización incremental inteligente: detecta rango existente y solo consulta a la API el tramo faltante.
+  - Consultas y filtrado temporal eficiente sin recargar toda la serie.
+  - Resumen consolidado de metadatos de datasets disponibles.
+
+Métricas de Calidad y Verificación:
+- 125 pruebas automatizadas offline y deterministas ejecutadas con éxito (0 fallos).
+- Cobertura de tests: `CandleValidator` (100%), `HistoricalDatasetManager` (100%), `HistoricalDataLoader` (99%), `ParquetStore` (96%).
+- Pipeline de integración multiaño (2023-2025) validado con indicadores técnicos y MarketEngine.
 
 
 
