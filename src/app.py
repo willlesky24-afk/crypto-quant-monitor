@@ -243,6 +243,67 @@ st.markdown(
     h2, h3 {
         text-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
     }
+
+    /* Executive Justification Card & Pills */
+    .justification-card {
+        background: linear-gradient(135deg, rgba(16, 26, 46, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
+        border: 1px solid rgba(0, 229, 255, 0.25);
+        border-radius: 18px;
+        padding: 18px 22px;
+        margin-bottom: 16px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
+    .justification-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 8px;
+    }
+    .justification-title {
+        color: #00E5FF;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .justification-text {
+        color: #F0F6FC;
+        font-size: 0.92rem;
+        line-height: 1.7;
+        letter-spacing: 0.3px;
+        margin-bottom: 14px;
+    }
+    .metric-pill {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 14px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-right: 8px;
+        margin-bottom: 6px;
+    }
+    .metric-pill-cyan {
+        background: rgba(0, 229, 255, 0.12);
+        border: 1px solid rgba(0, 229, 255, 0.35);
+        color: #00E5FF;
+    }
+    .metric-pill-green {
+        background: rgba(0, 255, 136, 0.12);
+        border: 1px solid rgba(0, 255, 136, 0.35);
+        color: #00FF88;
+    }
+    .metric-pill-gold {
+        background: rgba(255, 214, 0, 0.12);
+        border: 1px solid rgba(255, 214, 0, 0.35);
+        color: #FFD600;
+    }
+    .metric-pill-coral {
+        background: rgba(255, 46, 99, 0.12);
+        border: 1px solid rgba(255, 46, 99, 0.35);
+        color: #FF2E63;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -533,17 +594,61 @@ with tab_live:
     m_report = reporter.generate(symbol, analysis, profile)
 
     with c_layer1:
-        d_col1, d_col2 = st.columns([1.2, 1.0])
-        with d_col1:
-            st.info(f"**Estado de Mercado:** {decision.market_state}")
-            st.write(f"**Justificación:** {decision.reasoning}")
-            conclusion = m_report.get("conclusion") or "Evaluación en curso con parámetros de riesgo definidos."
-            st.caption(f"📌 **Conclusión Cuantitativa:** {conclusion}")
-        with d_col2:
+        conf_val = decision.confidence if decision.confidence > 1.0 else decision.confidence * 100.0
+        tech_score = getattr(decision, "technical_score", score.get("score", 70.0))
+        pred_sc = getattr(decision, "predictive_score", pred_res.predictive_score)
+
+        narrative_p = (
+            f"El motor cuantitativo determinó una postura de <strong>{decision.decision}</strong> en dirección <strong>{decision.direction}</strong> "
+            f"para <strong>{symbol}</strong> ({interval}). "
+            f"La señal técnica ({tech_score:.1f} pts) y la proyección predictiva ({pred_sc:.2f}) "
+            f"arrojan una confianza ponderada de <strong>{conf_val:.1f}%</strong>, con objetivo dinámico en <strong>{decision.tp_multiplier:.2f}x ATR</strong> "
+            f"y corte de riesgo en <strong>{decision.sl_multiplier:.2f}x ATR</strong>."
+        )
+
+        st.markdown(
+            f"""
+            <div class="justification-card">
+                <div class="justification-header">
+                    <span class="justification-title">🧠 Razonamiento Cuantitativo & Estado</span>
+                    <span class="metric-pill metric-pill-cyan">{decision.market_state}</span>
+                </div>
+                <div class="justification-text">
+                    {narrative_p}
+                </div>
+                <div>
+                    <span class="metric-pill metric-pill-green">📊 Técnico: {tech_score:.1f} pts</span>
+                    <span class="metric-pill metric-pill-cyan">🔮 Predictivo: {pred_sc:.2f}</span>
+                    <span class="metric-pill metric-pill-gold">🎯 Confianza: {conf_val:.1f}%</span>
+                    <span class="metric-pill metric-pill-coral">🛑 SL: {decision.sl_multiplier:.2f}x ATR</span>
+                    <span class="metric-pill metric-pill-green">🎯 TP: {decision.tp_multiplier:.2f}x ATR</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col_pos, col_warn = st.columns(2)
+        with col_pos:
+            st.markdown("##### 🟢 Confluencias Favorables")
             if decision.positives:
-                st.success("**Confluencias Favorables:**\n- " + "\n- ".join(decision.positives))
+                for pos in decision.positives:
+                    st.markdown(f"- ✅ **{pos}**")
+            else:
+                st.caption("Sin confluencias alcistas de alta significancia detectadas.")
+
+        with col_warn:
+            st.markdown("##### ⚠️ Factores de Riesgo")
             if decision.warnings:
-                st.warning("**Riesgos y Advertencias:**\n- " + "\n- ".join(decision.warnings))
+                for warn in decision.warnings:
+                    st.markdown(f"- ⚠️ **{warn}**")
+            else:
+                st.caption("No se registran factores de riesgo estructural inmediatos.")
+
+        with st.expander("🔬 Ver fórmula técnica y parámetros detallados", expanded=False):
+            st.code(decision.reasoning, language="text")
+            conclusion = m_report.get("conclusion") or "Evaluación en curso con parámetros de riesgo definidos."
+            st.caption(f"📌 Conclusión del Reporte: {conclusion}")
 
     with c_layer2:
         tp_mult = getattr(decision, "tp_multiplier", 3.0)
