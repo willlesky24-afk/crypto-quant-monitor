@@ -172,7 +172,8 @@ with tab_live:
     with col3:
         st.metric("Decisión Estratégica", f"{decision.decision} ({decision.direction})")
     with col4:
-        st.metric("Confianza", f"{decision.confidence * 100:.1f}%")
+        conf_pct = decision.confidence if decision.confidence > 1.0 else decision.confidence * 100.0
+        st.metric("Confianza", f"{conf_pct:.1f}%")
     with col5:
         st.metric(
             "Predictive Score",
@@ -233,20 +234,45 @@ with tab_live:
         reporter = MarketReport()
         m_report = reporter.generate(symbol, analysis, profile)
 
-        st.json({
-            "symbol": symbol,
-            "timeframe": interval,
-            "direction": decision.direction,
-            "action": decision.decision,
-            "quant_score": score["score"],
-            "predictive_score": pred_res.predictive_score,
-            "tp_multiplier": decision.tp_multiplier,
-            "sl_multiplier": decision.sl_multiplier,
-            "poc": profile.get("poc"),
-            "vah": profile.get("vah"),
-            "val": profile.get("val"),
-            "risk_assessment": m_report.get("conclusion", ""),
-        })
+        s_c1, s_c2 = st.columns(2)
+        with s_c1:
+            st.markdown("#### 🎯 Área de Valor")
+            poc_val = profile.get("poc")
+            vah_val = profile.get("vah")
+            val_val = profile.get("val")
+            if poc_val:
+                st.markdown(f"🟡 **POC (Control):** `${poc_val:,.2f}`")
+            if vah_val:
+                st.markdown(f"🟢 **VAH (Techo):** `${vah_val:,.2f}`")
+            if val_val:
+                st.markdown(f"🔴 **VAL (Suelo):** `${val_val:,.2f}`")
+
+        with s_c2:
+            st.markdown("#### 🛡️ Gestión de Riesgo")
+            tp_mult = getattr(decision, "tp_multiplier", 3.0)
+            sl_mult = getattr(decision, "sl_multiplier", 1.5)
+            st.markdown(f"🎯 **Target (TP):** `{tp_mult:.2f}x ATR`")
+            st.markdown(f"🛑 **Stop Loss (SL):** `{sl_mult:.2f}x ATR`")
+            st.markdown(f"⚖️ **Ratio R:R:** `{tp_mult / max(sl_mult, 0.01):.2f}`")
+
+        conclusion = m_report.get("conclusion") or "Existen factores positivos, evaluando confirmaciones adicionales."
+        st.info(f"**Evaluación Cuantitativa:** {conclusion}")
+
+        with st.expander("🛠️ Ver datos técnicos en formato JSON (Avanzado)", expanded=False):
+            st.json({
+                "symbol": symbol,
+                "timeframe": interval,
+                "direction": decision.direction,
+                "action": decision.decision,
+                "quant_score": score["score"],
+                "predictive_score": pred_res.predictive_score,
+                "tp_multiplier": decision.tp_multiplier,
+                "sl_multiplier": decision.sl_multiplier,
+                "poc": profile.get("poc"),
+                "vah": profile.get("vah"),
+                "val": profile.get("val"),
+                "risk_assessment": m_report.get("conclusion", ""),
+            })
 
 
 # =====================================================================
@@ -283,12 +309,12 @@ with tab_copilot:
     )
 
     live_signal_event = SignalEvent(
-        timestamp=pd.Timestamp(df.index[-1]),
+        timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
         symbol=symbol,
         timeframe=interval,
         action=c_decision.decision,
         direction=c_decision.direction,
-        confidence=c_decision.confidence,
+        confidence=c_decision.confidence if c_decision.confidence <= 1.0 else c_decision.confidence / 100.0,
         predictive_score=c_pred_res.predictive_score,
         regime=c_regime_res.regime.value,
         reasoning=c_decision.reasoning,
@@ -296,9 +322,13 @@ with tab_copilot:
         quant_score=c_score["score"],
         stop_loss=c_risk.get("stop_loss"),
         take_profit=c_risk.get("take_profit"),
-        risk_reward_ratio=c_risk.get("risk_ratio"),
-        atr=c_risk.get("atr"),
         signal_id=f"live-{symbol}-{interval}",
+        metadata={
+            "risk_reward_ratio": c_risk.get("risk_ratio"),
+            "atr": c_risk.get("atr"),
+            "positives": c_decision.positives,
+            "warnings": c_decision.warnings,
+        },
     )
 
 
@@ -405,18 +435,27 @@ with tab_copilot:
                     st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
 
         st.markdown("---")
-        st.markdown("### 🕒 Context Snapshot Details")
-        st.json({
-            "symbol": current_market_context.symbol,
-            "timeframe": current_market_context.timeframe,
-            "regime": current_market_context.market_regime,
-            "quant_score": current_market_context.quant_score,
-            "predictive_score": current_market_context.predictive_score,
-            "action": current_market_context.signal.action,
-            "direction": current_market_context.signal.direction,
-            "stop_loss": current_market_context.risk.stop_loss,
-            "take_profit": current_market_context.risk.take_profit,
-        })
+        st.markdown("### 🕒 Context Snapshot")
+        snap_col1, snap_col2 = st.columns(2)
+        with snap_col1:
+            st.metric("Régimen Activo", current_market_context.market_regime)
+            st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
+        with snap_col2:
+            st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
+            st.metric("Sesgo Operativo", f"{current_market_context.signal.action} ({current_market_context.signal.direction})")
+
+        with st.expander("🛠️ Ver snapshot técnico en formato JSON (Avanzado)", expanded=False):
+            st.json({
+                "symbol": current_market_context.symbol,
+                "timeframe": current_market_context.timeframe,
+                "regime": current_market_context.market_regime,
+                "quant_score": current_market_context.quant_score,
+                "predictive_score": current_market_context.predictive_score,
+                "action": current_market_context.signal.action,
+                "direction": current_market_context.signal.direction,
+                "stop_loss": current_market_context.risk.stop_loss,
+                "take_profit": current_market_context.risk.take_profit,
+            })
 
 
 # =====================================================================
