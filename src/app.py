@@ -544,208 +544,184 @@ with tab_live:
 # =====================================================================
 with tab_copilot:
     st.subheader("🤖 Institutional AI Quant Copilot")
-    st.caption("Read-only decision support assistant • Market interpretation • Anomaly observation • No automated execution")
+    st.caption("Asistente de inteligencia de mercado • Razonamiento contextual con Gemini • Sin ejecución automática")
 
-    # Evaluate quantitative pipeline for current closed candle
-    c_m_engine = MarketEngine()
-    c_analysis = c_m_engine.analyze(df, profile)
-    c_s_engine = SignalEngine()
-    c_signal = c_s_engine.evaluate(c_analysis, profile)
-    c_r_engine = RiskEngine()
-    c_risk = c_r_engine.evaluate(c_analysis, profile)
-    c_i_engine = MarketIntelligence()
-    c_intel = c_i_engine.evaluate(c_analysis)
-    c_score_engine = QuantScore()
-    c_score = c_score_engine.calculate(c_analysis, c_signal, c_risk)
-    c_regime_clf = RegimeClassifier()
-    c_regime_res = c_regime_clf.classify(df)
-    c_pred_engine = PredictiveEngine()
-    c_pred_res = c_pred_engine.evaluate(df, current_regime_res=c_regime_res)
-    c_dec_engine = DecisionEngine()
-    c_decision = c_dec_engine.evaluate(
-        signal=c_signal,
-        risk=c_risk,
-        intelligence=c_intel,
-        predictive=c_pred_res,
-        regime=c_regime_res.regime,
-        technical_score=c_score["score"],
-        predictive_mode=True,
-    )
-
-    live_signal_event = SignalEvent(
-        timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
-        symbol=symbol,
-        timeframe=interval,
-        action=c_decision.decision,
-        direction=c_decision.direction,
-        confidence=c_decision.confidence if c_decision.confidence <= 1.0 else c_decision.confidence / 100.0,
-        predictive_score=c_pred_res.predictive_score,
-        regime=c_regime_res.regime.value,
-        reasoning=c_decision.reasoning,
-        price=float(df.iloc[-1]["close"]),
-        quant_score=c_score["score"],
-        stop_loss=c_risk.get("stop_loss"),
-        take_profit=c_risk.get("take_profit"),
-        signal_id=f"live-{symbol}-{interval}",
-        metadata={
-            "risk_reward_ratio": c_risk.get("risk_ratio"),
-            "atr": c_risk.get("atr"),
-            "positives": c_decision.positives,
-            "warnings": c_decision.warnings,
-        },
-    )
-
-
-    context_builder = ContextBuilder()
-    current_market_context = context_builder.build_context(
-        signal_event=live_signal_event,
-        technical_indicators={
-            "rsi": float(df.iloc[-1].get("rsi", 50.0)),
-            "adx": float(df.iloc[-1].get("adx", 20.0)),
-            "volume": float(df.iloc[-1].get("volume", 0.0)),
-        },
-        volume_profile=profile,
-        metadata={"source": "Streamlit Live Dashboard"},
-    )
-
-    db_path = os.getenv("DATABASE_PATH", "data/market_contexts.db")
     try:
-        copilot_provider = SQLiteMarketContextProvider(db_path=db_path)
-    except Exception:
-        copilot_provider = InMemoryMarketContextProvider()
+        live_signal_event = SignalEvent(
+            timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
+            symbol=symbol,
+            timeframe=interval,
+            action=decision.decision,
+            direction=decision.direction,
+            confidence=decision.confidence if decision.confidence <= 1.0 else decision.confidence / 100.0,
+            predictive_score=pred_res.predictive_score,
+            regime=regime_res.regime.value,
+            reasoning=decision.reasoning,
+            price=float(df.iloc[-1]["close"]),
+            quant_score=score["score"],
+            stop_loss=risk.get("stop_loss"),
+            take_profit=risk.get("take_profit"),
+            signal_id=f"live-{symbol}-{interval}",
+            metadata={
+                "risk_reward_ratio": risk.get("risk_ratio"),
+                "atr": risk.get("atr"),
+                "positives": decision.positives,
+                "warnings": decision.warnings,
+            },
+        )
 
-    import asyncio
+        context_builder = ContextBuilder()
+        current_market_context = context_builder.build_context(
+            signal_event=live_signal_event,
+            technical_indicators={
+                "rsi": float(df.iloc[-1].get("rsi", 50.0)),
+                "adx": float(df.iloc[-1].get("adx", 20.0)),
+                "volume": float(df.iloc[-1].get("volume", 0.0)),
+            },
+            volume_profile=profile,
+            metadata={"source": "Streamlit Live Dashboard"},
+        )
 
-    def _safe_async_run(coro):
-        if not asyncio.iscoroutine(coro) and not isinstance(coro, asyncio.Future):
-            return coro
+        db_path = os.getenv("DATABASE_PATH", "data/market_contexts.db")
         try:
+            copilot_provider = SQLiteMarketContextProvider(db_path=db_path)
+        except Exception:
+            copilot_provider = InMemoryMarketContextProvider()
+
+        import asyncio
+
+        def _safe_async_run(coro):
+            if not asyncio.iscoroutine(coro) and not isinstance(coro, asyncio.Future):
+                return coro
             try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            if loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    return executor.submit(lambda: asyncio.run(coro)).result()
-            else:
-                return loop.run_until_complete(coro)
-        except Exception as exc:
-            raise exc
-
-    try:
-        copilot_provider.update_context(current_market_context)
-    except Exception:
-        pass
-
-    # Real AI Provider Resolution via ProviderFactory
-    active_llm_provider = ProviderFactory.create_provider()
-    copilot_assistant = OperatorAssistant(
-        context_provider=copilot_provider,
-        provider=active_llm_provider,
-    )
-    market_report_svc = MarketReportService()
-    anomaly_detector = MarketAnomalyDetector()
-
-    # Copilot Modular Layer Sub-tabs
-    cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs([
-        "💬 Consulta Directa (Chat AI)",
-        "📋 Briefing Diario de Mercado",
-        "🚨 Monitor Pasivo de Anomalías",
-        "🕒 Snapshot de Contexto Activo",
-    ])
-
-    with cop_tab1:
-        st.markdown("#### 💬 Consultar a Gemini Copilot")
-        provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
-        model_name = getattr(active_llm_provider, "model", "standard")
-        st.caption(f"🧠 Modelo Activo: **{provider_name}** (`{model_name}`) | Base de Datos: `{db_path}`")
-        st.info("💡 Ejemplos de consulta: *'Analiza el estado de BTCUSDT ahora'*, *'¿Cuáles son los principales riesgos identificados?'*, *'Explica el régimen actual'*")
-        user_query_input = st.text_input("Ingresa tu consulta para el Copilot:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
-
-        if st.button("🔎 Enviar Consulta a Copilot", type="primary"):
-            with st.spinner("AI Copilot sintetizando contexto cuantitativo con Gemini..."):
-                query_obj = OperatorQuery(
-                    query=user_query_input,
-                    symbol=symbol,
-                    timeframe=interval,
-                    operator_id="dashboard_operator",
-                )
                 try:
-                    copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                    st.markdown("---")
-                    st.markdown(copilot_res.answer)
-                    latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
-                    tokens = copilot_res.metadata.get("total_tokens", 0)
-                    meta_str = f"⚡ Latencia: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
-                    st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
-                except Exception as copilot_err:
-                    st.error(f"Error procesando la consulta con AI Copilot: {copilot_err}")
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                if loop.is_running():
+                    import concurrent.futures
 
-    with cop_tab2:
-        st.markdown("#### 📋 Briefing Diario del Mercado")
-        daily_rep = market_report_svc.generate_daily_briefing(current_market_context)
-        st.markdown(f"**Panorama General:** {daily_rep.market_overview}")
-        br_c1, br_c2, br_c3 = st.columns(3)
-        with br_c1:
-            st.metric("Régimen", daily_rep.current_regime)
-        with br_c2:
-            st.metric("Puntuación Quant", f"{daily_rep.quant_score:.1f}/100")
-        with br_c3:
-            st.metric("Predictive Score", f"{daily_rep.predictive_score:.2f}")
-
-        st.markdown(f"**Análisis de Volatilidad:** {daily_rep.volatility_analysis}")
-        if daily_rep.strongest_signals:
-            st.markdown("**Señales Más Fuertes:**")
-            for s in daily_rep.strongest_signals:
-                st.markdown(f"- {s}")
-        if daily_rep.main_risks:
-            st.markdown("**Riesgos Identificados:**")
-            for r in daily_rep.main_risks:
-                st.markdown(f"- ⚠️ {r}")
-
-    with cop_tab3:
-        st.markdown("#### 🚨 Detección Pasiva de Anomalías Estructurales")
-        detected_anomalies = anomaly_detector.evaluate(current_market_context)
-        if not detected_anomalies:
-            st.success("✅ Sin anomalías estructurales ni divergencias severas de volatilidad detectadas en este activo.")
-        else:
-            for alt in detected_anomalies:
-                if alt.severity.value == "CRITICAL":
-                    st.error(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
-                elif alt.severity.value == "WARNING":
-                    st.warning(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        return executor.submit(lambda: asyncio.run(coro)).result()
                 else:
-                    st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                    return loop.run_until_complete(coro)
+            except Exception as exc:
+                raise exc
 
-    with cop_tab4:
-        st.markdown("#### 🕒 Snapshot de Contexto Activo")
-        snap_col1, snap_col2, snap_col3, snap_col4 = st.columns(4)
-        with snap_col1:
-            st.metric("Régimen Activo", current_market_context.market_regime)
-        with snap_col2:
-            st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
-        with snap_col3:
-            st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
-        with snap_col4:
-            st.metric("Sesgo Operativo", f"{current_market_context.signal.action} ({current_market_context.signal.direction})")
+        try:
+            copilot_provider.update_context(current_market_context)
+        except Exception:
+            pass
 
-        with st.expander("🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)", expanded=False):
-            st.json({
-                "symbol": current_market_context.symbol,
-                "timeframe": current_market_context.timeframe,
-                "regime": current_market_context.market_regime,
-                "quant_score": current_market_context.quant_score,
-                "predictive_score": current_market_context.predictive_score,
-                "action": current_market_context.signal.action,
-                "direction": current_market_context.signal.direction,
-                "confidence": current_market_context.signal.confidence,
-                "stop_loss": current_market_context.risk.stop_loss,
-                "take_profit": current_market_context.risk.take_profit,
-                "atr": current_market_context.risk.atr,
-            })
+        # Real AI Provider Resolution via ProviderFactory
+        active_llm_provider = ProviderFactory.create_provider()
+        copilot_assistant = OperatorAssistant(
+            context_provider=copilot_provider,
+            ai_provider=active_llm_provider,
+        )
+        market_report_svc = MarketReportService()
+        anomaly_detector = MarketAnomalyDetector()
+
+        # Copilot Modular Layer Sub-tabs
+        cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs([
+            "💬 Consulta Directa (Chat AI)",
+            "📋 Briefing Diario de Mercado",
+            "🚨 Monitor Pasivo de Anomalías",
+            "🕒 Snapshot de Contexto Activo",
+        ])
+
+        with cop_tab1:
+            st.markdown("#### 💬 Consultar a Gemini Copilot")
+            provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
+            model_name = getattr(active_llm_provider, "model", "standard")
+            st.caption(f"🧠 Modelo Activo: **{provider_name}** (`{model_name}`) | Base de Datos: `{db_path}`")
+            st.info("💡 Ejemplos de consulta: *'Analiza el estado de BTCUSDT ahora'*, *'¿Cuáles son los principales riesgos identificados?'*, *'Explica el régimen actual'*")
+            user_query_input = st.text_input("Ingresa tu consulta para el Copilot:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
+
+            if st.button("🔎 Enviar Consulta a Copilot", type="primary"):
+                with st.spinner("AI Copilot sintetizando contexto cuantitativo con Gemini..."):
+                    query_obj = OperatorQuery(
+                        query=user_query_input,
+                        symbol=symbol,
+                        timeframe=interval,
+                        operator_id="dashboard_operator",
+                    )
+                    try:
+                        copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
+                        st.markdown("---")
+                        st.markdown(copilot_res.answer)
+                        latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
+                        tokens = copilot_res.metadata.get("total_tokens", 0)
+                        meta_str = f"⚡ Latencia: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
+                        st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
+                    except Exception as copilot_err:
+                        st.error(f"Error procesando la consulta con AI Copilot: {copilot_err}")
+
+        with cop_tab2:
+            st.markdown("#### 📋 Briefing Diario del Mercado")
+            daily_rep = market_report_svc.generate_daily_briefing(current_market_context)
+            st.markdown(f"**Panorama General:** {daily_rep.market_overview}")
+            br_c1, br_c2, br_c3 = st.columns(3)
+            with br_c1:
+                st.metric("Régimen", daily_rep.current_regime)
+            with br_c2:
+                st.metric("Puntuación Quant", f"{daily_rep.quant_score:.1f}/100")
+            with br_c3:
+                st.metric("Predictive Score", f"{daily_rep.predictive_score:.2f}")
+
+            st.markdown(f"**Análisis de Volatilidad:** {daily_rep.volatility_analysis}")
+            if daily_rep.strongest_signals:
+                st.markdown("**Señales Más Fuertes:**")
+                for s in daily_rep.strongest_signals:
+                    st.markdown(f"- {s}")
+            if daily_rep.main_risks:
+                st.markdown("**Riesgos Identificados:**")
+                for r in daily_rep.main_risks:
+                    st.markdown(f"- ⚠️ {r}")
+
+        with cop_tab3:
+            st.markdown("#### 🚨 Detección Pasiva de Anomalías Estructurales")
+            detected_anomalies = anomaly_detector.evaluate(current_market_context)
+            if not detected_anomalies:
+                st.success("✅ Sin anomalías estructurales ni divergencias severas de volatilidad detectadas en este activo.")
+            else:
+                for alt in detected_anomalies:
+                    if alt.severity.value == "CRITICAL":
+                        st.error(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                    elif alt.severity.value == "WARNING":
+                        st.warning(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                    else:
+                        st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+
+        with cop_tab4:
+            st.markdown("#### 🕒 Snapshot de Contexto Activo")
+            snap_col1, snap_col2, snap_col3, snap_col4 = st.columns(4)
+            with snap_col1:
+                st.metric("Régimen Activo", current_market_context.market_regime)
+            with snap_col2:
+                st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
+            with snap_col3:
+                st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
+            with snap_col4:
+                st.metric("Sesgo Operativo", f"{current_market_context.signal.action} ({current_market_context.signal.direction})")
+
+            with st.expander("🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)", expanded=False):
+                st.json({
+                    "symbol": current_market_context.symbol,
+                    "timeframe": current_market_context.timeframe,
+                    "regime": current_market_context.market_regime,
+                    "quant_score": current_market_context.quant_score,
+                    "predictive_score": current_market_context.predictive_score,
+                    "action": current_market_context.signal.action,
+                    "direction": current_market_context.signal.direction,
+                    "confidence": current_market_context.signal.confidence,
+                    "stop_loss": current_market_context.risk.stop_loss,
+                    "take_profit": current_market_context.risk.take_profit,
+                    "atr": current_market_context.risk.atr,
+                })
+    except Exception as cop_err:
+        st.error(f"Error inicializando AI Copilot: {cop_err}")
 
 
 # =====================================================================
