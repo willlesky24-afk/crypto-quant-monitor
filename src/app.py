@@ -283,6 +283,34 @@ else:
 interval = st.sidebar.selectbox("Temporalidad", ["15m", "1h", "4h", "1d"], index=1)
 limit = st.sidebar.slider("Velas Históricas", min_value=250, max_value=1000, value=300, step=50)
 
+# =====================================================================
+# SIDEBAR: MODO DE ANÁLISIS (AUTOMÁTICO VS MANUAL / WHAT-IF)
+# =====================================================================
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎛️ Modo de Análisis")
+sim_mode = st.sidebar.radio(
+    "Fuente de Parámetros",
+    ["🟢 Automático (En Vivo)", "🕹️ Manual (Simulador de Escenarios)"],
+    index=0,
+)
+
+is_manual_mode = "Manual" in sim_mode
+
+if is_manual_mode:
+    st.sidebar.markdown("##### ⚙️ Parámetros Forzados")
+    from src.regime_classifier import MarketRegime
+    from src.strategy_optimizer import OptimizedParameters
+
+    regime_options = [r.value for r in MarketRegime]
+    manual_regime_str = st.sidebar.selectbox("Régimen de Mercado", regime_options, index=0)
+    manual_regime = MarketRegime(manual_regime_str)
+
+    manual_pred_score = st.sidebar.slider("Predictive Score", 0.0, 1.0, 0.65, 0.05)
+    manual_prob_cont = st.sidebar.slider("P(Continuación)", 0.0, 1.0, 0.60, 0.05)
+    manual_tp_mult = st.sidebar.slider("Target TP (x ATR)", 1.0, 6.0, 3.0, 0.25)
+    manual_sl_mult = st.sidebar.slider("Stop Loss SL (x ATR)", 0.5, 4.0, 1.5, 0.25)
+    manual_tech_weight = st.sidebar.slider("Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05)
+
 # Fetch Market Data
 try:
     loader = BinanceDataLoader()
@@ -310,11 +338,12 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_copilot, tab_backtest, tab_settings = st.tabs([
+tab_live, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs([
     "📡 Live Monitor",
     "🤖 AI Copilot",
     "📈 Backtest Analytics",
     "⚙️ Notification Settings",
+    "📖 Guía & Glosario",
 ])
 
 
@@ -335,25 +364,76 @@ with tab_live:
     quant_score_engine = QuantScore()
     score = quant_score_engine.calculate(analysis, signal, risk)
 
-    regime_classifier = RegimeClassifier()
-    regime_res = regime_classifier.classify(df)
+    if is_manual_mode:
+        from src.predictive_engine import PredictiveResult
+        from src.regime_classifier import RegimeResult
 
-    predictive_engine = PredictiveEngine()
-    pred_res = predictive_engine.evaluate(df, current_regime_res=regime_res)
+        regime_res = RegimeResult(
+            timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
+            regime=manual_regime,
+            confidence=0.90,
+            features_used={"manual_override": 1.0},
+        )
+        pred_res = PredictiveResult(
+            timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
+            probability_continuation=manual_prob_cont,
+            probability_reversal=round(1.0 - manual_prob_cont, 4),
+            predictive_score=manual_pred_score,
+            confidence=0.85,
+            regime_context=manual_regime.value,
+            direction_bias="LONG" if manual_regime == MarketRegime.TRENDING_BULL else ("SHORT" if manual_regime == MarketRegime.TRENDING_BEAR else "NEUTRAL"),
+            features_used={},
+        )
+        opt_params = OptimizedParameters(
+            regime=manual_regime.value,
+            volatility_state="MANUAL",
+            atr_tp_multiplier=manual_tp_mult,
+            atr_sl_multiplier=manual_sl_mult,
+            expected_rr=round(manual_tp_mult / max(manual_sl_mult, 0.01), 2),
+            sample_size=100,
+            confidence=0.90,
+            validation_period={},
+        )
+        decision_engine = DecisionEngine(
+            technical_weight=manual_tech_weight,
+            predictive_weight=1.0 - manual_tech_weight,
+        )
+        decision = decision_engine.evaluate(
+            signal=signal,
+            risk=risk,
+            intelligence=intel,
+            predictive=pred_res,
+            optimized_params=opt_params,
+            regime=regime_res.regime,
+            technical_score=score["score"],
+            predictive_mode=True,
+        )
+    else:
+        regime_classifier = RegimeClassifier()
+        regime_res = regime_classifier.classify(df)
 
-    decision_engine = DecisionEngine()
-    decision = decision_engine.evaluate(
-        signal=signal,
-        risk=risk,
-        intelligence=intel,
-        predictive=pred_res,
-        regime=regime_res.regime,
-        technical_score=score["score"],
-        predictive_mode=True,
-    )
+        predictive_engine = PredictiveEngine()
+        pred_res = predictive_engine.evaluate(df, current_regime_res=regime_res)
+
+        decision_engine = DecisionEngine()
+        decision = decision_engine.evaluate(
+            signal=signal,
+            risk=risk,
+            intelligence=intel,
+            predictive=pred_res,
+            regime=regime_res.regime,
+            technical_score=score["score"],
+            predictive_mode=True,
+        )
 
     last_bar = df.iloc[-1]
     curr_price = float(last_bar["close"])
+
+    if is_manual_mode:
+        st.warning(
+            f"🕹️ **Modo Simulación Manual Activo:** Régimen forzado a `{manual_regime.value}` • "
+            f"Predictive Score: `{manual_pred_score:.2f}` • TP: `{manual_tp_mult:.2f}x ATR` • SL: `{manual_sl_mult:.2f}x ATR`."
+        )
 
     # 2. Key Metrics Header
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -962,3 +1042,98 @@ with tab_settings:
             st.success(f"Despacho completado. {len(results)} canales procesados.")
             result_rows = [r.to_dict() for r in results]
             st.table(pd.DataFrame(result_rows))
+
+
+# =====================================================================
+# TAB 5: GUÍA & GLOSARIO
+# =====================================================================
+with tab_guide:
+    st.subheader("📖 Guía Rápida & Glosario Cuantitativo")
+    st.caption("Referencia institucional de términos, siglas y manual paso a paso de la plataforma.")
+
+    g_tab1, g_tab2 = st.tabs([
+        "📚 Glosario de Siglas y Métricas",
+        "🕹️ Manual: Si tocas esto, obtienes esto",
+    ])
+
+    with g_tab1:
+        st.markdown("### 📚 Diccionario de Siglas Institucionales")
+
+        g_col1, g_col2 = st.columns(2)
+
+        with g_col1:
+            st.markdown("""
+            #### 🎯 Niveles de Volume Profile y Liquidez
+            - **`POC` (Point of Control / Punto de Control):**  
+              *Significado:* Nivel de precio exacto donde se transó el mayor volumen de operaciones durante el período analizado.  
+              *Uso táctico:* Funciona como un poderoso imán de liquidez y soporte/resistencia gravitacional.
+            
+            - **`VAH` (Value Area High / Techo del Área de Valor):**  
+              *Significado:* Límite superior del rango de precios donde se concentró el 70% del volumen negociado.  
+              *Uso táctico:* Resistencia institucional. Si el precio supera el VAH con volumen, indica desequilibrio alcista (*premium* comprador).
+            
+            - **`VAL` (Value Area Low / Suelo del Área de Valor):**  
+              *Significado:* Límite inferior del rango de precios que concentra el 70% del volumen negociado.  
+              *Uso táctico:* Soporte institucional. Si el precio pierde el VAL con volumen, indica desequilibrio bajista (*descuento* vendedor).
+
+            #### 🛡️ Gestión de Riesgo y Operativa
+            - **`ATR` (Average True Range / Rango Verdadero Promedio):**  
+              *Significado:* Métrica matemática de la volatilidad real del mercado expresada en dólares.  
+              *Uso táctico:* Permite definir objetivos de ganancia y límites de pérdida dinámicos que se expanden en mercados volátiles y se comprimen en mercados tranquilos.
+            
+            - **`R:R` (Risk-to-Reward Ratio / Ratio Riesgo-Beneficio):**  
+              *Significado:* Proporción entre el beneficio proyectado (Take Profit) y la pérdida máxima aceptada (Stop Loss).  
+              *Ejemplo:* Un R:R de `1 : 2.0` significa que por cada $1 arriesgado, se busca una ganancia de $2.
+            
+            - **`SL` (Stop Loss):** Nivel de corte de pérdidas protector automático.
+            - **`TP` (Take Profit):** Nivel objetivo de toma de ganancias programado.
+            """)
+
+        with g_col2:
+            st.markdown("""
+            #### 🧠 Modelos Predictivos y Regímenes
+            - **`P(Cont)` (Probabilidad de Continuación):**  
+              *Significado:* Cálculo estocástico derivado del modelo de Markov que estima la probabilidad de que la siguiente vela mantenga la dirección predominante.
+            
+            - **`Predictive Score` (0.00 a 1.00):**  
+              *Significado:* Puntuación normalizada del motor predictivo probabilístico. Valores > 0.60 señalan alta probabilidad direccional.
+            
+            - **`Quant Score` (0 a 100):**  
+              *Significado:* Puntuación cuantitativa compuesta que integra fuerza de tendencia, momento RSI/ADX, alineación de medias móviles y confluencias de volumen.
+            
+            - **`Regímenes de Mercado`:**
+              - **`TRENDING_BULL`:** Tendencia alcista confirmada (Precio > EMA50 > EMA200).
+              - **`TRENDING_BEAR`:** Tendencia bajista confirmada (Precio < EMA50 < EMA200).
+              - **`RANGING`:** Mercado en consolidación lateral sin tendencia definida.
+              - **`HIGH_VOLATILITY`:** Expansión violenta de rango y riesgo elevado.
+              - **`COMPRESSION`:** Rango estrecho que precede a movimientos explosivos.
+
+            #### 📈 Métricas de Backtest y Rendimiento
+            - **`Win Rate`:** Porcentaje de operaciones cerradas en ganancia frente al total.
+            - **`Profit Factor`:** Ganancia bruta dividida entre pérdida bruta (Institucional > 1.5).
+            - **`Max Drawdown %`:** Mayor caída porcentual experimentada desde el punto máximo de capital.
+            - **`Sharpe Ratio`:** Rendimiento generado por cada unidad de volatilidad asumida (> 1.0 es sólido).
+            - **`MAE / MFE`:** Máxima excursión adversa (*peor momento en contra*) y favorable (*mejor momento a favor*) de cada trade.
+            """)
+
+    with g_tab2:
+        st.markdown("### 🕹️ Manual Paso a Paso: Si tocas esto, obtienes esto")
+
+        st.markdown("""
+        | Sección | Control / Botón | Qué hace al interactuar | Qué obtienes en pantalla |
+        | :--- | :--- | :--- | :--- |
+        | **Barra Lateral** | **Par de Criptomoneda** | Seleccionas una moneda (BTC, ETH, SOL, etc.) | Descarga en tiempo real las velas institucionales de Binance para ese activo. |
+        | **Barra Lateral** | **Temporalidad** | Seleccionas 15m, 1h, 4h o 1d | Cambia el horizonte temporal. Verás cómo el régimen de mercado y las medias móviles se adaptan al marco temporal elegido. |
+        | **Barra Lateral** | **Velas Históricas** | Mueves el deslizador (250 a 1000 velas) | Amplía o reduce el historial cargado en memoria (ej. 300 velas en 1d = ~10 meses). |
+        | **Barra Lateral** | **Modo de Análisis** | Alternas entre *Automático* y *Manual* | Activa el simulador *What-If* para forzar regímenes, probabilidades y multiplicadores a tu criterio. |
+        | **📡 Live Monitor** | **🧠 Diagnóstico** | Pulsas la sub-pestaña | Muestra la decisión ejecutiva (LONG, SHORT o ESPERAR), justificación matemática y confluencias favorables/alertas. |
+        | **📡 Live Monitor** | **📋 Operación** | Pulsas la sub-pestaña | Muestra los precios sugeridos de entrada, Stop Loss (SL), Take Profit (TP), distancias en ATR y ratio R:R. |
+        | **📡 Live Monitor** | **🎯 Niveles** | Pulsas la sub-pestaña | Entrega los precios clave del Área de Valor (POC, VAH, VAL) e indica si el precio está en zona de sobrecompra o descuento. |
+        | **📡 Live Monitor** | **🔮 Predicción** | Pulsas la sub-pestaña | Muestra la probabilidad matemática de que la tendencia continúe y el desglose del modelo predictivo. |
+        | **📡 Live Monitor** | **🛠️ Datos** | Pulsas la sub-pestaña | Expande la carga técnica en JSON para auditoría cuantitativa o conexión a sistemas externos. |
+        | **🤖 AI Copilot** | **💬 Chat AI** | Escribes una duda y pulsas *Enviar Consulta* | Gemini analiza el contexto actual y te responde con explicación de mercado, riesgos y telemetría de latencia. |
+        | **🤖 AI Copilot** | **📋 Briefing** | Pulsas la sub-pestaña | Genera un informe diario institucional estructurado con análisis de volatilidad y señales fuertes. |
+        | **🤖 AI Copilot** | **🚨 Anomalías** | Pulsas la sub-pestaña | Evalúa si existen divergencias estructurales o anomalías severas de volatilidad en el activo actual. |
+        | **📈 Backtest** | **🚀 Ejecutar Backtest** | Pulsas el botón con tus parámetros elegidos | Simula vela por vela la estrategia en el pasado sin repintado y grafica la Curva de Capital, Drawdown y dispersión MAE vs MFE. |
+        | **⚙️ Configuración** | **🔔 Notificación de Prueba** | Pulsas el botón de prueba | Envía un ping de prueba simulado a tus canales de Telegram, Discord o Webhook configurados. |
+        """)
