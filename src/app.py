@@ -87,7 +87,30 @@ st.caption("Institutional Quantitative Engine • Predictive Intelligence • Re
 # =====================================================================
 st.sidebar.header("🕹️ Parámetros de Mercado")
 
-symbol = st.sidebar.text_input("Símbolo", "BTCUSDT").strip().upper()
+POPULAR_PAIRS = {
+    "🥇 BTC / USDT (Bitcoin)": "BTCUSDT",
+    "🥈 ETH / USDT (Ethereum)": "ETHUSDT",
+    "⚡ SOL / USDT (Solana)": "SOLUSDT",
+    "🪙 BNB / USDT (Binance Coin)": "BNBUSDT",
+    "💧 XRP / USDT (Ripple)": "XRPUSDT",
+    "🐕 DOGE / USDT (Dogecoin)": "DOGEUSDT",
+    "🔷 ADA / USDT (Cardano)": "ADAUSDT",
+    "🔺 AVAX / USDT (Avalanche)": "AVAXUSDT",
+    "🔗 LINK / USDT (Chainlink)": "LINKUSDT",
+    "💶 EUR / USDT (Euro / Dólar)": "EURUSDT",
+    "✍️ Escribir otro par personalizado...": "CUSTOM",
+}
+
+selected_label = st.sidebar.selectbox(
+    "Par de Criptomoneda",
+    options=list(POPULAR_PAIRS.keys()),
+    index=0,
+)
+
+if POPULAR_PAIRS[selected_label] == "CUSTOM":
+    symbol = st.sidebar.text_input("Ingresa el símbolo (ej. SUIUSDT)", "BTCUSDT").strip().upper()
+else:
+    symbol = POPULAR_PAIRS[selected_label]
 interval = st.sidebar.selectbox("Temporalidad", ["15m", "1h", "4h", "1d"], index=1)
 limit = st.sidebar.slider("Velas Históricas", min_value=250, max_value=1000, value=300, step=50)
 
