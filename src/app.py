@@ -104,34 +104,41 @@ st.markdown(
         color: var(--text-bright);
     }
 
-    /* Metric Cards: Futuristic Floating Glassmorphism */
+    /* Metric Cards: Futuristic Floating Glassmorphism - Compact & Balanced */
     [data-testid="stMetric"] {
         background: linear-gradient(135deg, rgba(16, 26, 46, 0.9) 0%, rgba(10, 16, 30, 0.95) 100%) !important;
         border: 1px solid rgba(0, 229, 255, 0.22) !important;
-        border-radius: 22px !important;
-        padding: 16px 22px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+        border-radius: 18px !important;
+        padding: 10px 14px !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
     }
 
     [data-testid="stMetric"]:hover {
-        transform: translateY(-3px);
+        transform: translateY(-2px);
         border-color: var(--neon-green) !important;
-        box-shadow: 0 12px 32px rgba(0, 255, 136, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0 8px 24px rgba(0, 255, 136, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
     }
 
     [data-testid="stMetricLabel"] {
         color: var(--text-sub) !important;
-        font-size: 0.82rem !important;
+        font-size: 0.74rem !important;
         font-weight: 700 !important;
-        letter-spacing: 0.6px !important;
+        letter-spacing: 0.5px !important;
         text-transform: uppercase !important;
+        margin-bottom: 2px !important;
     }
 
-    [data-testid="stMetricValue"] {
+    [data-testid="stMetricValue"], [data-testid="stMetricValue"] * {
         color: #ffffff !important;
-        font-weight: 800 !important;
-        text-shadow: 0 0 14px rgba(0, 229, 255, 0.45);
+        font-size: 1.25rem !important;
+        font-weight: 700 !important;
+        line-height: 1.25 !important;
+        text-shadow: 0 0 10px rgba(0, 229, 255, 0.35) !important;
+    }
+
+    [data-testid="stMetricDelta"] {
+        font-size: 0.75rem !important;
     }
 
     /* Rounded Pill Buttons with Fluorescent Glow */
@@ -429,61 +436,107 @@ with tab_live:
     )
     st.plotly_chart(fig_live, use_container_width=True)
 
-    # 4. Contextual Diagnostics & Active Signals
-    c_diag, c_signals = st.columns([1, 1])
-    with c_diag:
-        st.subheader("🧠 Diagnóstico y Razonamiento")
-        st.info(f"**Estado de Mercado:** {decision.market_state}")
-        st.write(f"**Justificación:** {decision.reasoning}")
-        if decision.positives:
-            st.success("**Confluencias Positivas:**\n- " + "\n- ".join(decision.positives))
-        if decision.warnings:
-            st.warning("**Riesgos y Advertencias:**\n- " + "\n- ".join(decision.warnings))
+    # 4. Contextual Diagnostics & Modular Layer Navigation (Menús por Capas)
+    st.markdown("### 🗂️ Información Cuantitativa por Capas")
+    st.caption("Explora el análisis de mercado capa por capa sin saturación visual:")
 
-    with c_signals:
-        st.subheader("📋 Parámetros de Operación")
-        reporter = MarketReport()
-        m_report = reporter.generate(symbol, analysis, profile)
+    c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs([
+        "🧠 Capa 1: Diagnóstico y Decisión",
+        "📋 Capa 2: Plan de Operación y Riesgo",
+        "🎯 Capa 3: Área de Valor (Volume Profile)",
+        "🔮 Capa 4: Inteligencia Predictiva y Régimen",
+        "🛠️ Capa 5: Snapshot Técnico (JSON)",
+    ])
 
-        s_c1, s_c2 = st.columns(2)
-        with s_c1:
-            st.markdown("#### 🎯 Área de Valor")
-            poc_val = profile.get("poc")
-            vah_val = profile.get("vah")
-            val_val = profile.get("val")
+    reporter = MarketReport()
+    m_report = reporter.generate(symbol, analysis, profile)
+
+    with c_layer1:
+        st.markdown("#### 🧠 Diagnóstico Estratégico")
+        d_col1, d_col2 = st.columns([1.2, 1.0])
+        with d_col1:
+            st.info(f"**Estado de Mercado:** {decision.market_state}")
+            st.write(f"**Justificación:** {decision.reasoning}")
+            conclusion = m_report.get("conclusion") or "Evaluación en curso con parámetros de riesgo definidos."
+            st.caption(f"📌 **Conclusión Cuantitativa:** {conclusion}")
+        with d_col2:
+            if decision.positives:
+                st.success("**Confluencias Favorables:**\n- " + "\n- ".join(decision.positives))
+            if decision.warnings:
+                st.warning("**Riesgos y Advertencias:**\n- " + "\n- ".join(decision.warnings))
+
+    with c_layer2:
+        st.markdown("#### 🛡️ Parámetros de Riesgo y Operación")
+        tp_mult = getattr(decision, "tp_multiplier", 3.0)
+        sl_mult = getattr(decision, "sl_multiplier", 1.5)
+        atr_val = risk.get("atr", 0.0)
+
+        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        with p_col1:
+            st.metric("Sesgo Sugerido", f"{decision.decision} ({decision.direction})")
+        with p_col2:
+            st.metric("Target (TP)", f"{tp_mult:.2f}x ATR", f"+${(tp_mult * atr_val):,.2f}" if atr_val else None)
+        with p_col3:
+            st.metric("Stop Loss (SL)", f"{sl_mult:.2f}x ATR", f"-${(sl_mult * atr_val):,.2f}" if atr_val else None)
+        with p_col4:
+            rr_ratio = tp_mult / max(sl_mult, 0.01)
+            st.metric("Ratio R:R", f"1 : {rr_ratio:.2f}")
+
+        st.caption("ℹ️ Los multiplicadores se derivan de la volatilidad histórica normalizada por el indicador ATR.")
+
+    with c_layer3:
+        st.markdown("#### 🎯 Niveles Clave del Área de Valor (Volume Profile)")
+        poc_val = profile.get("poc")
+        vah_val = profile.get("vah")
+        val_val = profile.get("val")
+
+        v_col1, v_col2, v_col3 = st.columns(3)
+        with v_col1:
             if poc_val:
-                st.markdown(f"🟡 **POC (Control):** `${poc_val:,.2f}`")
+                st.metric("🟡 POC (Punto de Control)", f"${poc_val:,.2f}", "Zona de mayor liquidez")
+        with v_col2:
             if vah_val:
-                st.markdown(f"🟢 **VAH (Techo):** `${vah_val:,.2f}`")
+                st.metric("🟢 VAH (Techo de Valor)", f"${vah_val:,.2f}", "Resistencia de volumen")
+        with v_col3:
             if val_val:
-                st.markdown(f"🔴 **VAL (Suelo):** `${val_val:,.2f}`")
+                st.metric("🔴 VAL (Suelo de Valor)", f"${val_val:,.2f}", "Soporte de volumen")
 
-        with s_c2:
-            st.markdown("#### 🛡️ Gestión de Riesgo")
-            tp_mult = getattr(decision, "tp_multiplier", 3.0)
-            sl_mult = getattr(decision, "sl_multiplier", 1.5)
-            st.markdown(f"🎯 **Target (TP):** `{tp_mult:.2f}x ATR`")
-            st.markdown(f"🛑 **Stop Loss (SL):** `{sl_mult:.2f}x ATR`")
-            st.markdown(f"⚖️ **Ratio R:R:** `{tp_mult / max(sl_mult, 0.01):.2f}`")
+        pos_text = "dentro del Área de Valor"
+        if vah_val and curr_price > vah_val:
+            pos_text = "por encima del VAH (desequilibrio alcista / premium)"
+        elif val_val and curr_price < val_val:
+            pos_text = "por debajo del VAL (desequilibrio bajista / descuento)"
+        st.info(f"📊 **Lectura de Liquidez:** El precio actual (${curr_price:,.2f}) se encuentra {pos_text}.")
 
-        conclusion = m_report.get("conclusion") or "Existen factores positivos, evaluando confirmaciones adicionales."
-        st.info(f"**Evaluación Cuantitativa:** {conclusion}")
+    with c_layer4:
+        st.markdown("#### 🔮 Probabilidades y Régimen Cuantitativo")
+        pr_col1, pr_col2, pr_col3 = st.columns(3)
+        with pr_col1:
+            st.metric("Predictive Score", f"{pred_res.predictive_score:.2f} / 1.00")
+        with pr_col2:
+            st.metric("Prob. Continuación", f"{pred_res.probability_continuation * 100:.0f}%")
+        with pr_col3:
+            st.metric("Régimen Activo", regime_res.regime.value)
 
-        with st.expander("🛠️ Ver datos técnicos en formato JSON (Avanzado)", expanded=False):
-            st.json({
-                "symbol": symbol,
-                "timeframe": interval,
-                "direction": decision.direction,
-                "action": decision.decision,
-                "quant_score": score["score"],
-                "predictive_score": pred_res.predictive_score,
-                "tp_multiplier": decision.tp_multiplier,
-                "sl_multiplier": decision.sl_multiplier,
-                "poc": profile.get("poc"),
-                "vah": profile.get("vah"),
-                "val": profile.get("val"),
-                "risk_assessment": m_report.get("conclusion", ""),
-            })
+        st.write(f"**Justificación de Régimen:** {regime_res.details.get('reason', 'Clasificación basada en estructura técnica y volatilidad.') if hasattr(regime_res, 'details') else 'Régimen cuantitativo activo.'}")
+
+    with c_layer5:
+        st.markdown("#### 🛠️ Snapshot de Datos Cuantitativos")
+        st.caption("Datos técnicos sin procesar para auditoría o conexión vía API:")
+        st.json({
+            "symbol": symbol,
+            "timeframe": interval,
+            "direction": decision.direction,
+            "action": decision.decision,
+            "quant_score": score["score"],
+            "predictive_score": pred_res.predictive_score,
+            "tp_multiplier": decision.tp_multiplier,
+            "sl_multiplier": decision.sl_multiplier,
+            "poc": profile.get("poc"),
+            "vah": profile.get("vah"),
+            "val": profile.get("val"),
+            "risk_assessment": m_report.get("conclusion", ""),
+        })
 
 
 # =====================================================================
@@ -564,20 +617,28 @@ with tab_copilot:
     import asyncio
 
     def _safe_async_run(coro):
+        if not asyncio.iscoroutine(coro) and not isinstance(coro, asyncio.Future):
+            return coro
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        if loop.is_running():
-            import concurrent.futures
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            if loop.is_running():
+                import concurrent.futures
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                return executor.submit(asyncio.run, coro).result()
-        else:
-            return loop.run_until_complete(coro)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    return executor.submit(lambda: asyncio.run(coro)).result()
+            else:
+                return loop.run_until_complete(coro)
+        except Exception as exc:
+            raise exc
 
-    _safe_async_run(copilot_provider.update_context(current_market_context))
+    try:
+        copilot_provider.update_context(current_market_context)
+    except Exception:
+        pass
 
     # Real AI Provider Resolution via ProviderFactory
     active_llm_provider = ProviderFactory.create_provider()
@@ -588,54 +649,68 @@ with tab_copilot:
     market_report_svc = MarketReportService()
     anomaly_detector = MarketAnomalyDetector()
 
-    # Copilot Layout
-    c_left, c_right = st.columns([1.2, 1.0])
+    # Copilot Modular Layer Sub-tabs
+    cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs([
+        "💬 Consulta Directa (Chat AI)",
+        "📋 Briefing Diario de Mercado",
+        "🚨 Monitor Pasivo de Anomalías",
+        "🕒 Snapshot de Contexto Activo",
+    ])
 
-    with c_left:
-        st.markdown("### 💬 Ask AI Copilot")
+    with cop_tab1:
+        st.markdown("#### 💬 Consultar a Gemini Copilot")
         provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
         model_name = getattr(active_llm_provider, "model", "standard")
-        st.caption(f"Active Provider: **{provider_name}** (`{model_name}`) | Storage: `{db_path}`")
-        st.info("💡 Examples: 'Analyze BTCUSDT right now', 'What are the main risks?', 'Explain current regime'")
-        user_query_input = st.text_input("Operator Query", value=f"Analyze {symbol} right now", key="copilot_input")
+        st.caption(f"🧠 Modelo Activo: **{provider_name}** (`{model_name}`) | Base de Datos: `{db_path}`")
+        st.info("💡 Ejemplos de consulta: *'Analiza el estado de BTCUSDT ahora'*, *'¿Cuáles son los principales riesgos identificados?'*, *'Explica el régimen actual'*")
+        user_query_input = st.text_input("Ingresa tu consulta para el Copilot:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
 
-        if st.button("🔎 Submit Query to Copilot", type="primary"):
-            with st.spinner("AI Copilot synthesizing quantitative context..."):
+        if st.button("🔎 Enviar Consulta a Copilot", type="primary"):
+            with st.spinner("AI Copilot sintetizando contexto cuantitativo con Gemini..."):
                 query_obj = OperatorQuery(
                     query=user_query_input,
                     symbol=symbol,
                     timeframe=interval,
                     operator_id="dashboard_operator",
                 )
-                copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                st.markdown(copilot_res.answer)
-                latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
-                tokens = copilot_res.metadata.get("total_tokens", 0)
-                meta_str = f"⚡ Latency: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
-                st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
+                try:
+                    copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
+                    st.markdown("---")
+                    st.markdown(copilot_res.answer)
+                    latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
+                    tokens = copilot_res.metadata.get("total_tokens", 0)
+                    meta_str = f"⚡ Latencia: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
+                    st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
+                except Exception as copilot_err:
+                    st.error(f"Error procesando la consulta con AI Copilot: {copilot_err}")
 
-
-        st.markdown("---")
-        st.markdown("### 📋 Daily Market Briefing")
+    with cop_tab2:
+        st.markdown("#### 📋 Briefing Diario del Mercado")
         daily_rep = market_report_svc.generate_daily_briefing(current_market_context)
-        with st.expander(f"📄 View Daily Briefing ({daily_rep.symbol})", expanded=False):
-            st.markdown(f"**Overview:** {daily_rep.market_overview}")
-            st.markdown(f"**Regime:** `{daily_rep.current_regime}` | **Quant Score:** {daily_rep.quant_score:.1f} | **Predictive:** {daily_rep.predictive_score:.2f}")
-            st.markdown(f"**Volatility Analysis:** {daily_rep.volatility_analysis}")
-            if daily_rep.strongest_signals:
-                st.markdown("**Strongest Signals:**")
-                for s in daily_rep.strongest_signals:
-                    st.markdown(f"- {s}")
-            if daily_rep.main_risks:
-                st.markdown("**Identified Risks:**")
-                for r in daily_rep.main_risks:
-                    st.markdown(f"- ⚠️ {r}")
+        st.markdown(f"**Panorama General:** {daily_rep.market_overview}")
+        br_c1, br_c2, br_c3 = st.columns(3)
+        with br_c1:
+            st.metric("Régimen", daily_rep.current_regime)
+        with br_c2:
+            st.metric("Puntuación Quant", f"{daily_rep.quant_score:.1f}/100")
+        with br_c3:
+            st.metric("Predictive Score", f"{daily_rep.predictive_score:.2f}")
 
-    with c_right:
-        st.markdown("### 🚨 Passive Anomaly Alerts")
+        st.markdown(f"**Análisis de Volatilidad:** {daily_rep.volatility_analysis}")
+        if daily_rep.strongest_signals:
+            st.markdown("**Señales Más Fuertes:**")
+            for s in daily_rep.strongest_signals:
+                st.markdown(f"- {s}")
+        if daily_rep.main_risks:
+            st.markdown("**Riesgos Identificados:**")
+            for r in daily_rep.main_risks:
+                st.markdown(f"- ⚠️ {r}")
+
+    with cop_tab3:
+        st.markdown("#### 🚨 Detección Pasiva de Anomalías Estructurales")
         detected_anomalies = anomaly_detector.evaluate(current_market_context)
         if not detected_anomalies:
-            st.success("✅ No structural anomalies or severe volatility divergences detected.")
+            st.success("✅ Sin anomalías estructurales ni divergencias severas de volatilidad detectadas en este activo.")
         else:
             for alt in detected_anomalies:
                 if alt.severity.value == "CRITICAL":
@@ -645,17 +720,19 @@ with tab_copilot:
                 else:
                     st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
 
-        st.markdown("---")
-        st.markdown("### 🕒 Context Snapshot")
-        snap_col1, snap_col2 = st.columns(2)
+    with cop_tab4:
+        st.markdown("#### 🕒 Snapshot de Contexto Activo")
+        snap_col1, snap_col2, snap_col3, snap_col4 = st.columns(4)
         with snap_col1:
             st.metric("Régimen Activo", current_market_context.market_regime)
-            st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
         with snap_col2:
+            st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
+        with snap_col3:
             st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
+        with snap_col4:
             st.metric("Sesgo Operativo", f"{current_market_context.signal.action} ({current_market_context.signal.direction})")
 
-        with st.expander("🛠️ Ver snapshot técnico en formato JSON (Avanzado)", expanded=False):
+        with st.expander("🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)", expanded=False):
             st.json({
                 "symbol": current_market_context.symbol,
                 "timeframe": current_market_context.timeframe,
@@ -664,8 +741,10 @@ with tab_copilot:
                 "predictive_score": current_market_context.predictive_score,
                 "action": current_market_context.signal.action,
                 "direction": current_market_context.signal.direction,
+                "confidence": current_market_context.signal.confidence,
                 "stop_loss": current_market_context.risk.stop_loss,
                 "take_profit": current_market_context.risk.take_profit,
+                "atr": current_market_context.risk.atr,
             })
 
 
