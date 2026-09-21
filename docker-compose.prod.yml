@@ -1,0 +1,111 @@
+version: "3.8"
+
+services:
+  operator-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_quant_operator_api
+    restart: unless-stopped
+    command: ["api"]
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - DATABASE_PATH=/app/data/market_contexts.db
+    volumes:
+      - quant_data:/app/data
+      - quant_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - quant_network
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_quant_dashboard
+    restart: unless-stopped
+    command: ["ui"]
+    expose:
+      - "8501"
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_PATH=/app/data/market_contexts.db
+    volumes:
+      - quant_data:/app/data
+      - quant_logs:/app/logs
+    depends_on:
+      operator-api:
+        condition: service_healthy
+    networks:
+      - quant_network
+
+  market-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_quant_market_worker
+    restart: unless-stopped
+    command: ["worker", "--symbols", "${SYMBOLS:-BTCUSDT}", "--interval", "${TIMEFRAME:-1h}"]
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_PATH=/app/data/market_contexts.db
+      - SYMBOLS=${SYMBOLS:-BTCUSDT}
+      - TIMEFRAME=${TIMEFRAME:-1h}
+    volumes:
+      - quant_data:/app/data
+      - quant_logs:/app/logs
+    depends_on:
+      operator-api:
+        condition: service_healthy
+    networks:
+      - quant_network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: crypto_quant_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+    networks:
+      - quant_network
+
+volumes:
+  quant_data:
+    driver: local
+  quant_logs:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  quant_network:
+    driver: bridge

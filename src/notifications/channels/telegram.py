@@ -141,3 +141,82 @@ class TelegramChannel(BaseNotificationChannel):
             event_id=payload.event_id,
             latency_ms=latency_ms,
         )
+
+    def format_copilot_response(
+        self,
+        symbol: str,
+        timeframe: str,
+        answer: str,
+        regime: str,
+        quant_score: float,
+        predictive_score: float,
+    ) -> str:
+        """Format an AI Copilot response for Telegram delivery."""
+        safe_symbol = html.escape(symbol.upper())
+        safe_tf = html.escape(timeframe.upper())
+        safe_regime = html.escape(regime)
+        safe_answer = html.escape(answer)
+
+        lines = [
+            f"<b>🤖 AI QUANT COPILOT: {safe_symbol} [{safe_tf}]</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"<b>Regime:</b> <code>{safe_regime}</code>",
+            f"<b>Quant Score:</b> {quant_score:.1f}/100 | <b>Predictive:</b> {predictive_score:.2f}",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            safe_answer,
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            "<i>Decision-support only. No automated execution.</i>",
+        ]
+        full_msg = "\n".join(lines)
+        if len(full_msg) > TELEGRAM_MAX_MESSAGE_LENGTH:
+            excess = len(full_msg) - TELEGRAM_MAX_MESSAGE_LENGTH + 20
+            safe_answer = safe_answer[:-excess] + " ...[truncated]"
+            lines[5] = safe_answer
+            full_msg = "\n".join(lines)
+        return full_msg
+
+    def send_copilot_response(
+        self,
+        symbol: str,
+        timeframe: str,
+        answer: str,
+        regime: str,
+        quant_score: float,
+        predictive_score: float,
+    ) -> bool:
+        """Deliver an AI Copilot interpretation message to Telegram."""
+        if (not self.bot_token or not self.chat_id) and not self.dry_run:
+            logger.error(f"[{self.name}] Cannot send: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.")
+            return False
+
+        msg_body = self.format_copilot_response(
+            symbol=symbol,
+            timeframe=timeframe,
+            answer=answer,
+            regime=regime,
+            quant_score=quant_score,
+            predictive_score=predictive_score,
+        )
+
+        if self.dry_run:
+            logger.info(f"[{self.name}] [DRY-RUN] Sent copilot message: {msg_body[:100]}...")
+            return True
+
+        api_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        json_data: dict[str, Any] = {
+            "chat_id": self.chat_id,
+            "text": msg_body,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+
+        success, _, _, _, _ = self.http_post_with_retry(
+            url=api_url,
+            json_data=json_data,
+            headers={"Content-Type": "application/json"},
+            timeout=self.timeout,
+            max_retries=self.max_retries,
+            base_backoff_sec=self.base_backoff_sec,
+        )
+        return success
+

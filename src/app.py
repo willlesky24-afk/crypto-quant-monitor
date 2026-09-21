@@ -8,6 +8,9 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 try:
+    from src.ai_agent.context_builder import ContextBuilder
+    from src.ai_providers.factory import ProviderFactory
+    from src.anomaly_detection.detector import MarketAnomalyDetector
     from src.backtest_models import BacktestConfig, TradeDirection
     from src.backtest_runner import BacktestRunner
     from src.data_loader import BinanceDataLoader
@@ -15,11 +18,16 @@ try:
     from src.engine import MarketEngine
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
+    from src.market_reports.generator import MarketReportService
     from src.notifications.channels.discord import DiscordWebhookChannel
     from src.notifications.channels.telegram import TelegramChannel
     from src.notifications.channels.webhook import WebhookChannel
     from src.notifications.dispatcher import NotificationDispatcher
     from src.notifications.models import NotificationPriority, SignalEvent
+    from src.operator_assistant.assistant import OperatorAssistant
+    from src.operator_assistant.models import OperatorQuery
+    from src.operator_service.interfaces import InMemoryMarketContextProvider
+    from src.operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
     from src.predictive_engine import PredictiveEngine
     from src.quant_score import QuantScore
     from src.regime_classifier import RegimeClassifier
@@ -28,6 +36,9 @@ try:
     from src.signal_engine import SignalEngine
     from src.volume_profile import VolumeProfile
 except ImportError:
+    from ai_agent.context_builder import ContextBuilder
+    from ai_providers.factory import ProviderFactory
+    from anomaly_detection.detector import MarketAnomalyDetector
     from backtest_models import BacktestConfig, TradeDirection
     from backtest_runner import BacktestRunner
     from data_loader import BinanceDataLoader
@@ -35,11 +46,16 @@ except ImportError:
     from engine import MarketEngine
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
+    from market_reports.generator import MarketReportService
     from notifications.channels.discord import DiscordWebhookChannel
     from notifications.channels.telegram import TelegramChannel
     from notifications.channels.webhook import WebhookChannel
     from notifications.dispatcher import NotificationDispatcher
     from notifications.models import NotificationPriority, SignalEvent
+    from operator_assistant.assistant import OperatorAssistant
+    from operator_assistant.models import OperatorQuery
+    from operator_service.interfaces import InMemoryMarketContextProvider
+    from operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
     from predictive_engine import PredictiveEngine
     from quant_score import QuantScore
     from regime_classifier import RegimeClassifier
@@ -47,6 +63,8 @@ except ImportError:
     from risk_engine import RiskEngine
     from signal_engine import SignalEngine
     from volume_profile import VolumeProfile
+
+
 
 st.set_page_config(
     page_title="Crypto Quant Monitor",
@@ -93,11 +111,13 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_backtest, tab_settings = st.tabs([
+tab_live, tab_copilot, tab_backtest, tab_settings = st.tabs([
     "📡 Live Monitor",
+    "🤖 AI Copilot",
     "📈 Backtest Analytics",
     "⚙️ Notification Settings",
 ])
+
 
 
 # =====================================================================
@@ -223,10 +243,166 @@ with tab_live:
 
 
 # =====================================================================
-# TAB 2: BACKTEST ANALYTICS
+# TAB 2: AI COPILOT
+# =====================================================================
+with tab_copilot:
+    st.subheader("🤖 Institutional AI Quant Copilot")
+    st.caption("Read-only decision support assistant • Market interpretation • Anomaly observation • No automated execution")
+
+    # Evaluate quantitative pipeline for current closed candle
+    c_m_engine = MarketEngine()
+    c_analysis = c_m_engine.analyze(df, profile)
+    c_s_engine = SignalEngine()
+    c_signal = c_s_engine.evaluate(c_analysis, profile)
+    c_r_engine = RiskEngine()
+    c_risk = c_r_engine.evaluate(c_analysis, profile)
+    c_i_engine = MarketIntelligence()
+    c_intel = c_i_engine.evaluate(c_analysis)
+    c_score_engine = QuantScore()
+    c_score = c_score_engine.calculate(c_analysis, c_signal, c_risk)
+    c_regime_clf = RegimeClassifier()
+    c_regime_res = c_regime_clf.classify(df)
+    c_pred_engine = PredictiveEngine()
+    c_pred_res = c_pred_engine.evaluate(df, current_regime_res=c_regime_res)
+    c_dec_engine = DecisionEngine()
+    c_decision = c_dec_engine.evaluate(
+        signal=c_signal,
+        risk=c_risk,
+        intelligence=c_intel,
+        predictive=c_pred_res,
+        regime=c_regime_res.regime,
+        technical_score=c_score["score"],
+        predictive_mode=True,
+    )
+
+    live_signal_event = SignalEvent(
+        timestamp=pd.Timestamp(df.index[-1]),
+        symbol=symbol,
+        timeframe=interval,
+        action=c_decision.decision,
+        direction=c_decision.direction,
+        confidence=c_decision.confidence,
+        predictive_score=c_pred_res.predictive_score,
+        regime=c_regime_res.regime.value,
+        reasoning=c_decision.reasoning,
+        price=float(df.iloc[-1]["close"]),
+        quant_score=c_score["score"],
+        stop_loss=c_risk.get("stop_loss"),
+        take_profit=c_risk.get("take_profit"),
+        risk_reward_ratio=c_risk.get("risk_ratio"),
+        atr=c_risk.get("atr"),
+        signal_id=f"live-{symbol}-{interval}",
+    )
+
+
+    context_builder = ContextBuilder()
+    current_market_context = context_builder.build_context(
+        signal_event=live_signal_event,
+        technical_indicators={
+            "rsi": float(df.iloc[-1].get("rsi", 50.0)),
+            "adx": float(df.iloc[-1].get("adx", 20.0)),
+            "volume": float(df.iloc[-1].get("volume", 0.0)),
+        },
+        volume_profile=profile,
+        metadata={"source": "Streamlit Live Dashboard"},
+    )
+
+    db_path = os.getenv("DATABASE_PATH", "data/market_contexts.db")
+    try:
+        copilot_provider = SQLiteMarketContextProvider(db_path=db_path)
+    except Exception:
+        copilot_provider = InMemoryMarketContextProvider()
+
+    import asyncio
+    asyncio.run(copilot_provider.update_context(current_market_context))
+
+    # Real AI Provider Resolution via ProviderFactory
+    active_llm_provider = ProviderFactory.create_provider()
+    copilot_assistant = OperatorAssistant(
+        context_provider=copilot_provider,
+        provider=active_llm_provider,
+    )
+    market_report_svc = MarketReportService()
+    anomaly_detector = MarketAnomalyDetector()
+
+    # Copilot Layout
+    c_left, c_right = st.columns([1.2, 1.0])
+
+    with c_left:
+        st.markdown("### 💬 Ask AI Copilot")
+        provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
+        model_name = getattr(active_llm_provider, "model", "standard")
+        st.caption(f"Active Provider: **{provider_name}** (`{model_name}`) | Storage: `{db_path}`")
+        st.info("💡 Examples: 'Analyze BTCUSDT right now', 'What are the main risks?', 'Explain current regime'")
+        user_query_input = st.text_input("Operator Query", value=f"Analyze {symbol} right now", key="copilot_input")
+
+        if st.button("🔎 Submit Query to Copilot", type="primary"):
+            with st.spinner("AI Copilot synthesizing quantitative context..."):
+                query_obj = OperatorQuery(
+                    query=user_query_input,
+                    symbol=symbol,
+                    timeframe=interval,
+                    operator_id="dashboard_operator",
+                )
+                copilot_res = asyncio.run(copilot_assistant.ask(query_obj))
+                st.markdown(copilot_res.answer)
+                latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
+                tokens = copilot_res.metadata.get("total_tokens", 0)
+                meta_str = f"⚡ Latency: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
+                st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
+
+
+        st.markdown("---")
+        st.markdown("### 📋 Daily Market Briefing")
+        daily_rep = market_report_svc.generate_daily_briefing(current_market_context)
+        with st.expander(f"📄 View Daily Briefing ({daily_rep.symbol})", expanded=False):
+            st.markdown(f"**Overview:** {daily_rep.market_overview}")
+            st.markdown(f"**Regime:** `{daily_rep.current_regime}` | **Quant Score:** {daily_rep.quant_score:.1f} | **Predictive:** {daily_rep.predictive_score:.2f}")
+            st.markdown(f"**Volatility Analysis:** {daily_rep.volatility_analysis}")
+            if daily_rep.strongest_signals:
+                st.markdown("**Strongest Signals:**")
+                for s in daily_rep.strongest_signals:
+                    st.markdown(f"- {s}")
+            if daily_rep.main_risks:
+                st.markdown("**Identified Risks:**")
+                for r in daily_rep.main_risks:
+                    st.markdown(f"- ⚠️ {r}")
+
+    with c_right:
+        st.markdown("### 🚨 Passive Anomaly Alerts")
+        detected_anomalies = anomaly_detector.evaluate(current_market_context)
+        if not detected_anomalies:
+            st.success("✅ No structural anomalies or severe volatility divergences detected.")
+        else:
+            for alt in detected_anomalies:
+                if alt.severity.value == "CRITICAL":
+                    st.error(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                elif alt.severity.value == "WARNING":
+                    st.warning(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                else:
+                    st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+
+        st.markdown("---")
+        st.markdown("### 🕒 Context Snapshot Details")
+        st.json({
+            "symbol": current_market_context.symbol,
+            "timeframe": current_market_context.timeframe,
+            "regime": current_market_context.market_regime,
+            "quant_score": current_market_context.quant_score,
+            "predictive_score": current_market_context.predictive_score,
+            "action": current_market_context.signal.action,
+            "direction": current_market_context.signal.direction,
+            "stop_loss": current_market_context.risk.stop_loss,
+            "take_profit": current_market_context.risk.take_profit,
+        })
+
+
+# =====================================================================
+# TAB 3: BACKTEST ANALYTICS
 # =====================================================================
 with tab_backtest:
     st.subheader("📈 Simulación Cronológica y Desempeño Histórico")
+
 
     # Backtest Execution Controls
     b_col1, b_col2, b_col3, b_col4 = st.columns(4)
