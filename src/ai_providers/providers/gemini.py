@@ -30,7 +30,7 @@ class GeminiProvider(BaseLLMProvider):
         max_retries: int = 2,
     ) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 

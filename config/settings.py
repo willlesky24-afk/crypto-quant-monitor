@@ -59,7 +59,7 @@ class AIProviderSettings:
 
     provider: str = "mock"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.7-flash"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     ollama_url: str = "http://localhost:11434"
@@ -169,7 +169,7 @@ class AppSettings:
         # AI Provider
         ai_provider_name = os.getenv("AI_PROVIDER", "mock").strip().lower()
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip() or None
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.7-flash").strip()
         openai_api_key = os.getenv("OPENAI_API_KEY", "").strip() or None
         openai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
         ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434").strip()
