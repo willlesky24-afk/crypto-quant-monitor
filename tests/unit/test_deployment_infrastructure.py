@@ -31,7 +31,7 @@ class TestConfigurationSettings:
             assert s.observability.metrics_enabled is True
             assert s.observability.json_logging_enabled is True
             assert s.ai_provider.provider == "mock"
-            assert s.ai_provider.gemini_model == "gemini-2.5-flash"
+            assert s.ai_provider.gemini_model == "gemini-3.7-flash"
             assert s.ai_provider.openai_model == "gpt-4o-mini"
             assert s.ai_provider.ollama_url == "http://localhost:11434"
             assert s.ai_provider.timeout_seconds == 10.0

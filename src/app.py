@@ -79,6 +79,164 @@ st.set_page_config(
     layout="wide",
 )
 
+# =====================================================================
+# CUSTOM NEON CYBER FINANCE THEME & STYLING
+# =====================================================================
+st.markdown(
+    """
+    <style>
+    /* Neon Cyber Finance Dark Theme */
+    :root {
+        --bg-main: #07090e;
+        --card-bg: rgba(14, 22, 38, 0.85);
+        --neon-green: #00ff88;
+        --neon-cyan: #00e5ff;
+        --neon-coral: #ff2e63;
+        --neon-gold: #ffd600;
+        --neon-purple: #bd00ff;
+        --text-bright: #f0f6fc;
+        --text-sub: #8b949e;
+    }
+
+    /* Overall App Background & Typography */
+    .stApp {
+        background-color: var(--bg-main);
+        color: var(--text-bright);
+    }
+
+    /* Metric Cards: Futuristic Floating Glassmorphism */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(16, 26, 46, 0.9) 0%, rgba(10, 16, 30, 0.95) 100%) !important;
+        border: 1px solid rgba(0, 229, 255, 0.22) !important;
+        border-radius: 22px !important;
+        padding: 16px 22px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+    }
+
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        border-color: var(--neon-green) !important;
+        box-shadow: 0 12px 32px rgba(0, 255, 136, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        color: var(--text-sub) !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.6px !important;
+        text-transform: uppercase !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        text-shadow: 0 0 14px rgba(0, 229, 255, 0.45);
+    }
+
+    /* Rounded Pill Buttons with Fluorescent Glow */
+    .stButton > button {
+        border-radius: 28px !important;
+        font-weight: 700 !important;
+        font-size: 0.92rem !important;
+        letter-spacing: 0.5px !important;
+        padding: 10px 24px !important;
+        border: 1px solid rgba(0, 255, 136, 0.45) !important;
+        background: linear-gradient(135deg, rgba(0, 255, 136, 0.14) 0%, rgba(0, 229, 255, 0.10) 100%) !important;
+        color: #00ff88 !important;
+        box-shadow: 0 4px 16px rgba(0, 255, 136, 0.18) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .stButton > button:hover {
+        border-color: #00ff88 !important;
+        color: #07090e !important;
+        background: linear-gradient(135deg, #00ff88 0%, #00e5ff 100%) !important;
+        box-shadow: 0 0 24px rgba(0, 255, 136, 0.65), 0 0 40px rgba(0, 229, 255, 0.35) !important;
+        transform: scale(1.02);
+    }
+
+    .stButton > button:active {
+        transform: scale(0.98);
+    }
+
+    /* Download Buttons */
+    .stDownloadButton > button {
+        border-radius: 28px !important;
+        font-weight: 700 !important;
+        border: 1px solid rgba(0, 229, 255, 0.45) !important;
+        background: linear-gradient(135deg, rgba(0, 229, 255, 0.14) 0%, rgba(189, 0, 255, 0.10) 100%) !important;
+        color: #00e5ff !important;
+        box-shadow: 0 4px 16px rgba(0, 229, 255, 0.18) !important;
+        transition: all 0.25s ease !important;
+    }
+
+    .stDownloadButton > button:hover {
+        border-color: #00e5ff !important;
+        color: #07090e !important;
+        background: linear-gradient(135deg, #00e5ff 0%, #bd00ff 100%) !important;
+        box-shadow: 0 0 24px rgba(0, 229, 255, 0.65) !important;
+    }
+
+    /* Rounded Tabs with Glowing Active State */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: rgba(14, 22, 38, 0.65);
+        padding: 6px;
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 24px !important;
+        padding: 8px 22px !important;
+        font-weight: 600 !important;
+        color: var(--text-sub) !important;
+        border: none !important;
+        transition: all 0.25s ease !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, rgba(0, 255, 136, 0.22) 0%, rgba(0, 229, 255, 0.15) 100%) !important;
+        color: #00ff88 !important;
+        border: 1px solid rgba(0, 255, 136, 0.5) !important;
+        box-shadow: 0 0 16px rgba(0, 255, 136, 0.3) !important;
+    }
+
+    /* Inputs, Selectboxes, and Text Areas */
+    div[data-baseweb="select"] > div {
+        border-radius: 20px !important;
+        background-color: rgba(14, 22, 38, 0.9) !important;
+        border: 1px solid rgba(0, 229, 255, 0.25) !important;
+    }
+
+    div[data-baseweb="select"]:hover > div {
+        border-color: var(--neon-cyan) !important;
+        box-shadow: 0 0 12px rgba(0, 229, 255, 0.3) !important;
+    }
+
+    div[data-baseweb="input"] > input {
+        border-radius: 18px !important;
+    }
+
+    /* Alert / Status Callouts */
+    .stAlert {
+        border-radius: 22px !important;
+        backdrop-filter: blur(10px) !important;
+    }
+
+    /* Glowing Titles & Section Headers */
+    h1 {
+        text-shadow: 0 0 24px rgba(0, 255, 136, 0.35);
+    }
+    h2, h3 {
+        text-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("📊 Crypto Quant Monitor")
 st.caption("Institutional Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting")
 
@@ -207,7 +365,7 @@ with tab_live:
     # 3. Interactive Plotly Chart (Candles, EMAs, Volume Profile)
     fig_live = go.Figure()
 
-    # Candlestick
+    # Candlestick with Fluorescent Green and Neon Coral
     fig_live.add_trace(
         go.Candlestick(
             x=df["timestamp"],
@@ -216,28 +374,58 @@ with tab_live:
             low=df["low"],
             close=df["close"],
             name="Precio",
+            increasing_line_color="#00FF88",
+            increasing_fillcolor="#00FF88",
+            decreasing_line_color="#FF2E63",
+            decreasing_fillcolor="#FF2E63",
         )
     )
 
-    # EMAs
+    # EMAs with Cyan and Magenta
     if "ema_50" in df.columns:
-        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_50"], name="EMA 50", line={"color": "#3498DB", "width": 1.5}))
+        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_50"], name="EMA 50", line={"color": "#00E5FF", "width": 2}))
     if "ema_200" in df.columns:
-        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_200"], name="EMA 200", line={"color": "#E67E22", "width": 1.5}))
+        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_200"], name="EMA 200", line={"color": "#BD00FF", "width": 2}))
 
-    # Volume Profile Horizontal Levels
+    # Volume Profile Horizontal Levels with Neon Glow Accents
     if profile.get("poc"):
-        fig_live.add_hline(y=profile["poc"], line={"color": "#F1C40F", "dash": "dash"}, annotation_text="POC")
+        fig_live.add_hline(
+            y=profile["poc"],
+            line={"color": "#FFD600", "width": 2, "dash": "dash"},
+            annotation_text="POC",
+            annotation_font_color="#FFD600",
+        )
     if profile.get("vah"):
-        fig_live.add_hline(y=profile["vah"], line={"color": "#2ECC71", "dash": "dot"}, annotation_text="VAH")
+        fig_live.add_hline(
+            y=profile["vah"],
+            line={"color": "#00FF88", "width": 1.5, "dash": "dot"},
+            annotation_text="VAH",
+            annotation_font_color="#00FF88",
+        )
     if profile.get("val"):
-        fig_live.add_hline(y=profile["val"], line={"color": "#E74C3C", "dash": "dot"}, annotation_text="VAL")
+        fig_live.add_hline(
+            y=profile["val"],
+            line={"color": "#FF2E63", "width": 1.5, "dash": "dot"},
+            annotation_text="VAL",
+            annotation_font_color="#FF2E63",
+        )
 
     fig_live.update_layout(
-        height=600,
+        height=620,
         margin={"l": 20, "r": 20, "t": 40, "b": 20},
         xaxis_rangeslider_visible=False,
         template="plotly_dark",
+        paper_bgcolor="#07090E",
+        plot_bgcolor="#07090E",
+        font={"family": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto", "color": "#E6EDF3"},
+        xaxis={
+            "gridcolor": "rgba(255, 255, 255, 0.06)",
+            "linecolor": "rgba(0, 229, 255, 0.2)",
+        },
+        yaxis={
+            "gridcolor": "rgba(255, 255, 255, 0.06)",
+            "linecolor": "rgba(0, 229, 255, 0.2)",
+        },
     )
     st.plotly_chart(fig_live, use_container_width=True)
 
@@ -551,7 +739,7 @@ with tab_backtest:
             )
 
             fig_eq.add_trace(
-                go.Scatter(x=eq_df["timestamp"], y=eq_df["equity"], name="Equity ($)", line={"color": "#2ECC71", "width": 2}),
+                go.Scatter(x=eq_df["timestamp"], y=eq_df["equity"], name="Equity ($)", line={"color": "#00FF88", "width": 2.5}),
                 row=1,
                 col=1,
             )
@@ -562,13 +750,24 @@ with tab_backtest:
                     y=-eq_df["drawdown_pct"],
                     name="Drawdown (%)",
                     fill="tozeroy",
-                    line={"color": "#E74C3C", "width": 1},
+                    fillcolor="rgba(255, 46, 99, 0.25)",
+                    line={"color": "#FF2E63", "width": 1.5},
                 ),
                 row=2,
                 col=1,
             )
 
-            fig_eq.update_layout(height=500, template="plotly_dark", margin={"l": 20, "r": 20, "t": 40, "b": 20})
+            fig_eq.update_layout(
+                height=520,
+                template="plotly_dark",
+                paper_bgcolor="#07090E",
+                plot_bgcolor="#07090E",
+                margin={"l": 20, "r": 20, "t": 40, "b": 20},
+                xaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
+                yaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
+                xaxis2={"gridcolor": "rgba(255, 255, 255, 0.06)"},
+                yaxis2={"gridcolor": "rgba(255, 255, 255, 0.06)"},
+            )
             st.plotly_chart(fig_eq, use_container_width=True)
 
         # 3. MFE vs MAE Scatter Plot & Trades Table
@@ -587,8 +786,9 @@ with tab_backtest:
                         y=trades_df["mfe"] * 100,
                         mode="markers",
                         marker={
-                            "size": 8,
-                            "color": ["#2ECC71" if p > 0 else "#E74C3C" for p in trades_df["net_pnl"]],
+                            "size": 9,
+                            "color": ["#00FF88" if p > 0 else "#FF2E63" for p in trades_df["net_pnl"]],
+                            "line": {"width": 1, "color": "#FFFFFF"},
                         },
                         text=[f"Trade {t['trade_id']} ({t['side']}): PnL ${t['net_pnl']:.2f}" for t in trade_rows],
                     )
@@ -596,9 +796,13 @@ with tab_backtest:
                 fig_mfe.update_layout(
                     xaxis_title="Max Adverse Excursion (MAE %)",
                     yaxis_title="Max Favorable Excursion (MFE %)",
-                    height=350,
+                    height=360,
                     template="plotly_dark",
+                    paper_bgcolor="#07090E",
+                    plot_bgcolor="#07090E",
                     margin={"l": 20, "r": 20, "t": 30, "b": 20},
+                    xaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
+                    yaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
                 )
                 st.plotly_chart(fig_mfe, use_container_width=True)
             else:
