@@ -141,73 +141,77 @@ st.markdown(
         font-size: 0.75rem !important;
     }
 
-    /* Rounded Pill Buttons with Fluorescent Glow */
+    /* Sleek, Compact Rounded Pill Buttons with Fluorescent Glow */
     .stButton > button {
-        border-radius: 28px !important;
-        font-weight: 700 !important;
-        font-size: 0.92rem !important;
-        letter-spacing: 0.5px !important;
-        padding: 10px 24px !important;
+        border-radius: 20px !important;
+        font-weight: 600 !important;
+        font-size: 0.80rem !important;
+        letter-spacing: 0.3px !important;
+        padding: 6px 18px !important;
         border: 1px solid rgba(0, 255, 136, 0.45) !important;
         background: linear-gradient(135deg, rgba(0, 255, 136, 0.14) 0%, rgba(0, 229, 255, 0.10) 100%) !important;
         color: #00ff88 !important;
-        box-shadow: 0 4px 16px rgba(0, 255, 136, 0.18) !important;
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 2px 12px rgba(0, 255, 136, 0.18) !important;
+        transition: all 0.2s ease-in-out !important;
     }
 
     .stButton > button:hover {
         border-color: #00ff88 !important;
         color: #07090e !important;
         background: linear-gradient(135deg, #00ff88 0%, #00e5ff 100%) !important;
-        box-shadow: 0 0 24px rgba(0, 255, 136, 0.65), 0 0 40px rgba(0, 229, 255, 0.35) !important;
-        transform: scale(1.02);
+        box-shadow: 0 0 18px rgba(0, 255, 136, 0.65) !important;
+        transform: scale(1.01);
     }
 
     .stButton > button:active {
-        transform: scale(0.98);
+        transform: scale(0.99);
     }
 
     /* Download Buttons */
     .stDownloadButton > button {
-        border-radius: 28px !important;
-        font-weight: 700 !important;
+        border-radius: 20px !important;
+        font-weight: 600 !important;
+        font-size: 0.80rem !important;
+        padding: 6px 18px !important;
         border: 1px solid rgba(0, 229, 255, 0.45) !important;
         background: linear-gradient(135deg, rgba(0, 229, 255, 0.14) 0%, rgba(189, 0, 255, 0.10) 100%) !important;
         color: #00e5ff !important;
-        box-shadow: 0 4px 16px rgba(0, 229, 255, 0.18) !important;
-        transition: all 0.25s ease !important;
+        box-shadow: 0 2px 12px rgba(0, 229, 255, 0.18) !important;
+        transition: all 0.2s ease !important;
     }
 
     .stDownloadButton > button:hover {
         border-color: #00e5ff !important;
         color: #07090e !important;
         background: linear-gradient(135deg, #00e5ff 0%, #bd00ff 100%) !important;
-        box-shadow: 0 0 24px rgba(0, 229, 255, 0.65) !important;
+        box-shadow: 0 0 18px rgba(0, 229, 255, 0.65) !important;
     }
 
-    /* Rounded Tabs with Glowing Active State */
+    /* Sleek, Compact Rounded Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
+        gap: 8px;
         background-color: rgba(14, 22, 38, 0.65);
-        padding: 6px;
-        border-radius: 30px;
+        padding: 4px 6px;
+        border-radius: 24px;
         border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .stTabs [data-baseweb="tab"] {
-        border-radius: 24px !important;
-        padding: 8px 22px !important;
+        border-radius: 18px !important;
+        padding: 5px 16px !important;
+        font-size: 0.80rem !important;
         font-weight: 600 !important;
+        letter-spacing: 0.2px !important;
         color: var(--text-sub) !important;
         border: none !important;
-        transition: all 0.25s ease !important;
+        transition: all 0.2s ease !important;
     }
 
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, rgba(0, 255, 136, 0.22) 0%, rgba(0, 229, 255, 0.15) 100%) !important;
         color: #00ff88 !important;
         border: 1px solid rgba(0, 255, 136, 0.5) !important;
-        box-shadow: 0 0 16px rgba(0, 255, 136, 0.3) !important;
+        box-shadow: 0 0 12px rgba(0, 255, 136, 0.25) !important;
     }
 
     /* Inputs, Selectboxes, and Text Areas */
@@ -436,23 +440,19 @@ with tab_live:
     )
     st.plotly_chart(fig_live, use_container_width=True)
 
-    # 4. Contextual Diagnostics & Modular Layer Navigation (Menús por Capas)
-    st.markdown("### 🗂️ Información Cuantitativa por Capas")
-    st.caption("Explora el análisis de mercado capa por capa sin saturación visual:")
-
+    # 4. Contextual Diagnostics & Modular Layer Navigation
     c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs([
-        "🧠 Capa 1: Diagnóstico y Decisión",
-        "📋 Capa 2: Plan de Operación y Riesgo",
-        "🎯 Capa 3: Área de Valor (Volume Profile)",
-        "🔮 Capa 4: Inteligencia Predictiva y Régimen",
-        "🛠️ Capa 5: Snapshot Técnico (JSON)",
+        "🧠 Diagnóstico",
+        "📋 Operación",
+        "🎯 Niveles",
+        "🔮 Predicción",
+        "🛠️ Datos",
     ])
 
     reporter = MarketReport()
     m_report = reporter.generate(symbol, analysis, profile)
 
     with c_layer1:
-        st.markdown("#### 🧠 Diagnóstico Estratégico")
         d_col1, d_col2 = st.columns([1.2, 1.0])
         with d_col1:
             st.info(f"**Estado de Mercado:** {decision.market_state}")
@@ -466,7 +466,6 @@ with tab_live:
                 st.warning("**Riesgos y Advertencias:**\n- " + "\n- ".join(decision.warnings))
 
     with c_layer2:
-        st.markdown("#### 🛡️ Parámetros de Riesgo y Operación")
         tp_mult = getattr(decision, "tp_multiplier", 3.0)
         sl_mult = getattr(decision, "sl_multiplier", 1.5)
         atr_val = risk.get("atr", 0.0)
@@ -482,10 +481,9 @@ with tab_live:
             rr_ratio = tp_mult / max(sl_mult, 0.01)
             st.metric("Ratio R:R", f"1 : {rr_ratio:.2f}")
 
-        st.caption("ℹ️ Los multiplicadores se derivan de la volatilidad histórica normalizada por el indicador ATR.")
+        st.caption("ℹ️ Multiplicadores calculados en base a la volatilidad ATR de velas cerradas.")
 
     with c_layer3:
-        st.markdown("#### 🎯 Niveles Clave del Área de Valor (Volume Profile)")
         poc_val = profile.get("poc")
         vah_val = profile.get("vah")
         val_val = profile.get("val")
@@ -493,13 +491,13 @@ with tab_live:
         v_col1, v_col2, v_col3 = st.columns(3)
         with v_col1:
             if poc_val:
-                st.metric("🟡 POC (Punto de Control)", f"${poc_val:,.2f}", "Zona de mayor liquidez")
+                st.metric("🟡 POC (Control)", f"${poc_val:,.2f}", "Mayor liquidez")
         with v_col2:
             if vah_val:
-                st.metric("🟢 VAH (Techo de Valor)", f"${vah_val:,.2f}", "Resistencia de volumen")
+                st.metric("🟢 VAH (Techo)", f"${vah_val:,.2f}", "Resistencia")
         with v_col3:
             if val_val:
-                st.metric("🔴 VAL (Suelo de Valor)", f"${val_val:,.2f}", "Soporte de volumen")
+                st.metric("🔴 VAL (Suelo)", f"${val_val:,.2f}", "Soporte")
 
         pos_text = "dentro del Área de Valor"
         if vah_val and curr_price > vah_val:
@@ -509,7 +507,6 @@ with tab_live:
         st.info(f"📊 **Lectura de Liquidez:** El precio actual (${curr_price:,.2f}) se encuentra {pos_text}.")
 
     with c_layer4:
-        st.markdown("#### 🔮 Probabilidades y Régimen Cuantitativo")
         pr_col1, pr_col2, pr_col3 = st.columns(3)
         with pr_col1:
             st.metric("Predictive Score", f"{pred_res.predictive_score:.2f} / 1.00")
@@ -521,7 +518,6 @@ with tab_live:
         st.write(f"**Justificación de Régimen:** {regime_res.details.get('reason', 'Clasificación basada en estructura técnica y volatilidad.') if hasattr(regime_res, 'details') else 'Régimen cuantitativo activo.'}")
 
     with c_layer5:
-        st.markdown("#### 🛠️ Snapshot de Datos Cuantitativos")
         st.caption("Datos técnicos sin procesar para auditoría o conexión vía API:")
         st.json({
             "symbol": symbol,
@@ -625,19 +621,17 @@ with tab_copilot:
 
         # Copilot Modular Layer Sub-tabs
         cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs([
-            "💬 Consulta Directa (Chat AI)",
-            "📋 Briefing Diario de Mercado",
-            "🚨 Monitor Pasivo de Anomalías",
-            "🕒 Snapshot de Contexto Activo",
+            "💬 Chat AI",
+            "📋 Briefing",
+            "🚨 Anomalías",
+            "🕒 Contexto",
         ])
 
         with cop_tab1:
-            st.markdown("#### 💬 Consultar a Gemini Copilot")
             provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
             model_name = getattr(active_llm_provider, "model", "standard")
-            st.caption(f"🧠 Modelo Activo: **{provider_name}** (`{model_name}`) | Base de Datos: `{db_path}`")
-            st.info("💡 Ejemplos de consulta: *'Analiza el estado de BTCUSDT ahora'*, *'¿Cuáles son los principales riesgos identificados?'*, *'Explica el régimen actual'*")
-            user_query_input = st.text_input("Ingresa tu consulta para el Copilot:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
+            st.caption(f"🧠 Modelo: **{provider_name}** (`{model_name}`) | BD: `{db_path}`")
+            user_query_input = st.text_input("Consulta:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
 
             if st.button("🔎 Enviar Consulta a Copilot", type="primary"):
                 with st.spinner("AI Copilot sintetizando contexto cuantitativo con Gemini..."):
