@@ -8,10 +8,11 @@
 
 Versión actual:
 
-v1.9 Predictive Market Engine & Strategy Optimization (Tag: v1.9-predictive-market-engine)
+v2.0 Notification System, Live Streaming & Dashboard Visualizer (Tag: v2.0-live-notifications-dashboard)
 
 Estado:
-FASE 4 COMPLETADA ✅
+FASE 5 COMPLETADA ✅
+
 
 
 
@@ -134,27 +135,30 @@ El sistema actualmente cuenta con:
 
 - **Backtest Runner (`src/backtest_runner.py`)**: Orquestación integral de datasets Parquet, warm-up causal de indicadores, generación de señales y reportes.
 
+## Capa de Streaming y Tiempo Real (Fase 5)
 
+- **WebSocket Client (`src/streaming/websocket_client.py`)**: Cliente Binance WebSocket de baja latencia con reconexión automática, exponential backoff, jitter y heartbeat.
+- **Candle Aggregator (`src/streaming/candle_aggregator.py`)**: Buffer rodante acotado en memoria, detección de vela cerrada $T$ y garantía estricta de no-repainting.
+- **Live Execution Engine (`src/streaming/live_engine.py`)**: Orquestador causal que recibe velas cerradas, ejecuta el pipeline cuantitativo y predictivo, genera `SignalEvent` y enruta alertas.
 
+## Capa de Notificaciones Multicanal (Fase 5)
 
+- **Event Contracts (`src/notifications/models.py`)**: `SignalEvent` como fuente única de verdad, `NotificationPayload`, `NotificationResult`.
+- **Canales (`src/notifications/channels/`)**: `DiscordWebhookChannel` (Rich Embeds), `TelegramChannel` (HTML, emojis, límite 4096 chars), `WebhookChannel` (POST JSON genérico).
+- **Despachador Central (`src/notifications/dispatcher.py`)**: `CooldownManager` anti-spam en memoria por `(symbol, timeframe, action)`, filtrado por `predictive_score`, despacho asíncrono no bloqueante y aislamiento de fallos por canal.
 
 ## Capa de memoria
 
-
-
 - SQLite Database
-
 - Signal History
-
-
-
-
 
 ## Interfaz
 
+- **Streamlit Multi-Tab Dashboard (`src/app.py`)**:
+  - Pestaña 1: Live Market Monitor (velas, EMAs, Volume Profile POC/VAH/VAL, métricas de régimen y predicción).
+  - Pestaña 2: Backtest & Strategy Analytics (ejecución parametrizable, curva de equity, drawdown underwater, MFE/MAE scatter, log de trades).
+  - Pestaña 3: Notification Settings (configuración de credenciales, sliders de cooldown y umbrales, botón de alerta de prueba ping).
 
-
-- Streamlit Dashboard
 
 
 
@@ -200,38 +204,23 @@ BacktestReport
 
 
 
-## Pipeline en Vivo / Monitor Tiempo Real
-
-
+## Pipeline en Vivo / Monitor Tiempo Real (Fase 5)
 
 ```text
-Market Data
+Live Data Stream (Binance WebSocket)
       ↓
-Data Loader
+ResilientWebSocketClient
       ↓
-Indicators
+CandleAggregator (Buffered Memory, Anti-Repainting)
       ↓
-Volume Profile
+LiveExecutionEngine (Feature Warm-up, Regime, Predictive, Decision)
       ↓
-Market Engine
+SignalEvent (Single Source of Truth)
       ↓
-Analyzer
-      ↓
-Signal Engine
-      ↓
-Risk Engine
-      ↓
-Decision Engine
-      ↓
-Quant Score
-      ↓
-Report
-      ↓
-Dashboard
-      ↓
-Signal History
-      ↓
-SQLite
+NotificationDispatcher (CooldownManager, Score Filter)
+ ┌────┼────┐
+ ↓    ↓    ↓
+Discord Telegram Webhook
 ```
 
 ---
@@ -303,13 +292,27 @@ Fase 4 Predictive Market Engine & Strategy Optimization completada:
 
 ---
 
-# 6. PROBLEMAS PENDIENTES / PRÓXIMAS FASES
+Fase 5 Notification System, Live Streaming & Dashboard Visualizer completada:
+- Modelos de eventos desacoplados y contratos unificados (`SignalEvent`, `NotificationPayload`, `NotificationResult`).
+- Adaptadores de canal multicanal (`DiscordWebhookChannel`, `TelegramChannel`, `WebhookChannel`) con formato semántico dinámico (LONG, SHORT, WAIT), retry con retroceso exponencial, jitter y truncado defensivo.
+- Despachador de notificaciones (`NotificationDispatcher`) con gestor de cooldown anti-spam en memoria (`CooldownManager`) por `(symbol, timeframe, action)`, filtrado por umbral de `predictive_score`, despacho asíncrono no bloqueante y aislamiento total de fallos por canal.
+- Cliente WebSocket resiliente (`ResilientWebSocketClient`) con reconexión automática, exponential backoff, heartbeat activo y soporte para streams kline de Binance.
+- Agregador de velas (`CandleAggregator`) con buffer rodante acotado en memoria, detección estricta de vela cerrada $T$ (`is_closed=True`) y garantía estricta de no-repainting.
+- Motor de ejecución en tiempo real (`LiveExecutionEngine`) con warmup dinámico de indicadores, cálculo en vivo de régimen, predicción y decisión, y emisión de eventos.
+- Verificación rigurosa de paridad live replay vs backtest (`test_live_replay_parity.py`) con 100% de coincidencia exacta (25/25 barras) en timestamps, acciones, direcciones, scores y regímenes.
+- Dashboard Streamlit modular con interfaz multi-pestaña: Live Market Monitor, Backtest & Strategy Analytics (curva de equity, drawdown underwater, MFE/MAE scatter) y Notification Settings.
+- Cobertura: 100% en `src/notifications/` (413/413 líneas), 98% en `src/streaming/` (405/414 líneas).
+- 260 tests automatizados offline y deterministas pasando al 100% (0 fallos).
+- Ruff limpio con 0 errores y 0 advertencias.
 
-Actualmente:
+---
 
-1. Sistema de notificaciones automáticas y multicanal (Fase 5: Notification System - Discord / Telegram).
-2. Panel visual interactivo de métricas de backtesting en Streamlit (curvas de capital, drawdown submarino, distribución MFE/MAE).
-3. Integración en tiempo real de WebSocket con Binance para streaming continuo de velas.
+# 6. PRÓXIMA FASE
+
+Fase 6 — AI Market Agent:
+1. Agente conversacional y analítico para explicación e interpretación semántica de señales cuantitativas.
+2. Síntesis automatizada del contexto de mercado (régimen actual, probabilidades predictivas, estructura de volumen POC/VAH/VAL).
+3. Consulta interactiva de estadísticas históricas, drawdown y performance de estrategias.
 
 
 ---

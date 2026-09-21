@@ -244,100 +244,73 @@ Métricas de Calidad y Verificación:
 
 
 
-\# FASE 5
-\# Notification System
+# FASE 5
 
+## Notification System, Live Streaming & Dashboard Visualizer
 
+ESTADO:
+COMPLETADO ✅ (Tag: `v2.0-live-notifications-dashboard`)
 
+Objetivo:
+Evolucionar la plataforma desde un motor cuantitativo de investigación histórica hacia un entorno en tiempo real de monitoreo, transmisión por streaming y despacho inteligente de alertas multicanal.
 
+Commits Realizados:
+- `8e5c9a5`: `feat(notifications): implement event contracts, notification models, and channel abstractions` (`src/notifications/models.py`, `src/notifications/channels/base.py`, `FASE5_PLAN.md`)
+- `804eff8`: `feat(notifications): implement Discord webhook, Telegram bot, and generic webhook channel adapters` (`src/notifications/channels/discord.py`, `telegram.py`, `webhook.py`)
+- `36b8eea`: `feat(notifications): implement notification dispatcher with anti-spam, rate limiting, and cooldown manager` (`src/notifications/dispatcher.py`)
+- `b5ea389`: `feat(streaming): implement resilient WebSocket client and live candle aggregator` (`src/streaming/websocket_client.py`, `candle_aggregator.py`)
+- `b477016`: `feat(streaming): implement real-time live execution engine linking stream, predictive decision, and alerts` (`src/streaming/live_engine.py`)
+- `deb1696`: `feat(dashboard): enhance Streamlit UI with multi-tab interface for live monitoring and backtest analytics` (`src/app.py`, `tests/unit/test_dashboard_structure.py`)
+- `56d8dbe`: `test(integration): create end-to-end live streaming, notification dispatch, and live replay parity integration tests` (`tests/integration/test_live_replay_parity.py`)
 
-Integrar:
+Componentes Implementados:
 
+- **Contratos de Eventos y Modelos de Notificación (`src/notifications/models.py`)**:
+  - `SignalEvent`: Contrato unificado como fuente única de verdad para alertas y backtests (precio, acción, dirección LONG/SHORT, regime, quant_score, predictive_score, TP, SL).
+  - `NotificationPayload`: Entidad de transporte enriquecida y desacoplada de la lógica cuantitativa.
+  - `NotificationResult`: Registro inmutable de resultado por canal con trazabilidad de latencia, status HTTP y errores.
 
+- **Adaptadores de Canales Externos (`src/notifications/channels/`)**:
+  - `DiscordWebhookChannel`: Formato Rich Embed con paleta semántica (LONG: verde, SHORT: rojo, WAIT/INFO: gris/azul), campos cuantitativos y retry con backoff exponencial.
+  - `TelegramChannel`: Mensajes en formato HTML con emojis dinámicos, escapado seguro y truncado defensivo a 4096 caracteres.
+  - `WebhookChannel`: POST JSON configurable para integraciones genéricas externas.
 
+- **Despachador Inteligente y Cooldown Anti-Spam (`src/notifications/dispatcher.py`)**:
+  - `CooldownManager` en memoria indexado por tupla `(symbol, timeframe, action)` para evitar ráfagas repetidas.
+  - Filtrado por umbral configurable de `predictive_score`.
+  - Despacho asíncrono no bloqueante con `asyncio.gather` y aislamiento total de fallos por canal (`return_exceptions=True`).
 
+- **Cliente WebSocket Resiliente (`src/streaming/websocket_client.py`)**:
+  - Conexión asíncrona a streams kline de Binance (`<symbol>@kline_<interval>`).
+  - Reconexión infinita con exponential backoff + jitter, detección de desconexión y heartbeat.
 
-\## Discord
+- **Agregador de Velas y Buffer en Memoria (`src/streaming/candle_aggregator.py`)**:
+  - Buffer rodante acotado en memoria (`deque(maxlen=buffer_size)`).
+  - Procesamiento estricto de vela cerrada $T$ (`is_closed=True`) garantizando no-repainting.
 
+- **Motor de Ejecución en Tiempo Real (`src/streaming/live_engine.py`)**:
+  - Orquestación en vivo: ingestión de vela cerrada -> warm-up dinámico de indicadores -> evaluación de régimen -> inferencia predictiva -> decisión cuantitativa -> emisión de `SignalEvent` -> despacho a `NotificationDispatcher`.
 
+- **Dashboard Visualizador Multi-Pestaña (`src/app.py`)**:
+  - Tab 1: Live Market Monitor (velas, indicadores, Volume Profile POC/VAH/VAL, régimen, scores).
+  - Tab 2: Backtest & Strategy Analytics (ejecución parametrizable, curva de equity, drawdown submarino, scatter MFE/MAE, log de trades).
+  - Tab 3: Notification Settings (gestión de URLs/tokens, sliders de cooldown y umbrales, botón de prueba ping).
 
+- **Paridad Determinista Certificada (`tests/integration/test_live_replay_parity.py`)**:
+  - 100% de paridad comprobada barra a barra entre replay en vivo y `BacktestRunner` en señales, regímenes, scores y timestamps.
 
+Métricas de Calidad y Verificación:
+- 260 pruebas automatizadas offline y deterministas pasando al 100% (0 fallos).
+- 100% de cobertura en `src/notifications/` (413/413 líneas).
+- 98% de cobertura en `src/streaming/` (405/414 líneas).
+- Ruff clean (0 errores y 0 advertencias).
 
-Servidor privado:
+----
 
 
 
-
-
-Ejemplo:
-
-
-
-
-
-🚨 BTCUSDT ALERT
-
-
-
-
-
-Precio:
-
-81250
-
-
-
-
-
-Score:
-
-92
-
-
-
-
-
-Decisión:
-
-Esperar confirmación
-
-
-
-
-
-Riesgo:
-
-Medio
-
-
-
-
-
-
-
-\---
-
-
-
-También:
-
-
-
-\- Telegram.
-
-\- Email.
-
-
-
-
-
-\---
-
-
-
-\# FASE 6
-
-\# AI Market Agent
+# FASE 6
+# AI Market Agent
 
 
 

@@ -134,9 +134,38 @@ Validación de cierre:
 - 92% de cobertura de código global (100% en módulos del backtesting framework y módulos optimizados);
 - Ruff limpio con 0 errores y 0 advertencias.
 
-## Siguiente objetivo (Fase 5)
+## Fase 5 — Notification System, Live Streaming & Dashboard Visualizer
 
-**Notification System & Live Streaming**: Sistema de alertas automáticas multicanal (Discord / Telegram), streaming en tiempo real vía WebSocket y panel interactivo de backtesting en Streamlit.
+Estado: **completada e integrada** (Tag: `v2.0-live-notifications-dashboard`).
+
+Objetivos completados:
+
+1. contratos de eventos tipados (`SignalEvent`, `NotificationPayload`, `NotificationResult`) como fuente única de verdad para alertas y simulaciones;
+2. adaptadores de canal (`DiscordWebhookChannel`, `TelegramChannel`, `WebhookChannel`) con formato enriquecido semántico, reintentos exponenciales con jitter y truncado seguro;
+3. despachador central (`NotificationDispatcher`) con `CooldownManager` en memoria, filtrado por score predictivo, aislamiento de fallos por canal y concurrencia no bloqueante;
+4. cliente WebSocket (`ResilientWebSocketClient`) para streams kline de Binance con reconexión automática infinita y heartbeat;
+5. agregador de velas (`CandleAggregator`) con buffer rodante acotado (`deque`), evaluación estricta de vela cerrada ($T$) y garantía de no-repainting;
+6. motor en tiempo real (`LiveExecutionEngine`) acoplando streaming, features, régimen, predicción, decisiones cuantitativas y emisión de alertas;
+7. suite de paridad live replay vs backtest (`test_live_replay_parity.py`) certificando 100% de identidad numérica y de señal;
+8. dashboard Streamlit multi-pestaña interactivo para monitoreo en vivo, analítica de backtests (curva de capital, drawdown submarino, scatter MFE/MAE) y configuración de notificaciones.
+
+Reglas y conclusiones arquitectónicas aprendidas en Fase 5:
+
+- **Contrato de evento inmutable y unificado**: `SignalEvent` desacopla completamente el motor de cálculo cuantitativo de los canales de entrega. Los canales son estrictamente consumidores y no calculan señales ni alteran datos.
+- **Aislamiento de fallos en despacho multicanal**: Un fallo o timeout en un webhook (p. ej. Discord) nunca debe degradar o abortar el despacho a otros canales (p. ej. Telegram).
+- **Anti-spam mediante cooldown contextual**: Para evitar saturar los canales con señales idénticas en consolidaciones prolongadas, el gestor de cooldown evalúa la tupla `(symbol, timeframe, action)` con retención en memoria.
+- **Buffer acotado y paridad matemática exacta**: `CandleAggregator` utiliza una ventana rodante con longitud máxima fija en memoria (`buffer_size=500`), garantizando uso constante de RAM y reproduciendo exactamente los mismos indicadores y señales que el `BacktestRunner`.
+
+Validación de cierre:
+
+- 260 pruebas automatizadas 100% offline y deterministas (0 fallos);
+- 100% de cobertura en `src/notifications/` (413/413 líneas);
+- 98% de cobertura en `src/streaming/` (405/414 líneas);
+- Ruff limpio con 0 errores y 0 advertencias.
+
+## Siguiente objetivo (Fase 6)
+
+**AI Market Agent**: Agente conversacional e inteligente para explicación y contextualización semántica de señales cuantitativas, análisis de regímenes de mercado y consulta de performance histórica.
 
 
 

@@ -7,8 +7,14 @@ Streamlit.
 
 ## Versión actual
 
-La versión actual es **v1.9 — Predictive Market Engine & Strategy Optimization** (Tag: `v1.9-predictive-market-engine`), construida sobre la arquitectura del monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2) y el framework de backtesting orientado a eventos (Fase 3). Incluye:
+La versión actual es **v2.0 — Notification System, Live Streaming & Dashboard Visualizer** (Tag: `v2.0-live-notifications-dashboard`), construida sobre la arquitectura del monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2), el framework de backtesting orientado a eventos (Fase 3) y el motor predictivo con optimización de estrategias (Fase 4). Incluye:
 
+- streaming de baja latencia con Binance WebSocket resiliente (`ResilientWebSocketClient`) con reconexión automática y heartbeat;
+- agregación de velas en buffer rodante de memoria acotada (`CandleAggregator`) con evaluación estricta anti-repintado de velas cerradas;
+- motor de ejecución en tiempo real (`LiveExecutionEngine`) con paridad determinista comprobada (100%) respecto a `BacktestRunner`;
+- sistema de alertas multicanal (`DiscordWebhookChannel`, `TelegramChannel`, `WebhookChannel`) con formato semántico dinámico (LONG, SHORT, WAIT);
+- despachador inteligente (`NotificationDispatcher`) con gestor de cooldown anti-spam en memoria (`CooldownManager`) y filtrado por score predictivo;
+- dashboard interactivo multi-pestaña en Streamlit (Live Market Monitor, Backtest & Strategy Analytics, Notification Settings);
 - descarga de OHLCV en vivo e histórica desde Binance con validación de integridad;
 - almacenamiento columnar optimizado en Apache Parquet con particionado anual;
 - RSI, ATR, volumen promedio, EMA 50/200 y Volume Profile vectorizado de alta velocidad (`np.histogram`);
@@ -19,7 +25,7 @@ La versión actual es **v1.9 — Predictive Market Engine & Strategy Optimizatio
 - optimización empírica de parámetros TP/SL basada en MFE/MAE con Walk-Forward Validation (`StrategyOptimizer`);
 - capa de decisión adaptativa (`Enhanced DecisionEngine`) con trazabilidad completa (`DecisionResult`);
 - cálculo de métricas institucionales (Win Rate, Profit Factor, Expectancy, Drawdown, MFE, MAE);
-- historial persistente en SQLite con control de migraciones y dashboard Streamlit.
+- historial persistente en SQLite con control de migraciones.
 
 ## Arquitectura v1.6
 
@@ -164,9 +170,50 @@ La Fase 4 expande el sistema incorporando análisis de contexto causal, estimaci
 - **92% de cobertura global**: 100% en módulos del framework de backtesting y 98%-100% en los nuevos componentes predictivos y de optimización.
 - **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
 
-## Próxima fase (Fase 5)
+## Notification System, Live Streaming & Dashboard Visualizer (v2.0)
 
-**Notification System & Live Streaming**: Sistema de alertas automáticas multicanal (Discord / Telegram), streaming continuo en tiempo real vía WebSocket y panel interactivo avanzado de métricas de backtesting en Streamlit.
+La Fase 5 transforma la plataforma en un sistema operacional en tiempo real, integrando ingestión de streaming de baja latencia, ejecución causal de modelos, alertas inteligentes y visualización interactiva avanzada.
+
+### Arquitectura de Tiempo Real
+
+```text
+Live Data Stream (Binance WebSocket)
+      ↓
+ResilientWebSocketClient
+      ↓
+CandleAggregator (Buffered Memory, Anti-Repainting)
+      ↓
+LiveExecutionEngine (Warm-up, Regime, Predictive, Decision)
+      ↓
+SignalEvent (Single Source of Truth)
+      ↓
+NotificationDispatcher (CooldownManager, Score Filter)
+ ┌────┼────┐
+ ↓    ↓    ↓
+Discord Telegram Webhook
+```
+
+### Características principales
+- **Streaming WebSocket Resiliente (`ResilientWebSocketClient`)**: Conexión continua a streams kline de Binance, reconexión automática infinita con exponential backoff + jitter y detección de heartbeat.
+- **Agregador de Velas en Memoria (`CandleAggregator`)**: Buffer rodante de longitud fija acotada en memoria (`deque`), garantía estricta de no-repainting evaluando únicamente velas cerradas ($T$).
+- **Motor en Vivo Causal (`LiveExecutionEngine`)**: Ejecución secuencial idéntica al backtest, asegurando paridad matemática absoluta (100% de concordancia comprobada en integración).
+- **Contrato Unificado de Señal (`SignalEvent`)**: Contrato fuertemente tipado que actúa como fuente única de verdad para alertas, órdenes y registros históricos.
+- **Alertas Multicanal Enriquecidas**: Adaptadores dedicados para Discord (Rich Embeds con colores según dirección de mercado), Telegram (formato HTML con emojis y truncado seguro) y Webhooks genéricos (POST JSON).
+- **Despachador Inteligente con Anti-Spam (`NotificationDispatcher`)**: Control de saturación en memoria mediante `CooldownManager` por `(symbol, timeframe, action)`, filtrado por `predictive_score`, despacho asíncrono no bloqueante y aislamiento total de fallos entre canales.
+- **Dashboard Streamlit Multi-Pestaña (`src/app.py`)**:
+  - **Live Market Monitor**: Velas en vivo, EMAs 50/200, Volume Profile (POC/VAH/VAL), métricas de régimen y predicción.
+  - **Backtest & Strategy Analytics**: Configuración y ejecución de simulaciones, curvas de capital acumulado, drawdown submarino, distribución MFE/MAE de trades y log detallado.
+  - **Notification Settings**: Configuración segura de endpoints y credenciales de Discord/Telegram, ajuste de cooldown y umbrales mínimos de score, con disparador manual de alertas de prueba.
+
+### Cobertura y Calidad
+- **260 pruebas automatizadas**: Cobertura integral 100% offline y determinista sin llamadas a red.
+- **100% de cobertura en notificaciones** (`src/notifications/`, 413/413 líneas).
+- **98% de cobertura en streaming** (`src/streaming/`, 405/414 líneas).
+- **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
+
+## Próxima fase (Fase 6)
+
+**AI Market Agent**: Agente conversacional e inteligente para la interpretación contextual de señales cuantitativas, análisis de regímenes de mercado y síntesis explicativa automatizada para el usuario.
 
 
 
