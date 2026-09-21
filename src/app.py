@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
+
+# Ensure project root directory is on sys.path for cloud deployment (Streamlit Cloud, Render, etc.)
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 try:
     from src.ai_agent.context_builder import ContextBuilder
@@ -314,7 +321,22 @@ with tab_copilot:
         copilot_provider = InMemoryMarketContextProvider()
 
     import asyncio
-    asyncio.run(copilot_provider.update_context(current_market_context))
+
+    def _safe_async_run(coro):
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                return executor.submit(asyncio.run, coro).result()
+        else:
+            return loop.run_until_complete(coro)
+
+    _safe_async_run(copilot_provider.update_context(current_market_context))
 
     # Real AI Provider Resolution via ProviderFactory
     active_llm_provider = ProviderFactory.create_provider()
@@ -344,7 +366,7 @@ with tab_copilot:
                     timeframe=interval,
                     operator_id="dashboard_operator",
                 )
-                copilot_res = asyncio.run(copilot_assistant.ask(query_obj))
+                copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
                 st.markdown(copilot_res.answer)
                 latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
                 tokens = copilot_res.metadata.get("total_tokens", 0)

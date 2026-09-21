@@ -155,3 +155,24 @@ class ContextBuilder:
             signal_event=signal_event,
             market_report=market_report,
         )
+
+    @classmethod
+    def build_context(
+        cls,
+        signal_event: SignalEvent,
+        technical_indicators: dict[str, Any] | None = None,
+        volume_profile: dict[str, Any] | None = None,
+        market_report: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> MarketContext:
+        """Convenience method building MarketContext from a SignalEvent with supplemental indicators."""
+        meta = dict(metadata or {})
+        if technical_indicators:
+            meta["technical_indicators"] = technical_indicators
+        if volume_profile:
+            meta["volume_profile"] = volume_profile
+        return cls.build_from_signal_event(
+            signal_event=signal_event,
+            market_report=market_report,
+            extra_metadata=meta,
+        )

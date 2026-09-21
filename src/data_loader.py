@@ -21,7 +21,12 @@ class BinanceDataLoader:
         en curso (no cerrada), garantizando que las señales e indicadores se calculen
         exclusivamente sobre datos confirmados.
         """
-        endpoint = f"{self.base_url}/klines"
+        mirrors = [
+            self.base_url,
+            "https://api.binance.com/api/v3",
+            "https://api1.binance.com/api/v3",
+            "https://api3.binance.com/api/v3",
+        ]
 
         params = {
             "symbol": symbol,
@@ -29,15 +34,30 @@ class BinanceDataLoader:
             "limit": limit,
         }
 
-        response = requests.get(
-            endpoint,
-            params=params,
-            timeout=10,
-        )
+        candles = None
+        last_error = None
 
-        response.raise_for_status()
+        for base in mirrors:
+            try:
+                endpoint = f"{base}/klines"
+                response = requests.get(
+                    endpoint,
+                    params=params,
+                    timeout=10,
+                )
+                response.raise_for_status()
+                data = response.json()
+                if isinstance(data, list):
+                    candles = data
+                    break
+            except Exception as exc:
+                last_error = exc
+                continue
 
-        candles = response.json()
+        if candles is None:
+            if last_error:
+                raise last_error
+            candles = []
 
         if not candles:
             return pd.DataFrame(
