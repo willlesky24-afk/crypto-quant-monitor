@@ -351,7 +351,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ Modo de Análisis")
 sim_mode = st.sidebar.radio(
     "Fuente de Parámetros",
-    ["🟢 Automático (En Vivo)", "🕹️ Manual (Simulador de Escenarios)"],
+    ["🕹️ Manual (Simulador de Escenarios)", "🟢 Automático (En Vivo)"],
     index=0,
 )
 
