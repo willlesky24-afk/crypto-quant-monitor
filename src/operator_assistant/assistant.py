@@ -104,7 +104,7 @@ class OperatorAssistant(BaseOperatorAssistant):
                 context=context,
                 query=query.query,
             )
-            llm_res = await self._ai_provider.generate_response(prompt)
+            llm_res = await self._ai_provider.generate_response(prompt, metadata=query.metadata)
             explanation_summary = llm_res.content
             market_outlook = f"Provider: {llm_res.provider} ({llm_res.model}) | Latency: {llm_res.latency_ms:.1f}ms"
             key_drivers = list(context.signal.positives) or [

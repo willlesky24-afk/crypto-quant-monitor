@@ -47,16 +47,46 @@ class GeminiProvider(BaseLLMProvider):
                 t0,
             )
 
+        meta = metadata or {}
+        image_bytes = meta.get("image_bytes")
+        mime_type = meta.get("mime_type", "image/png")
+        conversation_history = meta.get("conversation_history")
+
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
-        payload = {
-            "contents": [
-                {
-                    "parts": [{"text": prompt}]
+
+        contents: list[dict[str, Any]] = []
+
+        # Multi-turn conversation support
+        if conversation_history and isinstance(conversation_history, list):
+            for turn in conversation_history[-8:]:
+                turn_role = "user" if turn.get("role") == "user" else "model"
+                turn_text = str(turn.get("content", ""))
+                if turn_text.strip():
+                    contents.append({
+                        "role": turn_role,
+                        "parts": [{"text": turn_text}],
+                    })
+
+        current_parts: list[dict[str, Any]] = [{"text": prompt}]
+
+        # Multimodal image attachment support
+        if image_bytes and isinstance(image_bytes, (bytes, bytearray)):
+            import base64
+            encoded_img = base64.b64encode(image_bytes).decode("utf-8")
+            current_parts.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": encoded_img,
                 }
-            ],
+            })
+
+        contents.append({"role": "user", "parts": current_parts})
+
+        payload = {
+            "contents": contents,
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 2048,
             },
         }
 

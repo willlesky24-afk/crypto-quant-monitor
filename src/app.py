@@ -26,6 +26,7 @@ try:
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
     from src.market_reports.generator import MarketReportService
+    from src.market_scanner import MarketScanner
     from src.notifications.channels.discord import DiscordWebhookChannel
     from src.notifications.channels.telegram import TelegramChannel
     from src.notifications.channels.webhook import WebhookChannel
@@ -54,6 +55,7 @@ except ImportError:
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
     from market_reports.generator import MarketReportService
+    from market_scanner import MarketScanner
     from notifications.channels.discord import DiscordWebhookChannel
     from notifications.channels.telegram import TelegramChannel
     from notifications.channels.webhook import WebhookChannel
@@ -303,6 +305,61 @@ st.markdown(
         background: rgba(255, 46, 99, 0.12);
         border: 1px solid rgba(255, 46, 99, 0.35);
         color: #FF2E63;
+    }
+
+    /* Mobile Responsive Optimizations (Smartphones & Tablets) */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            padding-top: 1.0rem !important;
+        }
+        .stHorizontalBlock {
+            flex-direction: column !important;
+            gap: 0.6rem !important;
+        }
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+        .metric-card {
+            padding: 12px 14px !important;
+            margin-bottom: 8px !important;
+        }
+        .metric-value {
+            font-size: 1.15rem !important;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 4px !important;
+            overflow-x: auto !important;
+            flex-wrap: nowrap !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            padding: 6px 10px !important;
+            font-size: 0.76rem !important;
+        }
+        .justification-card {
+            padding: 14px 16px !important;
+        }
+        .justification-title {
+            font-size: 0.85rem !important;
+        }
+        .justification-text {
+            font-size: 0.85rem !important;
+            line-height: 1.55 !important;
+        }
+        .metric-pill {
+            display: inline-block !important;
+            margin-bottom: 5px !important;
+            font-size: 0.72rem !important;
+            padding: 3px 8px !important;
+        }
+        .stButton>button {
+            width: 100% !important;
+            min-height: 42px !important;
+            font-size: 0.84rem !important;
+        }
     }
     </style>
     """,
@@ -815,27 +872,168 @@ with tab_copilot:
         with cop_tab1:
             provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
             model_name = getattr(active_llm_provider, "model", "standard")
-            st.caption(f"🧠 Modelo: **{provider_name}** (`{model_name}`) | BD: `{db_path}`")
-            user_query_input = st.text_input("Consulta:", value=f"Analiza la situación cuantitativa de {symbol} ahora", key="copilot_input")
+            st.caption(f"🧠 Modelo: **{provider_name}** (`{model_name}`) | Memoria Conversacional • Explicación en Lenguaje Cotidiano")
 
-            if st.button("🔎 Enviar Consulta a Copilot", type="primary"):
-                with st.spinner("AI Copilot sintetizando contexto cuantitativo con Gemini..."):
-                    query_obj = OperatorQuery(
-                        query=user_query_input,
-                        symbol=symbol,
-                        timeframe=interval,
-                        operator_id="dashboard_operator",
-                    )
+            # Quick Action Buttons
+            q_col1, q_col2, q_col3 = st.columns([1.5, 1.5, 0.8])
+            scan_triggered = False
+            explain_triggered = False
+
+            with q_col1:
+                if st.button("🚀 Escanear Mercado (¿Mejor Par?)", key="btn_scan_market", use_container_width=True):
+                    scan_triggered = True
+            with q_col2:
+                if st.button(f"🗣️ Explicar {symbol} en Lenguaje Sencillo", key="btn_explain_current", use_container_width=True):
+                    explain_triggered = True
+            with q_col3:
+                if st.button("🗑️ Limpiar", key="btn_clear_chat", use_container_width=True):
+                    st.session_state["copilot_chat_history"] = []
+                    st.rerun()
+
+            # Initialize chat history
+            if "copilot_chat_history" not in st.session_state or not st.session_state["copilot_chat_history"]:
+                st.session_state["copilot_chat_history"] = [
+                    {
+                        "role": "assistant",
+                        "content": (
+                            f"👋 **¡Hola! Soy tu AI Quant Copilot.**\n\n"
+                            f"Puedo responder todas tus inquietudes en **lenguaje cotidiano** y con datos cuantitativos en tiempo real:\n"
+                            f"- Pregúntame: *¿Qué par presenta el mejor escenario para hacer trading hoy?*\n"
+                            f"- Puedes **adjuntar una foto o captura de pantalla de un gráfico** abajo para que lo analice visualmente.\n"
+                            f"- O pregúntame sobre la señal, volumen POC y niveles de riesgo de **{symbol}**."
+                        ),
+                    }
+                ]
+
+            # File/Image Uploader
+            with st.expander("📎 Adjuntar Gráfico o Archivo para Análisis Multimodal (Foto, TradingView o CSV)", expanded=False):
+                uploaded_file = st.file_uploader(
+                    "Sube una captura de gráfico (PNG, JPG, WEBP) o archivo de datos:",
+                    type=["png", "jpg", "jpeg", "webp", "csv", "txt"],
+                    key="copilot_file_uploader",
+                )
+                if uploaded_file is not None:
+                    if uploaded_file.type.startswith("image/"):
+                        st.image(uploaded_file, caption="📷 Gráfico adjunto para análisis visual", width=320)
+                    else:
+                        st.info(f"📄 Archivo cargado: {uploaded_file.name} ({uploaded_file.size} bytes)")
+
+            # Render Chat Messages
+            chat_container = st.container()
+            with chat_container:
+                for msg in st.session_state["copilot_chat_history"]:
+                    with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
+                        st.markdown(msg["content"])
+                        if msg.get("image_bytes"):
+                            st.image(msg["image_bytes"], width=300)
+
+            # Handler for Market Scanner Quick Action
+            if scan_triggered:
+                with st.spinner("🔍 Analizando y comparando pares principales en Binance (BTC, ETH, SOL, BNB, XRP)..."):
                     try:
+                        scanner = MarketScanner()
+                        scan_results = scanner.scan_market()
+                        scan_summary = scanner.format_scanner_summary_es(scan_results)
+
+                        user_prompt = "¿Puedes analizar el mercado crypto y ver qué par me presenta el mejor escenario para hacer trading? Explícalo con datos y en lenguaje cotidiano."
+                        st.session_state["copilot_chat_history"].append({
+                            "role": "user",
+                            "content": user_prompt,
+                        })
+
+                        query_obj = OperatorQuery(
+                            query=f"Basado en este escaneo de mercado cuantitativo en tiempo real:\n\n{scan_summary}\n\nExplica en lenguaje cotidiano al operador cuál es el mejor par para trading, por qué supera a los otros, qué significan sus números y cuáles son los niveles clave de entrada y riesgo.",
+                            symbol=scan_results[0].symbol if scan_results else symbol,
+                            timeframe=interval,
+                            operator_id="dashboard_operator",
+                            metadata={
+                                "conversation_history": [
+                                    {"role": m["role"], "content": m["content"]}
+                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                ],
+                            },
+                        )
                         copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                        st.markdown("---")
-                        st.markdown(copilot_res.answer)
-                        latency_ms = copilot_res.metadata.get("latency_ms", 0.0)
-                        tokens = copilot_res.metadata.get("total_tokens", 0)
-                        meta_str = f"⚡ Latencia: {latency_ms:.1f}ms" + (f" | 🪙 Tokens: {tokens}" if tokens else "")
-                        st.caption(f"🛡️ {copilot_res.disclaimer} • {meta_str}")
-                    except Exception as copilot_err:
-                        st.error(f"Error procesando la consulta con AI Copilot: {copilot_err}")
+                        answer_text = copilot_res.answer if "Unable to analyze" not in copilot_res.answer else scan_summary
+
+                        st.session_state["copilot_chat_history"].append({
+                            "role": "assistant",
+                            "content": answer_text,
+                        })
+                        st.rerun()
+                    except Exception as scan_err:
+                        st.error(f"Error ejecutando escaneo de mercado: {scan_err}")
+
+            # Handler for Explain Current Asset Quick Action
+            if explain_triggered:
+                user_prompt = f"Explícame en lenguaje cotidiano la situación actual de {symbol}: qué significa su Quant Score, el régimen de mercado y sus niveles de soporte y riesgo."
+                st.session_state["copilot_chat_history"].append({
+                    "role": "user",
+                    "content": user_prompt,
+                })
+                with st.spinner(f"AI Copilot traduciendo métricas de {symbol} a lenguaje cotidiano..."):
+                    try:
+                        query_obj = OperatorQuery(
+                            query=user_prompt,
+                            symbol=symbol,
+                            timeframe=interval,
+                            operator_id="dashboard_operator",
+                            metadata={
+                                "conversation_history": [
+                                    {"role": m["role"], "content": m["content"]}
+                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                ],
+                            },
+                        )
+                        copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
+                        st.session_state["copilot_chat_history"].append({
+                            "role": "assistant",
+                            "content": copilot_res.answer,
+                        })
+                        st.rerun()
+                    except Exception as exp_err:
+                        st.error(f"Error generando explicación: {exp_err}")
+
+            # Chat Input Form
+            chat_input_val = st.chat_input("Escribe tu consulta al Copilot (ej. ¿Cuál es el mejor par? o analiza la foto adjunta)...")
+            if chat_input_val:
+                user_msg = {
+                    "role": "user",
+                    "content": chat_input_val,
+                }
+                img_bytes = None
+                mime_type = "image/png"
+                if uploaded_file is not None and uploaded_file.type.startswith("image/"):
+                    img_bytes = uploaded_file.getvalue()
+                    mime_type = uploaded_file.type
+                    user_msg["image_bytes"] = img_bytes
+
+                st.session_state["copilot_chat_history"].append(user_msg)
+
+                with st.spinner("AI Copilot razonando y formulando respuesta en español..."):
+                    try:
+                        query_obj = OperatorQuery(
+                            query=chat_input_val,
+                            symbol=symbol,
+                            timeframe=interval,
+                            operator_id="dashboard_operator",
+                            metadata={
+                                "image_bytes": img_bytes,
+                                "mime_type": mime_type,
+                                "conversation_history": [
+                                    {"role": m["role"], "content": m["content"]}
+                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                ],
+                            },
+                        )
+                        copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
+                        st.session_state["copilot_chat_history"].append({
+                            "role": "assistant",
+                            "content": copilot_res.answer,
+                        })
+                        st.rerun()
+                    except Exception as cop_err:
+                        st.error(f"Error procesando la consulta: {cop_err}")
 
         with cop_tab2:
             st.markdown("#### 📋 Briefing Diario del Mercado")
