@@ -18,7 +18,12 @@ try:
     from src.ai_agent.context_builder import ContextBuilder
     from src.ai_providers.factory import ProviderFactory
     from src.anomaly_detection.detector import MarketAnomalyDetector
-    from src.backtest_models import BacktestConfig, TradeDirection
+    from src.backtest_models import BacktestConfig
+    from src.backtest_presets import (
+        PROVEN_STRATEGIES,
+        build_strategy_config,
+        evaluate_backtest_verdict,
+    )
     from src.backtest_runner import BacktestRunner
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
@@ -47,7 +52,12 @@ except ImportError:
     from ai_agent.context_builder import ContextBuilder
     from ai_providers.factory import ProviderFactory
     from anomaly_detection.detector import MarketAnomalyDetector
-    from backtest_models import BacktestConfig, TradeDirection
+    from backtest_models import BacktestConfig
+    from backtest_presets import (
+        PROVEN_STRATEGIES,
+        build_strategy_config,
+        evaluate_backtest_verdict,
+    )
     from backtest_runner import BacktestRunner
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
@@ -360,6 +370,20 @@ st.markdown(
             min-height: 42px !important;
             font-size: 0.84rem !important;
         }
+    /* Intelligent Traffic Light Verdict Card & Presets */
+    .verdict-card {
+        background: linear-gradient(135deg, rgba(16, 26, 46, 0.95) 0%, rgba(10, 16, 30, 0.98) 100%);
+        border-radius: 18px;
+        padding: 18px 22px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    .strategy-preset-card {
+        background: rgba(16, 26, 46, 0.65);
+        border: 1px solid rgba(0, 229, 255, 0.25);
+        border-radius: 14px;
+        padding: 12px 16px;
+        margin-bottom: 14px;
     }
     </style>
     """,
@@ -1105,31 +1129,122 @@ with tab_copilot:
 # TAB 3: BACKTEST ANALYTICS
 # =====================================================================
 with tab_backtest:
-    st.subheader("📈 Simulación Cronológica y Desempeño Histórico")
+    st.subheader("📈 Simulación Histórica & Backtest Analytics")
+    st.caption("Prueba de estrategias cuantitativas con datos reales de mercado • Sin riesgo de capital real")
 
+    # Experience Level Selector
+    exp_level = st.radio(
+        "Nivel de Experiencia",
+        [
+            "👶 Modo Guiado (Estrategias Probadas & Capital Flexible)",
+            "👨‍💻 Modo Personalizado (Control Total para Expertos)",
+        ],
+        horizontal=True,
+    )
 
-    # Backtest Execution Controls
-    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
-    with b_col1:
-        initial_cap = st.number_input("Capital Inicial ($)", min_value=1_000.0, max_value=1_000_000.0, value=10_000.0, step=1000.0)
-    with b_col2:
-        taker_fee_pct = st.number_input("Comisión Taker (%)", min_value=0.0, max_value=1.0, value=0.05, step=0.01) / 100.0
-    with b_col3:
-        slippage_pct = st.number_input("Slippage (%)", min_value=0.0, max_value=1.0, value=0.05, step=0.01) / 100.0
-    with b_col4:
-        direction_choice = st.selectbox("Dirección de Operación", ["BOTH", "LONG", "SHORT"], index=0)
+    is_guided = "Guiado" in exp_level
+    b_cfg = None
 
-    run_sim = st.button("🚀 Ejecutar Backtest", type="primary")
+    if is_guided:
+        st.markdown("##### 1️⃣ Define tu Capital Inicial Disponible")
+        if "guided_capital" not in st.session_state:
+            st.session_state["guided_capital"] = 100.0
+
+        cap_cols = st.columns(6)
+        preset_caps = [25.0, 50.0, 100.0, 250.0, 500.0, 1000.0]
+        for col, amt in zip(cap_cols, preset_caps):
+            with col:
+                if st.button(f"${int(amt)}", key=f"cap_btn_{int(amt)}", use_container_width=True):
+                    st.session_state["guided_capital"] = amt
+
+        selected_cap = st.number_input(
+            "O escribe el monto exacto en dólares ($):",
+            min_value=5.0,
+            max_value=1_000_000.0,
+            value=float(st.session_state["guided_capital"]),
+            step=10.0,
+            format="%.2f",
+            key="input_guided_cap",
+        )
+
+        st.markdown("##### 2️⃣ Elige una Estrategia Estándar Probada de la Industria")
+        strategy_keys = list(PROVEN_STRATEGIES.keys())
+        strategy_labels = [PROVEN_STRATEGIES[k]["name"] for k in strategy_keys]
+        selected_strategy_label = st.selectbox(
+            "Estrategia Cuantitativa:",
+            options=strategy_labels,
+            index=0,
+        )
+        chosen_strategy_key = strategy_keys[strategy_labels.index(selected_strategy_label)]
+        chosen_strategy_info = PROVEN_STRATEGIES[chosen_strategy_key]
+
+        st.markdown(
+            f"""
+            <div class="strategy-preset-card">
+                <strong style="color: #00E5FF;">{chosen_strategy_info['name']}</strong><br/>
+                <span style="color: #F0F6FC; font-size: 0.88rem; line-height: 1.5;">{chosen_strategy_info['description']}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        run_sim = st.button("🚀 Simular Estrategia con Datos Reales", type="primary", use_container_width=True)
+
+        if run_sim:
+            b_cfg = build_strategy_config(
+                strategy_key=chosen_strategy_key,
+                initial_capital=selected_cap,
+                taker_fee_pct=0.0005,
+                slippage_pct=0.0005,
+            )
+
+    else:
+        st.markdown("##### ⚙️ Parámetros Avanzados de Simulación")
+        b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+        with b_col1:
+            initial_cap = st.number_input(
+                "Capital Inicial ($)",
+                min_value=5.0,
+                max_value=1_000_000.0,
+                value=10_000.0,
+                step=100.0,
+            )
+        with b_col2:
+            taker_fee_pct = st.number_input(
+                "Comisión Taker (%)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.05,
+                step=0.01,
+            ) / 100.0
+        with b_col3:
+            slippage_pct = st.number_input(
+                "Slippage (%)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.05,
+                step=0.01,
+            ) / 100.0
+        with b_col4:
+            direction_choice = st.selectbox(
+                "Dirección de Operación",
+                ["BOTH", "LONG", "SHORT"],
+                index=0,
+            )
+
+        run_sim = st.button("🚀 Ejecutar Backtest Personalizado", type="primary", use_container_width=True)
+
+        if run_sim:
+            b_cfg = BacktestConfig(
+                initial_capital=initial_cap,
+                taker_fee_pct=taker_fee_pct,
+                slippage_pct=slippage_pct,
+                direction=direction_choice,
+            )
 
     if run_sim or "backtest_report" in st.session_state:
-        if run_sim:
-            with st.spinner("Ejecutando simulación event-driven..."):
-                b_cfg = BacktestConfig(
-                    initial_capital=initial_cap,
-                    taker_fee_pct=taker_fee_pct,
-                    slippage_pct=slippage_pct,
-                    trade_direction=TradeDirection(direction_choice),
-                )
+        if run_sim and b_cfg is not None:
+            with st.spinner("Ejecutando simulación cuantitativa vela por vela sobre datos reales de Binance..."):
                 runner = BacktestRunner(config=b_cfg)
                 st.session_state["backtest_report"] = runner.run_backtest(
                     df=df,
@@ -1140,6 +1255,62 @@ with tab_backtest:
 
         report = st.session_state["backtest_report"]
         metrics = report.metrics
+
+        # Intelligent Traffic Light Verdict
+        verdict = evaluate_backtest_verdict(metrics)
+        st.markdown(
+            f"""
+            <div class="verdict-card" style="border: 1px solid {verdict['color']};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="color: {verdict['color']}; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.5px;">{verdict['badge']}</span>
+                    <span style="color: #8B949E; font-size: 0.80rem;">{symbol} • {interval}</span>
+                </div>
+                <div style="color: #F0F6FC; font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
+                    {verdict['title']}
+                </div>
+                <div style="color: #C9D1D9; font-size: 0.88rem; line-height: 1.6;">
+                    {verdict['description']}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # AI Copilot Integration Button
+        c_consult_btn, _ = st.columns([1.5, 2.0])
+        with c_consult_btn:
+            if st.button("🤖 Preguntar al Copilot: ¿Qué significa este resultado para mí?", key="btn_ask_copilot_backtest", use_container_width=True):
+                backtest_prompt = (
+                    f"Acabo de ejecutar un backtest para {symbol} ({interval}) con los siguientes resultados cuantitativos:\n"
+                    f"- Total de Trades: {metrics.get('total_trades', 0)}\n"
+                    f"- Win Rate: {metrics.get('win_rate', 0.0)*100:.1f}%\n"
+                    f"- Profit Factor: {metrics.get('profit_factor', 0.0):.2f}\n"
+                    f"- Caída Máxima (Max Drawdown): {metrics.get('max_drawdown_pct', 0.0):.2f}%\n"
+                    f"- Retorno Neto: ${metrics.get('net_pnl', 0.0):,.2f}\n"
+                    f"- Veredicto: {verdict['badge']} - {verdict['title']}\n\n"
+                    f"Explícame en lenguaje cotidiano qué significan estos resultados para mí, si me conviene o no operar este par con esta estrategia, y qué consejos me das para cuidar mi dinero."
+                )
+                if "copilot_chat_history" not in st.session_state:
+                    st.session_state["copilot_chat_history"] = []
+                st.session_state["copilot_chat_history"].append({
+                    "role": "user",
+                    "content": backtest_prompt,
+                })
+                try:
+                    q_obj = OperatorQuery(
+                        query=backtest_prompt,
+                        symbol=symbol,
+                        timeframe=interval,
+                        operator_id="dashboard_operator",
+                    )
+                    cop_res = _safe_async_run(copilot_assistant.ask(q_obj))
+                    st.session_state["copilot_chat_history"].append({
+                        "role": "assistant",
+                        "content": cop_res.answer,
+                    })
+                    st.success("✅ ¡El Copilot ha analizado tu backtest! Ve a la pestaña '🤖 AI Copilot' para leer su recomendación personalizada.")
+                except Exception as exc:
+                    st.info(f"Consulta agregada al chat de Copilot: {exc}")
 
         # 1. Performance Metrics Grid
         m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)

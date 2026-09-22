@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from typing import Any
 
 import pandas as pd
 
@@ -77,6 +78,11 @@ class BacktestConfig:
     leverage: float = 1.0
     min_quant_score: float = 60.0
     require_favorable_decision: bool = True
+    trade_direction: Any = None
+
+    def __post_init__(self):
+        if self.trade_direction is not None:
+            self.direction = self.trade_direction.value if hasattr(self.trade_direction, "value") else str(self.trade_direction)
 
     def to_dict(self) -> dict:
         return asdict(self)
