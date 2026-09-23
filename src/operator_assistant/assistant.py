@@ -338,4 +338,101 @@ class OperatorAssistant(BaseOperatorAssistant):
             for w in context.signal.warnings:
                 lines.append(f"  * ⚠️ {w}")
 
+        lines.append("")
+        lines.extend(self._build_conclusive_verdict(context))
+
         return "\n".join(lines)
+
+    def _build_conclusive_verdict(self, context: MarketContext) -> list[str]:
+        """Construct a structured, conclusive trading verdict block (resumen conclusivo y parámetros de riesgo)."""
+        price = context.current_price
+        sl = context.risk.stop_loss
+        tp = context.risk.take_profit
+        atr = context.risk.atr
+        quant = context.quant_score
+        regime = context.market_regime
+        action = (context.signal.action or "").upper()
+        direction = (context.signal.direction or "").upper()
+        rsi = context.technical_indicators.get("rsi")
+
+        def _fmt(val: float | None) -> str:
+            if val is None:
+                return "N/A"
+            if val >= 100:
+                return f"${val:,.2f}"
+            elif val >= 1:
+                return f"${val:,.4f}"
+            else:
+                return f"${val:,.6f}"
+
+        # 1. Technical verdict
+        rsi_str = f" y un RSI saludable en ~{rsi:.1f}" if rsi is not None else ""
+        if "BUY" in action or "LONG" in direction:
+            if quant >= 75:
+                v_title = "Sí, el sesgo matemático favorece las compras."
+            else:
+                v_title = "Posible compra con cautela."
+            v_desc = (
+                f"{v_title} El par se encuentra en una estructura alcista confirmada bajo régimen `{regime}` "
+                f"con el precio cotizando en {_fmt(price)}{rsi_str}. "
+                f"La puntuación cuantitativa ({quant:.1f}/100) y las confluencias estadísticas respaldan la entrada."
+            )
+        elif "SELL" in action or "SHORT" in direction:
+            if quant >= 75:
+                v_title = "Precaución: El sesgo matemático favorece las ventas (SHORT) o mantenerse al margen."
+            else:
+                v_title = "Precaución: Presión vendedora detectada."
+            v_desc = (
+                f"{v_title} El par se encuentra bajo presión bajista en régimen `{regime}` "
+                f"con el precio en {_fmt(price)}{rsi_str}. "
+                f"El modelo cuantitativo no recomienda compras en este entorno de debilidad técnica."
+            )
+        else:
+            v_title = "En Espera / Neutral: No se recomienda entrar en este momento."
+            v_desc = (
+                f"{v_title} El mercado se encuentra en consolidación o rango bajo régimen `{regime}` "
+                f"con el precio en {_fmt(price)}{rsi_str}. "
+                f"La puntuación cuantitativa ({quant:.1f}/100) indica que no hay ventaja estadística suficiente; conviene aguardar confirmación."
+            )
+
+        # 2. Risk parameters
+        if atr is not None and atr > 0:
+            spread = min(0.3 * atr, price * 0.002) if price > 0 else 0.0
+        else:
+            spread = (price * 0.0005 if price < 10 else price * 0.001) if price > 0 else 0.0
+
+        if "SELL" in action or "SHORT" in direction:
+            e_min = price
+            e_max = price + spread
+        else:
+            e_min = max(0.0, price - spread)
+            e_max = price
+
+        entry_text = f"Zona de {_fmt(e_min)} – {_fmt(e_max)}"
+
+        if sl is not None and price > 0:
+            sl_pct = abs(price - sl) / price * 100
+            sl_text = f"{_fmt(sl)} (Riesgo controlado de ~{sl_pct:.2f}%)"
+        else:
+            sl_text = "Dinámico según niveles de soporte o volatilidad ATR"
+
+        if tp is not None and price > 0:
+            tp_pct = abs(tp - price) / price * 100
+            if sl is not None and abs(price - sl) > 0:
+                rr = abs(tp - price) / abs(price - sl)
+                rr_text = f", Ratio Riesgo:Beneficio de 1 : {rr:.1f}" if rr >= 0.1 else ""
+            else:
+                rr_text = ""
+            tp_text = f"{_fmt(tp)} (Objetivo técnico ~+{tp_pct:.2f}%{rr_text})"
+        else:
+            tp_text = "Dinámico según niveles de resistencia técnica"
+
+        return [
+            "---",
+            "### 🏁 Conclusión Operativa y Veredicto Técnico:",
+            f"* **Respuesta técnica**: {v_desc}",
+            "* **Parámetros de Riesgo Sugeridos**:",
+            f"  * **Entrada**: {entry_text}",
+            f"  * **Stop Loss (Corte de pérdida)**: {sl_text}",
+            f"  * **Take Profit (Toma de beneficio)**: {tp_text}",
+        ]

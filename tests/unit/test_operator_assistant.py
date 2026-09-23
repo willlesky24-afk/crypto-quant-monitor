@@ -117,6 +117,11 @@ async def test_operator_assistant_ask_success():
     assert "Copilot Intelligence" in response.answer
     assert len(response.scenarios) > 0
     assert "DECISION SUPPORT ONLY" in response.disclaimer
+    assert "🏁 Conclusión Operativa y Veredicto Técnico" in response.answer
+    assert "Respuesta técnica" in response.answer
+    assert "Parámetros de Riesgo Sugeridos" in response.answer
+    assert "Stop Loss (Corte de pérdida)" in response.answer
+    assert "Take Profit (Toma de beneficio)" in response.answer
 
 
 @pytest.mark.anyio
