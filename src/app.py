@@ -28,6 +28,8 @@ try:
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
     from src.engine import MarketEngine
+    from src.forex_data_loader import FOREX_PAIRS, ForexDataLoader
+    from src.forex_sessions import get_forex_session_status
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
     from src.market_reports.generator import MarketReportService
@@ -62,6 +64,8 @@ except ImportError:
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
     from engine import MarketEngine
+    from forex_data_loader import FOREX_PAIRS, ForexDataLoader
+    from forex_sessions import get_forex_session_status
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
     from market_reports.generator import MarketReportService
@@ -390,13 +394,49 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("📊 Crypto Quant Monitor")
-st.caption("Institutional Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting")
+st.title("📊 Crypto & Forex Quant Monitor")
 
 # =====================================================================
-# SIDEBAR: DATA CONTROLS
+# SIDEBAR: MASTER MARKET SELECTOR (CRYPTO VS FOREX)
 # =====================================================================
-st.sidebar.header("🕹️ Parámetros de Mercado")
+st.sidebar.subheader("🌐 Mercado Activo")
+market_choice = st.sidebar.radio(
+    "Selecciona el Mercado:",
+    ["🪙 Criptomonedas (24/7)", "💱 Divisas Forex (Lun - Vie)"],
+    index=0,
+)
+
+is_forex = "Forex" in market_choice
+
+# Live Market Status & Session Schedule
+if is_forex:
+    forex_status = get_forex_session_status()
+    status_color = "#00FF88" if forex_status.is_market_open else "#FF2E63"
+    st.sidebar.markdown(
+        f"""
+        <div style="background: rgba(16, 26, 46, 0.85); border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.84rem; color: {status_color};">{forex_status.status_headline}</div>
+            <div style="font-size: 0.76rem; color: #8B949E; margin-top: 4px;">🕒 {forex_status.current_utc_time}</div>
+            <div style="font-size: 0.74rem; color: #00E5FF; margin-top: 3px;">📌 {forex_status.weekend_reopen_info}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.sidebar.expander("🕒 Horarios de Sesiones Bancarias (UTC)", expanded=False):
+        for s_name, s_time in forex_status.session_details.items():
+            st.caption(f"**{s_name}:** {s_time}")
+else:
+    st.sidebar.markdown(
+        """
+        <div style="background: rgba(16, 26, 46, 0.85); border: 1px solid rgba(0, 255, 136, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.84rem; color: #00FF88;">🟢 Mercado Cripto Abierto 24/7</div>
+            <div style="font-size: 0.76rem; color: #8B949E; margin-top: 4px;">Operaciones continuas los 365 días del año sin cierres</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.sidebar.header("🕹️ Parámetros de Selección")
 
 POPULAR_PAIRS = {
     "🥇 BTC / USDT (Bitcoin)": "BTCUSDT",
@@ -412,18 +452,30 @@ POPULAR_PAIRS = {
     "✍️ Escribir otro par personalizado...": "CUSTOM",
 }
 
-selected_label = st.sidebar.selectbox(
-    "Par de Criptomoneda",
-    options=list(POPULAR_PAIRS.keys()),
-    index=0,
-)
-
-if POPULAR_PAIRS[selected_label] == "CUSTOM":
-    symbol = st.sidebar.text_input("Ingresa el símbolo (ej. SUIUSDT)", "BTCUSDT").strip().upper()
+if is_forex:
+    selected_label = st.sidebar.selectbox(
+        "Par de Divisas Forex",
+        options=list(FOREX_PAIRS.keys()),
+        index=0,
+    )
+    symbol = FOREX_PAIRS[selected_label]
 else:
-    symbol = POPULAR_PAIRS[selected_label]
+    selected_label = st.sidebar.selectbox(
+        "Par de Criptomoneda",
+        options=list(POPULAR_PAIRS.keys()),
+        index=0,
+    )
+    if POPULAR_PAIRS[selected_label] == "CUSTOM":
+        symbol = st.sidebar.text_input("Ingresa el símbolo (ej. SUIUSDT)", "BTCUSDT").strip().upper()
+    else:
+        symbol = POPULAR_PAIRS[selected_label]
+
 interval = st.sidebar.selectbox("Temporalidad", ["15m", "1h", "4h", "1d"], index=1)
-limit = st.sidebar.slider("Velas Históricas", min_value=250, max_value=1000, value=300, step=50)
+limit = st.sidebar.slider("Velas Históricas", min_value=150, max_value=1000, value=300, step=50)
+
+# Caption under title
+market_desc = "💱 Divisas Forex Globales (Interbancario)" if is_forex else "🪙 Criptomonedas (Binance Spot & Futuros)"
+st.caption(f"{market_desc} • Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting")
 
 # =====================================================================
 # SIDEBAR: MODO DE ANÁLISIS (AUTOMÁTICO VS MANUAL / WHAT-IF)
@@ -453,20 +505,28 @@ if is_manual_mode:
     manual_sl_mult = st.sidebar.slider("Stop Loss SL (x ATR)", 0.5, 4.0, 1.5, 0.25)
     manual_tech_weight = st.sidebar.slider("Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05)
 
-# Fetch Market Data
+# Fetch Market Data (Crypto vs Forex)
 try:
-    loader = BinanceDataLoader()
-    df_raw = loader.get_klines(
-        symbol=symbol,
-        interval=interval,
-        limit=limit,
-        include_open_candle=False,
-    )
+    if is_forex:
+        forex_loader = ForexDataLoader()
+        df_raw = forex_loader.get_forex_klines(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+        )
+    else:
+        loader = BinanceDataLoader()
+        df_raw = loader.get_klines(
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+            include_open_candle=False,
+        )
 except Exception as exc:
     st.error(f"Error cargando datos de mercado para {symbol}: {exc}")
     st.stop()
 
-if df_raw.empty or len(df_raw) < 50:
+if df_raw.empty or len(df_raw) < 35:
     st.warning("Datos de mercado insuficientes para ejecutar el análisis cuantitativo.")
     st.stop()
 
@@ -709,6 +769,23 @@ with tab_live:
             unsafe_allow_html=True,
         )
 
+        market_badge_text = "💱 Mercado Forex Global" if is_forex else "🪙 Mercado Criptomonedas 24/7"
+        strategy_recommendation = (
+            "🏛️ <strong>Método Recomendado en Forex:</strong> Reversión a la Media en zonas de valor institucional (VAL/VAH) y Seguimiento de Tendencia macroeconómico."
+            if is_forex
+            else "🚀 <strong>Método Recomendado en Cripto:</strong> Rupturas de Volatilidad (Breakouts) y Modelo Híbrido Dinámico para expansiones de impulso 24/7."
+        )
+
+        st.markdown(
+            f"""
+            <div style="background: rgba(16, 26, 46, 0.6); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;">
+                <span class="metric-pill metric-pill-gold">{market_badge_text}</span>
+                <span style="font-size: 0.85rem; color: #C9D1D9;">{strategy_recommendation}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         col_pos, col_warn = st.columns(2)
         with col_pos:
             st.markdown("##### 🟢 Confluencias Favorables")
@@ -903,8 +980,9 @@ with tab_copilot:
             scan_triggered = False
             explain_triggered = False
 
+            scan_btn_label = "💱 Escanear Divisas Forex" if is_forex else "🚀 Escanear Criptomonedas"
             with q_col1:
-                if st.button("🚀 Escanear Mercado (¿Mejor Par?)", key="btn_scan_market", use_container_width=True):
+                if st.button(scan_btn_label, key="btn_scan_market", use_container_width=True):
                     scan_triggered = True
             with q_col2:
                 if st.button(f"🗣️ Explicar {symbol} en Lenguaje Sencillo", key="btn_explain_current", use_container_width=True):
@@ -916,12 +994,13 @@ with tab_copilot:
 
             # Initialize chat history
             if "copilot_chat_history" not in st.session_state or not st.session_state["copilot_chat_history"]:
+                market_label = "Divisas Forex Globales" if is_forex else "Criptomonedas"
                 st.session_state["copilot_chat_history"] = [
                     {
                         "role": "assistant",
                         "content": (
                             f"👋 **¡Hola! Soy tu AI Quant Copilot.**\n\n"
-                            f"Puedo responder todas tus inquietudes en **lenguaje cotidiano** y con datos cuantitativos en tiempo real:\n"
+                            f"Puedo responder todas tus inquietudes sobre el mercado de **{market_label}** en **lenguaje cotidiano** y con datos cuantitativos en tiempo real:\n"
                             f"- Pregúntame: *¿Qué par presenta el mejor escenario para hacer trading hoy?*\n"
                             f"- Puedes **adjuntar una foto o captura de pantalla de un gráfico** abajo para que lo analice visualmente.\n"
                             f"- O pregúntame sobre la señal, volumen POC y niveles de riesgo de **{symbol}**."
@@ -953,24 +1032,33 @@ with tab_copilot:
 
             # Handler for Market Scanner Quick Action
             if scan_triggered:
-                with st.spinner("🔍 Analizando y comparando pares principales en Binance (BTC, ETH, SOL, BNB, XRP)..."):
+                scan_market_name = "Forex (EUR/USD, GBP/USD, USD/JPY...)" if is_forex else "Binance (BTC, ETH, SOL, BNB, XRP)"
+                with st.spinner(f"🔍 Analizando y comparando pares principales en {scan_market_name}..."):
                     try:
-                        scanner = MarketScanner()
-                        scan_results = scanner.scan_market()
+                        if is_forex:
+                            scanner = MarketScanner(data_loader=ForexDataLoader())
+                            forex_symbols = [s for s in FOREX_PAIRS.values() if not s.startswith("CUSTOM")][:6]
+                            scan_results = scanner.scan_market(symbols=forex_symbols, timeframe=interval)
+                            user_prompt = "¿Puedes analizar el mercado Forex y ver qué par me presenta el mejor escenario para operar hoy considerando las sesiones bancarias? Explícalo con datos y en lenguaje cotidiano."
+                        else:
+                            scanner = MarketScanner()
+                            scan_results = scanner.scan_market()
+                            user_prompt = "¿Puedes analizar el mercado crypto y ver qué par me presenta el mejor escenario para hacer trading? Explícalo con datos y en lenguaje cotidiano."
+
                         scan_summary = scanner.format_scanner_summary_es(scan_results)
 
-                        user_prompt = "¿Puedes analizar el mercado crypto y ver qué par me presenta el mejor escenario para hacer trading? Explícalo con datos y en lenguaje cotidiano."
                         st.session_state["copilot_chat_history"].append({
                             "role": "user",
                             "content": user_prompt,
                         })
 
                         query_obj = OperatorQuery(
-                            query=f"Basado en este escaneo de mercado cuantitativo en tiempo real:\n\n{scan_summary}\n\nExplica en lenguaje cotidiano al operador cuál es el mejor par para trading, por qué supera a los otros, qué significan sus números y cuáles son los niveles clave de entrada y riesgo.",
+                            query=f"Basado en este escaneo de mercado cuantitativo en tiempo real ({'Forex' if is_forex else 'Crypto'}):\n\n{scan_summary}\n\nExplica en lenguaje cotidiano al operador cuál es el mejor par para trading, por qué supera a los otros, qué significan sus números y cuáles son los niveles clave de entrada y riesgo.",
                             symbol=scan_results[0].symbol if scan_results else symbol,
                             timeframe=interval,
                             operator_id="dashboard_operator",
                             metadata={
+                                "market_type": "Forex" if is_forex else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
                                     for m in st.session_state["copilot_chat_history"][-6:]
@@ -990,7 +1078,8 @@ with tab_copilot:
 
             # Handler for Explain Current Asset Quick Action
             if explain_triggered:
-                user_prompt = f"Explícame en lenguaje cotidiano la situación actual de {symbol}: qué significa su Quant Score, el régimen de mercado y sus niveles de soporte y riesgo."
+                market_label = "Forex" if is_forex else "Cripto"
+                user_prompt = f"Explícame en lenguaje cotidiano la situación actual de {symbol} ({market_label}): qué significa su Quant Score, el régimen de mercado y sus niveles de soporte y riesgo."
                 st.session_state["copilot_chat_history"].append({
                     "role": "user",
                     "content": user_prompt,
@@ -1003,6 +1092,7 @@ with tab_copilot:
                             timeframe=interval,
                             operator_id="dashboard_operator",
                             metadata={
+                                "market_type": "Forex" if is_forex else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
                                     for m in st.session_state["copilot_chat_history"][-6:]
@@ -1044,6 +1134,7 @@ with tab_copilot:
                             metadata={
                                 "image_bytes": img_bytes,
                                 "mime_type": mime_type,
+                                "market_type": "Forex" if is_forex else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
                                     for m in st.session_state["copilot_chat_history"][-6:]
@@ -1127,10 +1218,24 @@ with tab_copilot:
 
 # =====================================================================
 # TAB 3: BACKTEST ANALYTICS
-# =====================================================================
 with tab_backtest:
-    st.subheader("📈 Simulación Histórica & Backtest Analytics")
+    market_name_cap = "Divisas Forex" if is_forex else "Criptomonedas"
+    st.subheader(f"📈 Simulación Histórica & Backtest Analytics ({market_name_cap})")
     st.caption("Prueba de estrategias cuantitativas con datos reales de mercado • Sin riesgo de capital real")
+
+    market_advice = (
+        "💡 **Consejo Cuantitativo para Forex:** En el mercado de divisas, las mejores rentabilidades con menor drawdown suelen obtenerse con **Reversión a la Media (RSI + Value Area VAL/VAH)** aprovechando que los bancos devuelven los precios a su equilibrio, o con **Seguimiento de Tendencia Macro**."
+        if is_forex
+        else "💡 **Consejo Cuantitativo para Cripto:** Las criptomonedas tienen expansiones explosivas 24/7. Las estrategias de **Ruptura de Volatilidad (Breakout)** y el **Modelo Híbrido Cuantitativo** están optimizadas para capturar esos movimientos direccionales rápidos."
+    )
+    st.markdown(
+        f"""
+        <div style="background: rgba(16, 26, 46, 0.65); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.86rem; color: #E6EDF3;">
+            {market_advice}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Experience Level Selector
     exp_level = st.radio(
@@ -1244,7 +1349,8 @@ with tab_backtest:
 
     if run_sim or "backtest_report" in st.session_state:
         if run_sim and b_cfg is not None:
-            with st.spinner("Ejecutando simulación cuantitativa vela por vela sobre datos reales de Binance..."):
+            source_label = "Forex Global" if is_forex else "Binance"
+            with st.spinner(f"Ejecutando simulación cuantitativa vela por vela sobre datos reales de {source_label}..."):
                 runner = BacktestRunner(config=b_cfg)
                 st.session_state["backtest_report"] = runner.run_backtest(
                     df=df,
