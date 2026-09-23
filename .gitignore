@@ -12,4 +12,5 @@ data/
 .env
 signals.db
 *.bak
+.streamlit/secrets.toml
 
