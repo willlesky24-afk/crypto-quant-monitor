@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from src.market_scanner import MarketScanner, ScannedPairResult
 
@@ -49,3 +49,36 @@ def test_market_scanner_format_summary_es():
     assert "SOLUSDT" in summary
     assert "MEJOR escenario" in summary
     assert "Puntaje Cuantitativo" in summary
+
+
+def test_market_scanner_pipeline_integration():
+    from unittest.mock import MagicMock
+
+    import numpy as np
+    import pandas as pd
+
+    mock_loader = MagicMock()
+    rng = np.random.default_rng(42)
+    now = pd.Timestamp.now(tz="UTC")
+    dates = [now - pd.Timedelta(hours=50 - i) for i in range(50)]
+    closes = 100.0 + np.cumsum(rng.normal(0.1, 0.5, 50))
+    sample_df = pd.DataFrame({
+        "timestamp": dates,
+        "open": closes - 0.2,
+        "high": closes + 0.5,
+        "low": closes - 0.5,
+        "close": closes,
+        "volume": rng.integers(100, 1000, 50),
+    })
+    mock_loader.get_klines.return_value = sample_df
+
+    scanner = MarketScanner(data_loader=mock_loader)
+    results = scanner.scan_market(symbols=["BTCUSDT", "ETHUSDT"])
+    assert len(results) == 2
+    for r in results:
+        assert r.symbol in ("BTCUSDT", "ETHUSDT")
+        assert r.price > 0
+        assert r.quant_score >= 0.0
+        assert r.confidence >= 0.0
+        assert r.action != ""
+        assert r.direction in ("LONG", "SHORT", "NEUTRAL")

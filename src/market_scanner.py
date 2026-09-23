@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.data_loader import BinanceDataLoader
+from src.decision_engine import DecisionEngine
 from src.engine import MarketEngine
 from src.indicators import TechnicalIndicators
+from src.market_intelligence import MarketIntelligence
 from src.predictive_engine import PredictiveEngine
 from src.quant_score import QuantScore
 from src.regime_classifier import RegimeClassifier
@@ -75,6 +77,8 @@ class MarketScanner:
         self.market_engine = MarketEngine()
         self.signal_engine = SignalEngine()
         self.risk_engine = RiskEngine()
+        self.intel_engine = MarketIntelligence()
+        self.decision_engine = DecisionEngine()
         self.quant_score_engine = QuantScore()
         self.regime_classifier = RegimeClassifier()
         self.predictive_engine = PredictiveEngine()
@@ -99,15 +103,27 @@ class MarketScanner:
                 analysis = self.market_engine.analyze(df, profile)
                 signal = self.signal_engine.evaluate(analysis, profile)
                 risk = self.risk_engine.evaluate(analysis, profile)
+                intel = self.intel_engine.evaluate(analysis)
                 score_dict = self.quant_score_engine.calculate(analysis, signal, risk)
                 regime_res = self.regime_classifier.classify(df)
                 pred_res = self.predictive_engine.evaluate(df, current_regime_res=regime_res)
 
-                price = float(df.iloc[-1]["close"])
                 q_score = float(score_dict.get("score", 50.0))
+                decision = self.decision_engine.evaluate(
+                    signal=signal,
+                    risk=risk,
+                    intelligence=intel,
+                    predictive=pred_res,
+                    regime=regime_res.regime,
+                    technical_score=q_score,
+                    predictive_mode=True,
+                )
+
+                price = float(df.iloc[-1]["close"])
                 p_score = float(pred_res.predictive_score)
                 rr = float(risk.get("risk_ratio", 1.5))
-                conf = float(signal.confidence)
+                raw_conf = float(decision.confidence)
+                conf = raw_conf if raw_conf <= 1.0 else raw_conf / 100.0
 
                 # Composite score weighting: 50% technical score, 30% predictive, 20% risk-reward
                 ranking_score = round(
@@ -115,15 +131,16 @@ class MarketScanner:
                     1,
                 )
 
-                pos = signal.positives[0] if signal.positives else f"Régimen {regime_res.regime.value}"
+                pos_list = signal.get("positives", []) if isinstance(signal, dict) else getattr(signal, "positives", [])
+                pos = pos_list[0] if pos_list else f"Régimen {regime_res.regime.value}"
 
                 results.append(
                     ScannedPairResult(
                         symbol=sym,
                         price=price,
                         regime=regime_res.regime.value,
-                        action=signal.action,
-                        direction=signal.direction,
+                        action=str(decision.decision),
+                        direction=str(decision.direction),
                         quant_score=q_score,
                         predictive_score=p_score,
                         confidence=conf,
