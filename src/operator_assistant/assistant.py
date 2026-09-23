@@ -400,21 +400,25 @@ class OperatorAssistant(BaseOperatorAssistant):
         rsi_str = f" y un RSI en ~{rsi:.1f}" if rsi is not None else ""
         warn_str = f" ({', '.join(warnings)})" if warnings else ""
 
-        # Strict coherence: If action is WAIT or confidence is low, NEVER say "Sí, favorece compras"
-        if "WAIT" in action or "HOLD" in action:
-            if "LONG" in direction:
+        # Strict coherence: Check for wait or caution states in both Spanish and English
+        is_wait = any(w in action for w in ("WAIT", "HOLD", "ESPERAR", "DÉBIL", "DEBIL", "PAUSA", "CONFIRMACIÓN", "CONFIRMACION"))
+        is_buy = (any(b in action for b in ("BUY", "COMPRAR", "FAVORABLE", "ALCISTA")) or "LONG" in action) and not is_wait
+        is_sell = (any(s in action for s in ("SELL", "VENDER", "BAJISTA")) or "SHORT" in action) and not is_wait
+
+        if is_wait:
+            if "LONG" in direction or "COMPRA" in direction or "ALCISTA" in regime:
                 v_title = "En Espera / Precaución (NO entrar ahora):"
                 v_desc = (
-                    f"{v_title} Aunque la estructura de fondo muestra sesgo alcista (`{regime}`), "
-                    f"el motor cuantitativo mantiene la señal en espera (`WAIT`) con confianza del {conf_pct:.1f}%. "
+                    f"{v_title} Aunque la estructura de fondo muestra sesgo alcista (`{regime}`) con fuerza técnica ({quant:.1f}/100), "
+                    f"la señal del motor es '{context.signal.action}' con confianza del {conf_pct:.1f}%. "
                     f"Existen advertencias activas{warn_str}, por lo que ingresar a comprar en este instante conlleva un riesgo elevado de falso impulso o retroceso. "
-                    f"Se aconseja esperar un retroceso a soporte o confirmación de volumen institucional."
+                    f"Se aconseja esperar confirmación de volumen o retroceso hacia zonas de soporte antes de abrir posiciones."
                 )
-            elif "SHORT" in direction:
+            elif "SHORT" in direction or "VENTA" in direction or "BAJISTA" in regime:
                 v_title = "En Espera / Precaución (NO entrar ahora):"
                 v_desc = (
                     f"{v_title} Aunque el sesgo técnico muestra presión bajista (`{regime}`), "
-                    f"el motor mantiene la señal en espera (`WAIT`) con confianza del {conf_pct:.1f}%. "
+                    f"el motor mantiene la señal en espera ('{context.signal.action}') con confianza del {conf_pct:.1f}%. "
                     f"Existen advertencias activas{warn_str}. Se aconseja no entrar hasta confirmar volumen o ruptura."
                 )
             else:
@@ -424,8 +428,8 @@ class OperatorAssistant(BaseOperatorAssistant):
                     f"con el precio en {_fmt(price)}{rsi_str}. "
                     f"La puntuación cuantitativa ({quant:.1f}/100) indica que no hay ventaja estadística suficiente; conviene aguardar confirmación."
                 )
-        elif "BUY" in action or "LONG" in action:
-            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w for w in warnings):
+        elif is_buy:
+            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w or "Volumen sin confirmación" in w for w in warnings):
                 v_title = "Sí, el sesgo matemático favorece las compras (LONG)."
                 v_desc = (
                     f"{v_title} El par se encuentra en una estructura alcista confirmada bajo régimen `{regime}` "
@@ -433,13 +437,13 @@ class OperatorAssistant(BaseOperatorAssistant):
                     f"La puntuación cuantitativa ({quant:.1f}/100) y la confianza ({conf_pct:.1f}%) respaldan la entrada."
                 )
             else:
-                v_title = "Posible compra con cautela (LONG moderado):"
+                v_title = "Posible compra con cautela (LONG moderado / esperar confirmación):"
                 v_desc = (
-                    f"{v_title} La señal marca compra pero con confianza moderada ({conf_pct:.1f}%){warn_str}. "
-                    f"Se recomienda tamaño de posición reducido y estricto respeto al Stop Loss."
+                    f"{v_title} La condición general es favorable, pero la confianza es moderada ({conf_pct:.1f}%){warn_str}. "
+                    f"Se recomienda esperar confirmación de volumen institucional o mantener un tamaño de posición reducido con estricto Stop Loss."
                 )
-        elif "SELL" in action or "SHORT" in action:
-            if quant >= 70.0 and conf_pct >= 60.0:
+        elif is_sell:
+            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w or "Volumen sin confirmación" in w for w in warnings):
                 v_title = "Sí, el sesgo matemático favorece las ventas (SHORT)."
                 v_desc = (
                     f"{v_title} El par se encuentra bajo presión bajista confirmada en régimen `{regime}` "
@@ -456,13 +460,13 @@ class OperatorAssistant(BaseOperatorAssistant):
         else:
             v_title = "En Espera / Neutral: No se recomienda entrar en este momento."
             v_desc = (
-                f"{v_title} El mercado se encuentra en rango bajo régimen `{regime}` con precio en {_fmt(price)}. "
+                f"{v_title} El mercado se encuentra en consolidación o rango bajo régimen `{regime}` con precio en {_fmt(price)}. "
                 f"Conviene aguardar una ruptura con volumen institucional."
             )
 
-        # 2. Concrete risk parameters
+        # 2. Concrete risk parameters (Never fallback to generic text)
         spread = min(0.25 * atr, price * 0.001) if price > 0 else 0.0
-        if "SELL" in action or "SHORT" in direction:
+        if "SHORT" in direction or is_sell:
             e_min = price
             e_max = price + spread
         else:
@@ -471,22 +475,20 @@ class OperatorAssistant(BaseOperatorAssistant):
 
         entry_text = f"Zona de {_fmt(e_min)} – {_fmt(e_max)}"
 
-        if sl is not None and price > 0:
-            sl_pct = abs(price - sl) / price * 100
-            sl_text = f"{_fmt(sl)} (Riesgo controlado de ~{sl_pct:.2f}%)"
-        else:
-            sl_text = "Nivel de soporte dinámico por volatilidad ATR"
+        if sl is None or sl <= 0:
+            sl = price + 1.5 * atr if ("SHORT" in direction or is_sell) else max(0.0, price - 1.5 * atr)
+        sl_pct = abs(price - sl) / price * 100 if price > 0 else 0.0
+        sl_text = f"{_fmt(sl)} (Riesgo controlado de ~{sl_pct:.2f}%)"
 
-        if tp is not None and price > 0:
-            tp_pct = abs(tp - price) / price * 100
-            if sl is not None and abs(price - sl) > 0:
-                rr = abs(tp - price) / abs(price - sl)
-                rr_text = f", Ratio Riesgo:Beneficio de 1 : {rr:.1f}" if rr >= 0.1 else ""
-            else:
-                rr_text = ""
-            tp_text = f"{_fmt(tp)} (Objetivo técnico ~+{tp_pct:.2f}%{rr_text})"
+        if tp is None or tp <= 0:
+            tp = max(0.0, price - 3.0 * atr) if ("SHORT" in direction or is_sell) else price + 3.0 * atr
+        tp_pct = abs(tp - price) / price * 100 if price > 0 else 0.0
+        if sl is not None and abs(price - sl) > 0:
+            rr = abs(tp - price) / abs(price - sl)
+            rr_text = f", Ratio Riesgo:Beneficio de 1 : {rr:.1f}" if rr >= 0.1 else ""
         else:
-            tp_text = "Nivel de resistencia dinámica por volatilidad ATR"
+            rr_text = ", Ratio Riesgo:Beneficio de 1 : 2.0"
+        tp_text = f"{_fmt(tp)} (Objetivo técnico ~+{tp_pct:.2f}%{rr_text})"
 
         return [
             "---",

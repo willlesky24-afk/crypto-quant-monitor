@@ -312,3 +312,44 @@ async def test_operator_assistant_conclusive_verdict_coherence_wait_signal():
     assert "No especificado" not in res.answer
     assert "Stop Loss (Corte de pérdida)" in res.answer
     assert "Take Profit (Toma de beneficio)" in res.answer
+
+
+@pytest.mark.anyio
+async def test_operator_assistant_conclusive_verdict_spanish_esperar_confirmacion():
+    """Verify that action='🟡 Esperar confirmación' with quant 90.0 does NOT say 'Sí'."""
+    provider = InMemoryMarketContextProvider()
+    ctx = MarketContext(
+        timestamp=pd.Timestamp("2026-09-22 18:00:00", tz="UTC"),
+        symbol="USDCAD=X",
+        timeframe="1h",
+        current_price=1.4079,
+        market_regime="TRENDING_BULL",
+        predictive_score=0.64,
+        quant_score=90.0,
+        signal=SignalInfo(
+            action="🟡 Esperar confirmación",
+            direction="LONG",
+            confidence=0.55,
+            reasoning="Pausar gatillo",
+            warnings=("Volumen sin confirmación", "Precio alejado del POC"),
+        ),
+        risk=RiskMetrics(
+            stop_loss=None,
+            take_profit=None,
+            atr=0.0022,
+        ),
+    )
+    provider.update_context(ctx)
+
+    assistant = OperatorAssistant(context_provider=provider, ai_provider=MockAIProvider())
+    query = OperatorQuery(query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h")
+    res = await assistant.ask(query)
+
+    # Coherence check: MUST NOT say 'Sí, el sesgo matemático favorece las compras'
+    assert "Sí, el sesgo matemático favorece las compras" not in res.answer
+    assert "En Espera / Precaución (NO entrar ahora)" in res.answer
+    assert "Volumen sin confirmación" in res.answer
+    # Concrete risk numbers check: MUST have dollar numbers and NOT 'Dinámico'
+    assert "Dinámico según" not in res.answer
+    assert "No especificado" not in res.answer
+    assert "$1.4046" in res.answer or "$1." in res.answer
