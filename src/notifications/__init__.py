@@ -10,8 +10,10 @@ from src.notifications.models import (
     NotificationResult,
     SignalEvent,
 )
+from src.notifications.tracker import AlertOutcomeTracker
 
 __all__ = [
+    "AlertOutcomeTracker",
     "BaseNotificationChannel",
     "CooldownManager",
     "DiscordWebhookChannel",

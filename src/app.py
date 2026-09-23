@@ -48,6 +48,7 @@ try:
     from src.notifications.channels.webhook import WebhookChannel
     from src.notifications.dispatcher import NotificationDispatcher
     from src.notifications.models import NotificationPriority, SignalEvent
+    from src.notifications.tracker import AlertOutcomeTracker
     from src.operator_assistant.assistant import OperatorAssistant
     from src.operator_assistant.models import OperatorQuery
     from src.operator_assistant.on_demand_context import (
@@ -88,6 +89,7 @@ except ImportError:
     from notifications.channels.webhook import WebhookChannel
     from notifications.dispatcher import NotificationDispatcher
     from notifications.models import NotificationPriority, SignalEvent
+    from notifications.tracker import AlertOutcomeTracker
     from operator_assistant.assistant import OperatorAssistant
     from operator_assistant.models import OperatorQuery
     from operator_assistant.on_demand_context import (
@@ -1942,6 +1944,7 @@ with tab_settings:
                     if "dispatched_signals_history" not in st.session_state:
                         st.session_state["dispatched_signals_history"] = []
 
+                    tracker = AlertOutcomeTracker()
                     for cand in scan_results:
                         is_wait = any(w in cand.action.upper() for w in ("WAIT", "ESPERAR", "DÉBIL", "DEBIL"))
                         if cand.quant_score >= min_quant_thresh and not is_wait:
@@ -1974,6 +1977,9 @@ with tab_settings:
                             )
                             dispatcher.dispatch_signal(sig_ev, priority=NotificationPriority.HIGH)
                             sent_count += 1
+                            tracker.record_alert(sig_ev, is_forex=is_cand_fx, risk_reward=cand.risk_reward)
+                            if "dispatched_signals_history" not in st.session_state:
+                                st.session_state["dispatched_signals_history"] = []
                             st.session_state["dispatched_signals_history"].append({
                                 "Fecha (UTC)": str(sig_ev.timestamp)[:19],
                                 "Par": cand.symbol,
@@ -1990,13 +1996,67 @@ with tab_settings:
                     else:
                         st.info("ℹ️ Ningún par superó el umbral sin estado de espera en este ciclo de mercado.")
 
-    # Audit log of dispatched signals
-    if st.session_state.get("dispatched_signals_history"):
-        st.markdown("---")
-        st.markdown("### 📋 Historial de Alertas Despachadas (Auditoría de Tasa de Éxito)")
-        st.caption("Registro histórico de señales enviadas a Telegram para medir la tasa de acierto en el tiempo.")
-        hist_df = pd.DataFrame(st.session_state["dispatched_signals_history"])
-        st.dataframe(hist_df, use_container_width=True)
+    # Persistent audit log and automated TP/SL outcome tracking
+    tracker = AlertOutcomeTracker()
+    all_alerts = tracker.get_all_alerts()
+
+    st.markdown("---")
+    st.markdown("### 📋 Historial de Alertas y Auditoría de Tasa de Éxito (Win Rate)")
+    st.caption("Auditoría cuantitativa automática: evalúa contra el mercado en tiempo real si cada señal alcanzó el Take Profit o Stop Loss.")
+
+    if all_alerts:
+        stats = tracker.compute_statistics()
+
+        stat_c1, stat_c2, stat_c3, stat_c4, stat_c5 = st.columns(5)
+        stat_c1.metric("🎯 Win Rate (Acierto)", f"{stats['win_rate']:.1f}%", help="Porcentaje de operaciones que tocaron Take Profit sobre las cerradas.")
+        stat_c2.metric("🟢 Ganadas (TP)", f"{stats['wins']}")
+        stat_c3.metric("🔴 En Stop Loss", f"{stats['losses']}")
+        stat_c4.metric("🟡 En Curso", f"{stats['open_alerts']}")
+        stat_c5.metric("📈 Retorno R Acumulado", f"{stats['total_r']:+.1f} R", help="Múltiplo de Riesgo acumulado ganado o perdido.")
+
+        btn_c1, btn_c2 = st.columns([1, 2])
+        with btn_c1:
+            if st.button("🔄 Actualizar Resultados (Verificar TP / SL)", type="primary", use_container_width=True):
+                with st.spinner("Descargando velas recientes y evaluando TP / SL para cada alerta..."):
+                    f_ldr = ForexDataLoader() if is_forex else None
+                    c_ldr = BinanceDataLoader() if not is_forex else None
+                    upd = tracker.update_alert_outcomes(forex_loader=f_ldr, crypto_loader=c_ldr)
+                    st.success(f"¡Auditoría actualizada! {upd} alertas verificadas contra el mercado.")
+                    st.rerun()
+
+        display_rows = []
+        for a in all_alerts:
+            is_fx_row = bool(a["is_forex"]) or "=X" in a["symbol"]
+            dec = 4 if is_fx_row else 2
+
+            st_val = a["status"]
+            if st_val == "WIN":
+                status_str = f"🟢 TP ALCANZADO (+{a['r_multiple']:.1f}R)"
+            elif st_val == "LOSS":
+                status_str = "🔴 STOP LOSS (-1.0R)"
+            else:
+                status_str = f"🟡 EN CURSO ({a['pnl_percent']:+.2f}%)"
+
+            exit_p = a["current_or_exit_price"]
+            exit_str = f"${exit_p:,.{dec}f}" if exit_p else "-"
+
+            display_rows.append({
+                "Fecha (UTC)": a["timestamp"][:16],
+                "Par": a["symbol"],
+                "Dirección": a["direction"],
+                "Estado": status_str,
+                "Entrada": f"${a['entry_price']:,.{dec}f}",
+                "Stop Loss": f"${a['stop_loss']:,.{dec}f}",
+                "Take Profit": f"${a['take_profit']:,.{dec}f}",
+                "Precio Actual/Salida": exit_str,
+                "PnL (%)": f"{a['pnl_percent']:+.2f}%",
+                "Quant Score": f"{a['quant_score']:.1f}",
+                "R:R": f"1:{a['risk_reward']:.2f}",
+            })
+
+        st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+    else:
+        st.info("ℹ️ Aún no hay alertas despachadas en la base de datos. Haz clic en 'Escanear Mercado y Enviar Alertas Reales' para comenzar tu historial de auditoría.")
 
 
 # =====================================================================
