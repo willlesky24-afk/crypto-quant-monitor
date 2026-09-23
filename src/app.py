@@ -1548,23 +1548,30 @@ with tab_backtest:
                 trade_rows = [t.to_dict() for t in report.trades]
                 trades_df = pd.DataFrame(trade_rows)
 
+                mae_col = trades_df["mae_pct"] if "mae_pct" in trades_df.columns else trades_df.get("mae", 0.0)
+                mfe_col = trades_df["mfe_pct"] if "mfe_pct" in trades_df.columns else trades_df.get("mfe", 0.0)
+
                 fig_mfe = go.Figure()
                 fig_mfe.add_trace(
                     go.Scatter(
-                        x=trades_df["mae"] * 100,
-                        y=trades_df["mfe"] * 100,
+                        x=mae_col,
+                        y=mfe_col,
                         mode="markers",
                         marker={
                             "size": 9,
-                            "color": ["#00FF88" if p > 0 else "#FF2E63" for p in trades_df["net_pnl"]],
+                            "color": ["#00FF88" if p > 0 else "#FF2E63" for p in trades_df.get("net_pnl", [])],
                             "line": {"width": 1, "color": "#FFFFFF"},
                         },
-                        text=[f"Trade {t['trade_id']} ({t['side']}): PnL ${t['net_pnl']:.2f}" for t in trade_rows],
+                        text=[
+                            f"Trade {t.get('trade_id', '')} ({t.get('side', '')}): PnL ${t.get('net_pnl', 0.0):.2f}<br>Máx Caída (MAE): {t.get('mae_pct', 0.0):.2f}%<br>Máx Ganancia (MFE): {t.get('mfe_pct', 0.0):.2f}%"
+                            for t in trade_rows
+                        ],
+                        hoverinfo="text",
                     )
                 )
                 fig_mfe.update_layout(
-                    xaxis_title="Max Adverse Excursion (MAE %)",
-                    yaxis_title="Max Favorable Excursion (MFE %)",
+                    xaxis_title="Pérdida Máxima Temporal (MAE %)",
+                    yaxis_title="Ganancia Máxima Alcanzada (MFE %)",
                     height=360,
                     template="plotly_dark",
                     paper_bgcolor="#07090E",
@@ -1574,22 +1581,25 @@ with tab_backtest:
                     yaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
                 )
                 st.plotly_chart(fig_mfe, use_container_width=True)
+                st.caption("💡 **MAE (Eje X)**: Peor caída temporal sufrida antes del cierre. **MFE (Eje Y)**: Mayor ganancia alcanzada durante el trade.")
             else:
                 st.info("No se registraron operaciones en este período de simulación.")
 
         with t_right:
             st.subheader("📋 Registro de Transacciones")
             if report.trades:
-                trades_display = trades_df[[
-                    "trade_id",
-                    "side",
-                    "entry_time",
-                    "entry_price",
-                    "exit_time",
-                    "exit_price",
-                    "net_pnl",
-                    "exit_reason",
-                ]]
+                display_cols = {
+                    "trade_id": "ID",
+                    "side": "Dirección",
+                    "entry_timestamp": "Entrada",
+                    "entry_price": "P. Entrada",
+                    "exit_timestamp": "Salida",
+                    "exit_price": "P. Salida",
+                    "net_pnl": "PnL Neto ($)",
+                    "exit_reason": "Causa Cierre",
+                }
+                valid_cols = [c for c in display_cols if c in trades_df.columns]
+                trades_display = trades_df[valid_cols].rename(columns=display_cols)
                 st.dataframe(trades_display, height=350, use_container_width=True)
             else:
                 st.info("Sin transacciones.")
