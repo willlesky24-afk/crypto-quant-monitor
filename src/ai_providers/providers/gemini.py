@@ -30,7 +30,7 @@ class GeminiProvider(BaseLLMProvider):
         max_retries: int = 2,
     ) -> None:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 
@@ -93,7 +93,7 @@ class GeminiProvider(BaseLLMProvider):
 
         # Candidate models for high availability failover (e.g. on 503 Service Unavailable or 404/429)
         models_to_try = [self.model]
-        for fallback_candidate in ("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"):
+        for fallback_candidate in ("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.0-flash"):
             if fallback_candidate not in models_to_try:
                 models_to_try.append(fallback_candidate)
 

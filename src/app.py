@@ -953,8 +953,38 @@ with tab_copilot:
         except Exception:
             pass
 
+        # AI Model Configuration Controls (Gemini 3.8 / 3.5 / 3.7)
+        with st.expander("⚙️ Selección de Modelo AI Copilot (Gemini 3.8 / 3.5 / 3.7)", expanded=False):
+            cfg_col1, cfg_col2 = st.columns([2, 1])
+            with cfg_col1:
+                gemini_model_options = [
+                    "gemini-3.8-flash (Recomendado • Mayor Capacidad)",
+                    "gemini-3.5-flash-lite (Ultra Rápido • Menor Demanda)",
+                    "gemini-3.7-flash (Estándar)",
+                    "gemini-2.5-flash (Respaldo)",
+                    "gemini-2.0-flash (Respaldo)",
+                ]
+                selected_model_str = st.selectbox(
+                    "Modelo Activo de Google Gemini:",
+                    options=gemini_model_options,
+                    index=0,
+                    key="sel_copilot_model",
+                )
+                chosen_gemini_model = selected_model_str.split(" ")[0]
+            with cfg_col2:
+                custom_gemini_key = st.text_input(
+                    "Clave API Personal (Opcional):",
+                    type="password",
+                    help="Déjalo vacío para usar la clave configurada en Streamlit Secrets o .env.",
+                    key="input_copilot_custom_key",
+                ).strip()
+
         # Real AI Provider Resolution via ProviderFactory
-        active_llm_provider = ProviderFactory.create_provider()
+        provider_kwargs = {"model": chosen_gemini_model}
+        if custom_gemini_key:
+            provider_kwargs["api_key"] = custom_gemini_key
+
+        active_llm_provider = ProviderFactory.create_provider(**provider_kwargs)
         copilot_assistant = OperatorAssistant(
             context_provider=copilot_provider,
             ai_provider=active_llm_provider,
