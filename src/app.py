@@ -903,6 +903,21 @@ with tab_copilot:
     st.caption("Asistente de inteligencia de mercado • Razonamiento contextual con Gemini • Sin ejecución automática")
 
     try:
+        curr_p = float(df.iloc[-1]["close"])
+        atr_val = float(analysis.get("atr", 0.0))
+        sl_mult = getattr(decision, "sl_multiplier", 1.5) or 1.5
+        tp_mult = getattr(decision, "tp_multiplier", 3.0) or 3.0
+
+        calc_sl = risk.get("stop_loss")
+        calc_tp = risk.get("take_profit")
+        if calc_sl is None and atr_val > 0:
+            if "SHORT" in decision.direction.upper() or "SELL" in decision.decision.upper():
+                calc_sl = round(curr_p + sl_mult * atr_val, 5 if is_forex else 2)
+                calc_tp = round(max(0.0, curr_p - tp_mult * atr_val), 5 if is_forex else 2)
+            else:
+                calc_sl = round(max(0.0, curr_p - sl_mult * atr_val), 5 if is_forex else 2)
+                calc_tp = round(curr_p + tp_mult * atr_val, 5 if is_forex else 2)
+
         live_signal_event = SignalEvent(
             timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
             symbol=symbol,
@@ -913,14 +928,14 @@ with tab_copilot:
             predictive_score=pred_res.predictive_score,
             regime=regime_res.regime.value,
             reasoning=decision.reasoning,
-            price=float(df.iloc[-1]["close"]),
+            price=curr_p,
             quant_score=score["score"],
-            stop_loss=risk.get("stop_loss"),
-            take_profit=risk.get("take_profit"),
+            stop_loss=calc_sl,
+            take_profit=calc_tp,
             signal_id=f"live-{symbol}-{interval}",
             metadata={
-                "risk_reward_ratio": risk.get("risk_ratio"),
-                "atr": risk.get("atr"),
+                "risk_reward_ratio": round(tp_mult / max(sl_mult, 0.01), 2),
+                "atr": atr_val,
                 "positives": decision.positives,
                 "warnings": decision.warnings,
             },
@@ -1021,7 +1036,29 @@ with tab_copilot:
         with cop_tab1:
             provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
             model_name = getattr(active_llm_provider, "model", "standard")
-            st.caption(f"🧠 Modelo: **{provider_name}** (`{model_name}`) | Memoria Conversacional • Explicación en Lenguaje Cotidiano")
+
+            # Track active conversation asset in session state to maintain conversation thread across follow-up queries
+            if "copilot_active_symbol" not in st.session_state:
+                st.session_state["copilot_active_symbol"] = symbol
+                st.session_state["copilot_active_timeframe"] = interval
+                st.session_state["copilot_active_is_forex"] = is_forex
+
+            if "prev_sidebar_symbol" not in st.session_state:
+                st.session_state["prev_sidebar_symbol"] = symbol
+            elif st.session_state["prev_sidebar_symbol"] != symbol:
+                st.session_state["copilot_active_symbol"] = symbol
+                st.session_state["copilot_active_timeframe"] = interval
+                st.session_state["copilot_active_is_forex"] = is_forex
+                st.session_state["prev_sidebar_symbol"] = symbol
+
+            active_sym_display = st.session_state.get("copilot_active_symbol", symbol)
+            active_tf_display = st.session_state.get("copilot_active_timeframe", interval).upper()
+
+            st.caption(
+                f"🧠 Modelo: **{provider_name}** (`{model_name}`) | "
+                f"🎯 Par en Conversación: **`{active_sym_display}`** ({active_tf_display}) | "
+                f"Memoria Conversacional Activa"
+            )
 
             # Quick Action Buttons
             q_col1, q_col2, q_col3 = st.columns([1.5, 1.5, 0.8])
@@ -1038,6 +1075,9 @@ with tab_copilot:
             with q_col3:
                 if st.button("🗑️ Limpiar", key="btn_clear_chat", use_container_width=True):
                     st.session_state["copilot_chat_history"] = []
+                    st.session_state["copilot_active_symbol"] = symbol
+                    st.session_state["copilot_active_timeframe"] = interval
+                    st.session_state["copilot_active_is_forex"] = is_forex
                     st.rerun()
 
             # Initialize chat history
@@ -1179,8 +1219,21 @@ with tab_copilot:
 
                 st.session_state["copilot_chat_history"].append(user_msg)
 
-                # Dynamically resolve mentioned symbol from user query
-                target_sym, target_tf, target_is_fx = resolve_mentioned_symbol(chat_input_val, symbol, interval)
+                # Dynamically resolve mentioned symbol using active conversation asset as fallback
+                curr_active_sym = st.session_state.get("copilot_active_symbol", symbol)
+                curr_active_tf = st.session_state.get("copilot_active_timeframe", interval)
+                curr_active_fx = st.session_state.get("copilot_active_is_forex", is_forex)
+
+                target_sym, target_tf, target_is_fx = resolve_mentioned_symbol(
+                    chat_input_val, curr_active_sym, curr_active_tf
+                )
+
+                # Persist the active conversation target
+                st.session_state["copilot_active_symbol"] = target_sym
+                st.session_state["copilot_active_timeframe"] = target_tf
+                st.session_state["copilot_active_is_forex"] = target_is_fx
+
+                # Build on-demand context if target differs from current dashboard context or needs refresh
                 if target_sym != symbol or target_tf != interval:
                     with st.spinner(f"Analizando métricas cuantitativas en vivo para {target_sym} ({target_tf})..."):
                         od_ctx = build_on_demand_context(target_sym, target_tf, target_is_fx)
@@ -1203,7 +1256,7 @@ with tab_copilot:
                                 "market_type": "Forex" if target_is_fx else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                    for m in st.session_state["copilot_chat_history"][:-1][-6:]
                                 ],
                             },
                         )

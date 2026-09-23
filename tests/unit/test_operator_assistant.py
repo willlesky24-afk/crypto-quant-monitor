@@ -271,3 +271,44 @@ def test_resolve_mentioned_symbol():
     sym, tf, is_fx = resolve_mentioned_symbol("Cual es el riesgo general?", "EURUSD=X", "1h")
     assert sym == "EURUSD=X"
     assert is_fx is True
+
+
+@pytest.mark.anyio
+async def test_operator_assistant_conclusive_verdict_coherence_wait_signal():
+    """Verify that when action is WAIT despite bullish regime, the verdict does NOT say 'Sí'."""
+    provider = InMemoryMarketContextProvider()
+    ctx = MarketContext(
+        timestamp=pd.Timestamp("2026-09-22 18:00:00", tz="UTC"),
+        symbol="USDCAD=X",
+        timeframe="1h",
+        current_price=1.4081,
+        market_regime="TRENDING_BULL",
+        predictive_score=0.65,
+        quant_score=75.0,
+        signal=SignalInfo(
+            action="WAIT",
+            direction="LONG",
+            confidence=0.502,
+            reasoning="Contexto débil",
+            warnings=("Momentum débil", "Volumen sin confirmación"),
+        ),
+        risk=RiskMetrics(
+            stop_loss=None,
+            take_profit=None,
+            atr=0.0020,
+        ),
+    )
+    provider.update_context(ctx)
+
+    assistant = OperatorAssistant(context_provider=provider, ai_provider=MockAIProvider())
+    query = OperatorQuery(query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h")
+    res = await assistant.ask(query)
+
+    # Coherence check: MUST NOT say 'Sí, el sesgo matemático favorece las compras'
+    assert "Sí, el sesgo matemático favorece las compras" not in res.answer
+    assert "En Espera / Precaución (NO entrar ahora)" in res.answer
+    assert "Momentum débil" in res.answer
+    # Concrete risk numbers check: MUST NOT say 'No especificado'
+    assert "No especificado" not in res.answer
+    assert "Stop Loss (Corte de pérdida)" in res.answer
+    assert "Take Profit (Toma de beneficio)" in res.answer

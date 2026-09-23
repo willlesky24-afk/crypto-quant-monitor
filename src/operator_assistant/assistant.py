@@ -322,8 +322,36 @@ class OperatorAssistant(BaseOperatorAssistant):
         for sc in scenarios:
             lines.append(f"- {sc}")
 
-        sl_str = f"${context.risk.stop_loss:,.2f}" if context.risk.stop_loss is not None else "No especificado"
-        tp_str = f"${context.risk.take_profit:,.2f}" if context.risk.take_profit is not None else "No especificado"
+        price = context.current_price
+        is_fx = "=X" in context.symbol or price < 10
+
+        def _fmt(val: float | None) -> str:
+            if val is None:
+                return "N/A"
+            if is_fx or val < 10:
+                return f"${val:,.4f}"
+            return f"${val:,.2f}"
+
+        atr = context.risk.atr or (price * 0.003 if is_fx else price * 0.015)
+        direction = (context.signal.direction or "").upper()
+        action = (context.signal.action or "").upper()
+
+        sl = context.risk.stop_loss
+        tp = context.risk.take_profit
+        if sl is None and price > 0:
+            if "SHORT" in direction or "SELL" in action:
+                sl = price + 1.5 * atr
+            else:
+                sl = max(0.0, price - 1.5 * atr)
+
+        if tp is None and price > 0:
+            if "SHORT" in direction or "SELL" in action:
+                tp = max(0.0, price - 3.0 * atr)
+            else:
+                tp = price + 3.0 * atr
+
+        sl_str = _fmt(sl)
+        tp_str = _fmt(tp)
 
         lines.extend([
             "",
@@ -339,68 +367,101 @@ class OperatorAssistant(BaseOperatorAssistant):
                 lines.append(f"  * ⚠️ {w}")
 
         lines.append("")
-        lines.extend(self._build_conclusive_verdict(context))
+        lines.extend(self._build_conclusive_verdict(context, sl, tp, atr, is_fx))
 
         return "\n".join(lines)
 
-    def _build_conclusive_verdict(self, context: MarketContext) -> list[str]:
-        """Construct a structured, conclusive trading verdict block (resumen conclusivo y parámetros de riesgo)."""
+    def _build_conclusive_verdict(
+        self,
+        context: MarketContext,
+        sl: float | None,
+        tp: float | None,
+        atr: float,
+        is_fx: bool,
+    ) -> list[str]:
+        """Construct a structured, fully coherent trading verdict block (resumen conclusivo y parámetros de riesgo)."""
         price = context.current_price
-        sl = context.risk.stop_loss
-        tp = context.risk.take_profit
-        atr = context.risk.atr
         quant = context.quant_score
         regime = context.market_regime
         action = (context.signal.action or "").upper()
         direction = (context.signal.direction or "").upper()
+        confidence = context.signal.confidence
+        conf_pct = confidence * 100.0 if confidence <= 1.0 else confidence
         rsi = context.technical_indicators.get("rsi")
+        warnings = list(context.signal.warnings)
 
         def _fmt(val: float | None) -> str:
             if val is None:
                 return "N/A"
-            if val >= 100:
-                return f"${val:,.2f}"
-            elif val >= 1:
+            if is_fx or val < 10:
                 return f"${val:,.4f}"
-            else:
-                return f"${val:,.6f}"
+            return f"${val:,.2f}"
 
-        # 1. Technical verdict
-        rsi_str = f" y un RSI saludable en ~{rsi:.1f}" if rsi is not None else ""
-        if "BUY" in action or "LONG" in direction:
-            if quant >= 75:
-                v_title = "Sí, el sesgo matemático favorece las compras."
+        rsi_str = f" y un RSI en ~{rsi:.1f}" if rsi is not None else ""
+        warn_str = f" ({', '.join(warnings)})" if warnings else ""
+
+        # Strict coherence: If action is WAIT or confidence is low, NEVER say "Sí, favorece compras"
+        if "WAIT" in action or "HOLD" in action:
+            if "LONG" in direction:
+                v_title = "En Espera / Precaución (NO entrar ahora):"
+                v_desc = (
+                    f"{v_title} Aunque la estructura de fondo muestra sesgo alcista (`{regime}`), "
+                    f"el motor cuantitativo mantiene la señal en espera (`WAIT`) con confianza del {conf_pct:.1f}%. "
+                    f"Existen advertencias activas{warn_str}, por lo que ingresar a comprar en este instante conlleva un riesgo elevado de falso impulso o retroceso. "
+                    f"Se aconseja esperar un retroceso a soporte o confirmación de volumen institucional."
+                )
+            elif "SHORT" in direction:
+                v_title = "En Espera / Precaución (NO entrar ahora):"
+                v_desc = (
+                    f"{v_title} Aunque el sesgo técnico muestra presión bajista (`{regime}`), "
+                    f"el motor mantiene la señal en espera (`WAIT`) con confianza del {conf_pct:.1f}%. "
+                    f"Existen advertencias activas{warn_str}. Se aconseja no entrar hasta confirmar volumen o ruptura."
+                )
             else:
-                v_title = "Posible compra con cautela."
-            v_desc = (
-                f"{v_title} El par se encuentra en una estructura alcista confirmada bajo régimen `{regime}` "
-                f"con el precio cotizando en {_fmt(price)}{rsi_str}. "
-                f"La puntuación cuantitativa ({quant:.1f}/100) y las confluencias estadísticas respaldan la entrada."
-            )
-        elif "SELL" in action or "SHORT" in direction:
-            if quant >= 75:
-                v_title = "Precaución: El sesgo matemático favorece las ventas (SHORT) o mantenerse al margen."
+                v_title = "En Espera / Neutral (NO entrar ahora):"
+                v_desc = (
+                    f"{v_title} El mercado se encuentra en consolidación o indecisión bajo régimen `{regime}` "
+                    f"con el precio en {_fmt(price)}{rsi_str}. "
+                    f"La puntuación cuantitativa ({quant:.1f}/100) indica que no hay ventaja estadística suficiente; conviene aguardar confirmación."
+                )
+        elif "BUY" in action or "LONG" in action:
+            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w for w in warnings):
+                v_title = "Sí, el sesgo matemático favorece las compras (LONG)."
+                v_desc = (
+                    f"{v_title} El par se encuentra en una estructura alcista confirmada bajo régimen `{regime}` "
+                    f"con el precio cotizando en {_fmt(price)}{rsi_str}. "
+                    f"La puntuación cuantitativa ({quant:.1f}/100) y la confianza ({conf_pct:.1f}%) respaldan la entrada."
+                )
             else:
-                v_title = "Precaución: Presión vendedora detectada."
-            v_desc = (
-                f"{v_title} El par se encuentra bajo presión bajista en régimen `{regime}` "
-                f"con el precio en {_fmt(price)}{rsi_str}. "
-                f"El modelo cuantitativo no recomienda compras en este entorno de debilidad técnica."
-            )
+                v_title = "Posible compra con cautela (LONG moderado):"
+                v_desc = (
+                    f"{v_title} La señal marca compra pero con confianza moderada ({conf_pct:.1f}%){warn_str}. "
+                    f"Se recomienda tamaño de posición reducido y estricto respeto al Stop Loss."
+                )
+        elif "SELL" in action or "SHORT" in action:
+            if quant >= 70.0 and conf_pct >= 60.0:
+                v_title = "Sí, el sesgo matemático favorece las ventas (SHORT)."
+                v_desc = (
+                    f"{v_title} El par se encuentra bajo presión bajista confirmada en régimen `{regime}` "
+                    f"con el precio en {_fmt(price)}{rsi_str}. "
+                    f"La fuerza técnica y el flujo vendedor respaldan la posición corta o mantenerse fuera de compras."
+                )
+            else:
+                v_title = "Precaución: Presión vendedora detectada (SHORT moderado):"
+                v_desc = (
+                    f"{v_title} El activo enfrenta debilidad técnica en régimen `{regime}` "
+                    f"con el precio en {_fmt(price)}{rsi_str}{warn_str}. "
+                    f"El modelo cuantitativo no recomienda compras en este entorno."
+                )
         else:
             v_title = "En Espera / Neutral: No se recomienda entrar en este momento."
             v_desc = (
-                f"{v_title} El mercado se encuentra en consolidación o rango bajo régimen `{regime}` "
-                f"con el precio en {_fmt(price)}{rsi_str}. "
-                f"La puntuación cuantitativa ({quant:.1f}/100) indica que no hay ventaja estadística suficiente; conviene aguardar confirmación."
+                f"{v_title} El mercado se encuentra en rango bajo régimen `{regime}` con precio en {_fmt(price)}. "
+                f"Conviene aguardar una ruptura con volumen institucional."
             )
 
-        # 2. Risk parameters
-        if atr is not None and atr > 0:
-            spread = min(0.3 * atr, price * 0.002) if price > 0 else 0.0
-        else:
-            spread = (price * 0.0005 if price < 10 else price * 0.001) if price > 0 else 0.0
-
+        # 2. Concrete risk parameters
+        spread = min(0.25 * atr, price * 0.001) if price > 0 else 0.0
         if "SELL" in action or "SHORT" in direction:
             e_min = price
             e_max = price + spread
@@ -414,7 +475,7 @@ class OperatorAssistant(BaseOperatorAssistant):
             sl_pct = abs(price - sl) / price * 100
             sl_text = f"{_fmt(sl)} (Riesgo controlado de ~{sl_pct:.2f}%)"
         else:
-            sl_text = "Dinámico según niveles de soporte o volatilidad ATR"
+            sl_text = "Nivel de soporte dinámico por volatilidad ATR"
 
         if tp is not None and price > 0:
             tp_pct = abs(tp - price) / price * 100
@@ -425,7 +486,7 @@ class OperatorAssistant(BaseOperatorAssistant):
                 rr_text = ""
             tp_text = f"{_fmt(tp)} (Objetivo técnico ~+{tp_pct:.2f}%{rr_text})"
         else:
-            tp_text = "Dinámico según niveles de resistencia técnica"
+            tp_text = "Nivel de resistencia dinámica por volatilidad ATR"
 
         return [
             "---",

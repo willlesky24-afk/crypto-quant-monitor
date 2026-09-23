@@ -176,6 +176,21 @@ def build_on_demand_context(
         )
 
         last_row = enr_df.iloc[-1]
+        curr_p = float(last_row["close"])
+        atr_val = float(ana.get("atr", 0.0))
+        sl_mult = getattr(dec, "sl_multiplier", 1.5) or 1.5
+        tp_mult = getattr(dec, "tp_multiplier", 3.0) or 3.0
+
+        calc_sl = rsk.get("stop_loss")
+        calc_tp = rsk.get("take_profit")
+        if calc_sl is None and atr_val > 0:
+            if "SHORT" in dec.direction.upper() or "SELL" in dec.decision.upper():
+                calc_sl = round(curr_p + sl_mult * atr_val, 5 if is_fx else 2)
+                calc_tp = round(max(0.0, curr_p - tp_mult * atr_val), 5 if is_fx else 2)
+            else:
+                calc_sl = round(max(0.0, curr_p - sl_mult * atr_val), 5 if is_fx else 2)
+                calc_tp = round(curr_p + tp_mult * atr_val, 5 if is_fx else 2)
+
         live_sig = SignalEvent(
             timestamp=pd.Timestamp(last_row["timestamp"]),
             symbol=symbol,
@@ -186,14 +201,14 @@ def build_on_demand_context(
             predictive_score=prd_res.predictive_score,
             regime=reg_res.regime.value,
             reasoning=dec.reasoning,
-            price=float(last_row["close"]),
+            price=curr_p,
             quant_score=sc["score"],
-            stop_loss=rsk.get("stop_loss"),
-            take_profit=rsk.get("take_profit"),
+            stop_loss=calc_sl,
+            take_profit=calc_tp,
             signal_id=f"on_demand-{symbol}-{timeframe}",
             metadata={
-                "risk_reward_ratio": rsk.get("risk_ratio"),
-                "atr": rsk.get("atr"),
+                "risk_reward_ratio": round(tp_mult / max(sl_mult, 0.01), 2),
+                "atr": atr_val,
                 "positives": dec.positives,
                 "warnings": dec.warnings,
             },

@@ -35,6 +35,9 @@ class PromptBuilder:
         alerts: list[MarketAlert] | None = None,
     ) -> str:
         """Compose structured operator prompt merging market context, reports, anomalies, and query."""
+        is_forex = "=X" in context.symbol or context.current_price < 10
+        price_str = f"${context.current_price:,.4f}" if is_forex else f"${context.current_price:,.2f}"
+
         lines = [
             self.SYSTEM_ROLE_PROMPT,
             "",
@@ -43,7 +46,7 @@ class PromptBuilder:
             "==================================================",
             f"Asset: {context.symbol} | Interval: {context.timeframe.upper()}",
             f"Timestamp: {context.timestamp}",
-            f"Current Price: ${context.current_price:,.2f}",
+            f"Current Price: {price_str}",
             f"Market Regime: {context.market_regime}",
             f"Quant Score: {context.quant_score:.1f}/100",
             f"Predictive Score: {context.predictive_score:.2f} (Scale: 0.0 - 1.0)",
@@ -62,8 +65,13 @@ class PromptBuilder:
             for w in context.signal.warnings:
                 lines.append(f"  - {w}")
 
-        sl_str = f"${context.risk.stop_loss:,.2f}" if context.risk.stop_loss is not None else "None"
-        tp_str = f"${context.risk.take_profit:,.2f}" if context.risk.take_profit is not None else "None"
+        def _fmt_p(v: float | None) -> str:
+            if v is None:
+                return "None"
+            return f"${v:,.4f}" if is_forex or v < 10 else f"${v:,.2f}"
+
+        sl_str = _fmt_p(context.risk.stop_loss)
+        tp_str = _fmt_p(context.risk.take_profit)
 
         lines.extend([
             "",
@@ -114,6 +122,7 @@ class PromptBuilder:
             "RESPONSE INSTRUCTIONS:",
             "- Directly answer the operator's query using the quantitative snapshot above.",
             "- Responde OBLIGATORIAMENTE en Español. Explica cada concepto cuantitativo en lenguaje cotidiano, pedagógico y amigable.",
+            "- Mantén ESTRICTA COHERENCIA con la señal: Si la 'Engine Signal Action' es 'WAIT' o existen advertencias activas (como momentum débil o falta de volumen), NO recomiendes entrar; enfatiza prudencia y esperar mejores condiciones.",
             "- Si el operador consulta si conviene entrar a comprar o vender, evalúa de forma directa y concluyente con el régimen de mercado, el RSI, medias móviles y el Quant Score.",
             "- Si el operador consulta sobre qué par presenta el mejor escenario, compara los datos objetivamente.",
             "- Si se adjunta una imagen o gráfico técnico, detalla patrones de velas, soportes, resistencias y divergencias observadas.",
