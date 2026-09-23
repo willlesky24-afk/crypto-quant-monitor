@@ -105,11 +105,15 @@ class OperatorAssistant(BaseOperatorAssistant):
                 query=query.query,
             )
             llm_res = await self._ai_provider.generate_response(prompt, metadata=query.metadata)
-            explanation_summary = llm_res.content
-            market_outlook = f"Provider: {llm_res.provider} ({llm_res.model}) | Latency: {llm_res.latency_ms:.1f}ms"
+            if llm_res.content.startswith("⚠️") or "fallback" in llm_res.provider:
+                local_explanation = self._generate_local_explanation_es(context, query.query)
+                explanation_summary = f"{llm_res.content}\n\n{local_explanation}"
+            else:
+                explanation_summary = llm_res.content
+            market_outlook = f"Provider: {llm_res.provider} ({llm_res.model}) | Latencia: {llm_res.latency_ms:.1f}ms"
             key_drivers = list(context.signal.positives) or [
-                f"Regime: {context.market_regime}",
-                f"Quant Score: {context.quant_score:.1f}",
+                f"Régimen: {context.market_regime}",
+                f"Puntuación Quant: {context.quant_score:.1f}",
             ]
         else:
             explanation = await self._ai_provider.generate_explanation(context)
@@ -213,6 +217,55 @@ class OperatorAssistant(BaseOperatorAssistant):
             possible_scenarios=tuple(scenarios),
         )
 
+    def _generate_local_explanation_es(self, context: MarketContext, query: str) -> str:
+        """Generate high-fidelity everyday Spanish explanation when remote LLM is in fallback mode."""
+        regime = context.market_regime
+        if "BULL" in regime:
+            regime_desc = "Tendencia Alcista (compradores al mando del mercado)"
+        elif "BEAR" in regime:
+            regime_desc = "Tendencia Bajista (vendedores con mayor presión)"
+        elif "RANGE" in regime or "CONSOLIDATION" in regime or "CHOPPY" in regime:
+            regime_desc = "Rango o Consolidación (mercado lateral buscando liquidez)"
+        else:
+            regime_desc = f"Régimen de Mercado {regime}"
+
+        direction_desc = (
+            "al alza (compra / LONG)"
+            if context.signal.direction == "LONG"
+            else ("a la baja (venta / SHORT)" if context.signal.direction == "SHORT" else "neutral / a la espera")
+        )
+
+        quant_fuerza = (
+            "muy alta" if context.quant_score >= 80 else ("moderada-alta" if context.quant_score >= 65 else "neutral/precaución")
+        )
+
+        poc_val = context.volume_profile.get("poc") if context.volume_profile else None
+        poc_text = (
+            f"El nivel de mayor acumulación de volumen institucional (POC) se ubica en **${poc_val:,.2f}**."
+            if poc_val
+            else "El perfil de volumen institucional no define una concentración anómala."
+        )
+
+        sl = context.risk.stop_loss
+        tp = context.risk.take_profit
+        sl_text = f"${sl:,.2f}" if sl else "dinámico por volatilidad"
+        tp_text = f"${tp:,.2f}" if tp else "dinámico por volatilidad"
+
+        lines = [
+            f"📊 **Diagnóstico Cuantitativo en Lenguaje Cotidiano para {context.symbol} ({context.timeframe.upper()}):**",
+            f"- **Postura y Dirección:** El sistema sugiere `{context.signal.action}` {direction_desc}.",
+            f"- **Régimen de Mercado:** Actualmente en **{regime_desc}** con el precio en **${context.current_price:,.2f}**.",
+            f"- **Fuerza Técnica (Quant Score):** **{context.quant_score:.1f}/100** (fuerza {quant_fuerza}). De cada 10 métricas analizadas, aproximadamente **{int(context.quant_score/10)} respaldan** este diagnóstico.",
+            f"- **Probabilidad Predictiva:** **{context.predictive_score:.2f}** con una confianza estadística del **{context.signal.confidence * 100:.1f}%**.",
+            f"- **Nivel Clave Institucional:** {poc_text}",
+            f"- **Parámetros de Seguridad:** Corte de riesgo (Stop Loss) recomendado en **{sl_text}** y objetivo (Take Profit) en **{tp_text}**.",
+        ]
+
+        if context.signal.positives:
+            lines.append(f"- **Factores a Favor:** {', '.join(context.signal.positives)}.")
+
+        return "\n".join(lines)
+
     def _formulate_scenarios(self, context: MarketContext) -> list[str]:
         """Formulate scenario frameworks based on quantitative indicators."""
         scenarios: list[str] = []
@@ -222,29 +275,29 @@ class OperatorAssistant(BaseOperatorAssistant):
 
         if "BULL" in regime or pred > 0.65:
             scenarios.append(
-                f"Primary Scenario (Bullish Expansion): Continuation toward resistance while holding above "
-                f"support/SL level ({context.risk.stop_loss or 'nearest pivot'})."
+                f"Escenario Principal (Bullish Expansion / Expansión Alcista): Continuación hacia resistencia manteniendo soporte "
+                f"en nivel de Stop Loss ({context.risk.stop_loss or 'pivote cercano'})."
             )
             scenarios.append(
-                "Alternative Scenario (Exhaustion / Pullback): Failure to sustain momentum could trigger "
-                "a mean-reversion retest of the Value Area POC."
+                "Escenario Alternativo (Exhaustion / Agotamiento): Pérdida de impulso podría provocar "
+                "un retroceso hacia el punto de control institucional (POC)."
             )
         elif "BEAR" in regime or pred < 0.35:
             scenarios.append(
-                f"Primary Scenario (Bearish Continuation): Downside drift remains favored under {regime} regime; "
-                f"watch for breakdown below support."
+                f"Escenario Principal (Bearish Continuation / Continuación Bajista): Presión a la baja favorecida bajo régimen {regime}; "
+                f"vigilar posible ruptura de soporte clave."
             )
             scenarios.append(
-                "Alternative Scenario (Short Squeeze / Relief Rally): Bullish divergence could prompt "
-                "a quick liquidity reclaim toward Value Area High."
+                "Escenario Alternativo (Short Squeeze / Rebote Técnico): Una divergencia alcista podría provocar "
+                "una recuperación rápida de liquidez hacia la parte alta del perfil (VAH)."
             )
         else:
             scenarios.append(
-                f"Primary Scenario (Range Bound / Consolidation): Price likely to oscillate within the current value "
-                f"area with Quant Score at {quant:.1f}/100."
+                f"Escenario Principal (Range Bound / Rango Lateral): Oscilación de precio dentro del área de valor "
+                f"con Puntuación Quant en {quant:.1f}/100."
             )
             scenarios.append(
-                "Breakout Scenario: Sustained expansion accompanied by volume deviation required for trend definition."
+                "Escenario de Ruptura (Breakout): Se requiere volumen institucional significativo para validar una salida de rango."
             )
 
         return scenarios
@@ -259,34 +312,33 @@ class OperatorAssistant(BaseOperatorAssistant):
     ) -> str:
         """Assemble structured markdown narrative for the human operator."""
         lines = [
-            f"### 🤖 Copilot Intelligence: {context.symbol} [{context.timeframe.upper()}]",
-            f"**Current Price:** ${context.current_price:,.2f} | **Regime:** `{context.market_regime}`",
-            f"**Quant Score:** {context.quant_score:.1f}/100 | **Predictive Score:** {context.predictive_score:.2f} | **Confidence:** {context.signal.confidence*100:.1f}%",
+            f"### 🤖 Copilot Intelligence (Diagnóstico Cuantitativo): {context.symbol} [{context.timeframe.upper()}]",
+            f"**Precio Actual:** ${context.current_price:,.2f} | **Régimen de Mercado:** `{context.market_regime}`",
+            f"**Puntuación Quant:** {context.quant_score:.1f}/100 | **Puntaje Predictivo:** {context.predictive_score:.2f} | **Confianza:** {context.signal.confidence*100:.1f}%",
             "",
-            "#### 📊 Quantitative Assessment & Bias",
+            "#### 📊 Evaluación Cuantitativa y Diagnóstico (Quantitative Assessment)",
             f"{explanation_summary}",
             f"{market_outlook}",
             "",
-            "#### 🎯 Scenarios for Operator Evaluation",
+            "#### 🎯 Escenarios para Evaluación del Operador (Scenarios)",
         ]
         for sc in scenarios:
             lines.append(f"- {sc}")
 
-        sl_str = f"${context.risk.stop_loss:,.2f}" if context.risk.stop_loss is not None else "None specified"
-        tp_str = f"${context.risk.take_profit:,.2f}" if context.risk.take_profit is not None else "None specified"
+        sl_str = f"${context.risk.stop_loss:,.2f}" if context.risk.stop_loss is not None else "No especificado"
+        tp_str = f"${context.risk.take_profit:,.2f}" if context.risk.take_profit is not None else "No especificado"
 
         lines.extend([
             "",
-            "#### 🛡️ Risk & Boundary Factors",
-            f"- **Stop Loss Level:** {sl_str}",
-            f"- **Take Profit Target:** {tp_str}",
-            f"- **Risk Category:** {context.risk.risk_category or 'Standard'}",
+            "#### 🛡️ Parámetros de Riesgo y Protección (Risk & Boundaries)",
+            f"- **Nivel de Stop Loss (Corte de Riesgo):** {sl_str}",
+            f"- **Objetivo de Take Profit (Toma de Ganancias):** {tp_str}",
+            f"- **Categoría de Riesgo:** {context.risk.risk_category or 'Estándar'}",
         ])
 
-
         if context.signal.warnings:
-            lines.append("- **Active Warnings:**")
+            lines.append("- **Advertencias Activas:**")
             for w in context.signal.warnings:
-                lines.append(f"  * {w}")
+                lines.append(f"  * ⚠️ {w}")
 
         return "\n".join(lines)

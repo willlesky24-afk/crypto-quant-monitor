@@ -1066,7 +1066,14 @@ with tab_copilot:
                             },
                         )
                         copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                        answer_text = copilot_res.answer if "Unable to analyze" not in copilot_res.answer else scan_summary
+                        if "⚠️" in copilot_res.answer or "fallback" in copilot_res.answer.lower() or "503" in copilot_res.answer or "unable to analyze" in copilot_res.answer.lower():
+                            answer_text = (
+                                f"{scan_summary}\n\n---\n"
+                                f"💡 *Nota: Diagnóstico generado directamente por el motor cuantitativo algorítmico local "
+                                f"(la API de Gemini presentó alta demanda temporal en Google).* "
+                            )
+                        else:
+                            answer_text = f"{copilot_res.answer}\n\n---\n{scan_summary}"
 
                         st.session_state["copilot_chat_history"].append({
                             "role": "assistant",
