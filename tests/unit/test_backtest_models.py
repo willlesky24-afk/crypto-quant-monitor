@@ -223,6 +223,16 @@ def test_equity_point_and_backtest_report_serialization():
     assert len(d_rep["equity_curve"]) == 1
     assert d_rep["config"]["initial_capital"] == 10_000.0
 
+    # Test report.metrics property
+    metrics = report.metrics
+    assert isinstance(metrics, dict)
+    assert metrics["total_trades"] == 10
+    assert metrics["win_rate"] == 0.60
+    assert metrics["profit_factor"] == 1.85
+    assert metrics["max_drawdown_pct"] == 4.2
+    assert metrics["net_pnl"] == 1200.0
+    assert metrics["sharpe_ratio"] == 1.95
+
 
 def test_short_trade_result_and_funding_serialization():
     sig_ts = pd.to_datetime("2024-01-01 12:00:00", utc=True)

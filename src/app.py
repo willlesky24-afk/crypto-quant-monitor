@@ -1307,17 +1307,23 @@ with tab_backtest:
         for col, amt in zip(cap_cols, preset_caps):
             with col:
                 if st.button(f"${int(amt)}", key=f"cap_btn_{int(amt)}", use_container_width=True):
-                    st.session_state["guided_capital"] = amt
+                    st.session_state["guided_capital"] = float(amt)
+                    st.session_state["input_guided_cap"] = float(amt)
+                    st.rerun()
+
+        if "input_guided_cap" not in st.session_state:
+            st.session_state["input_guided_cap"] = float(st.session_state["guided_capital"])
 
         selected_cap = st.number_input(
             "O escribe el monto exacto en dólares ($):",
             min_value=5.0,
             max_value=1_000_000.0,
-            value=float(st.session_state["guided_capital"]),
+            value=float(st.session_state["input_guided_cap"]),
             step=10.0,
             format="%.2f",
             key="input_guided_cap",
         )
+        st.session_state["guided_capital"] = selected_cap
 
         st.markdown("##### 2️⃣ Elige una Estrategia Estándar Probada de la Industria")
         strategy_keys = list(PROVEN_STRATEGIES.keys())
@@ -1406,8 +1412,15 @@ with tab_backtest:
                     predictive_mode=True,
                 )
 
-        report = st.session_state["backtest_report"]
-        metrics = report.metrics
+        report = st.session_state.get("backtest_report")
+        if report is None:
+            st.stop()
+        if hasattr(report, "metrics"):
+            metrics = report.metrics
+        elif isinstance(report, dict):
+            metrics = report.get("metrics", report)
+        else:
+            metrics = getattr(report, "__dict__", {})
 
         # Intelligent Traffic Light Verdict
         verdict = evaluate_backtest_verdict(metrics)

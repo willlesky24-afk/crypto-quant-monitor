@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from src.backtest_presets import (
     PROVEN_STRATEGIES,
@@ -53,3 +53,37 @@ def test_evaluate_backtest_verdict():
     })
     assert v_rejected["status"] == "REJECTED"
     assert "NO RECOMENDADA" in v_rejected["badge"]
+
+
+def test_evaluate_backtest_verdict_with_backtest_report_metrics():
+    from src.backtest_models import BacktestConfig, BacktestReport
+
+    report = BacktestReport(
+        config=BacktestConfig(),
+        symbol="BTCUSDT",
+        timeframe="1h",
+        start_time="2024-01-01",
+        end_time="2024-01-10",
+        total_candles=100,
+        total_trades=20,
+        winning_trades=14,
+        losing_trades=6,
+        win_rate_pct=70.0,
+        profit_factor=2.2,
+        expectancy=50.0,
+        expectancy_r=1.2,
+        max_drawdown_pct=5.0,
+        max_drawdown_usd=25.0,
+        max_drawdown_duration_bars=4,
+        avg_mfe_pct=2.5,
+        avg_mae_pct=0.8,
+        avg_bars_held=5.0,
+        total_gross_pnl=500.0,
+        total_fees_paid=20.0,
+        total_net_pnl=480.0,
+        return_on_capital_pct=48.0,
+    )
+
+    verdict = evaluate_backtest_verdict(report.metrics)
+    assert verdict["status"] == "APPROVED"
+    assert "APROBADA" in verdict["badge"]

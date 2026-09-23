@@ -218,3 +218,25 @@ class BacktestReport:
         d["trades"] = [t.to_dict() for t in self.trades]
         d["equity_curve"] = [p.to_dict() for p in self.equity_curve]
         return d
+
+    @property
+    def metrics(self) -> dict[str, Any]:
+        return {
+            "total_trades": self.total_trades,
+            "win_rate": (self.win_rate_pct / 100.0) if self.win_rate_pct else 0.0,
+            "win_rate_pct": self.win_rate_pct,
+            "winning_trades": self.winning_trades,
+            "losing_trades": self.losing_trades,
+            "profit_factor": self.profit_factor,
+            "max_drawdown_pct": self.max_drawdown_pct,
+            "max_drawdown_usd": self.max_drawdown_usd,
+            "net_pnl": self.total_net_pnl,
+            "total_net_pnl": self.total_net_pnl,
+            "total_gross_pnl": self.total_gross_pnl,
+            "total_fees_paid": self.total_fees_paid,
+            "sharpe_ratio": self.sharpe_ratio or 0.0,
+            "calmar_ratio": self.calmar_ratio or 0.0,
+            "expectancy": self.expectancy,
+            "expectancy_r": self.expectancy_r,
+            "return_on_capital_pct": self.return_on_capital_pct,
+        }
