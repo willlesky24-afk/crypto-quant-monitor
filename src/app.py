@@ -14,6 +14,15 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+# Synchronize Streamlit Cloud secrets into os.environ
+try:
+    if hasattr(st, "secrets"):
+        for sec_k, sec_v in st.secrets.items():
+            if isinstance(sec_v, str) and not os.getenv(sec_k):
+                os.environ[sec_k] = sec_v
+except Exception:
+    pass
+
 try:
     from src.ai_agent.context_builder import ContextBuilder
     from src.ai_providers.factory import ProviderFactory
@@ -958,11 +967,12 @@ with tab_copilot:
             cfg_col1, cfg_col2 = st.columns([2, 1])
             with cfg_col1:
                 gemini_model_options = [
-                    "gemini-3.8-flash (Recomendado • Mayor Capacidad)",
+                    "gemini-2.0-flash (Recomendado • Máxima Estabilidad y Disponibilidad)",
+                    "gemini-3.8-flash (Nueva Generación • Mayor Capacidad)",
                     "gemini-3.5-flash-lite (Ultra Rápido • Menor Demanda)",
+                    "gemini-2.0-flash-lite (Rápido • Menor Consumo)",
                     "gemini-3.7-flash (Estándar)",
-                    "gemini-2.5-flash (Respaldo)",
-                    "gemini-2.0-flash (Respaldo)",
+                    "gemini-1.5-flash (Universal)",
                 ]
                 selected_model_str = st.selectbox(
                     "Modelo Activo de Google Gemini:",

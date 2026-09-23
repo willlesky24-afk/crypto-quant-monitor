@@ -52,19 +52,6 @@ class GeminiProvider(BaseLLMProvider):
         mime_type = meta.get("mime_type", "image/png")
         conversation_history = meta.get("conversation_history")
 
-        contents: list[dict[str, Any]] = []
-
-        # Multi-turn conversation support
-        if conversation_history and isinstance(conversation_history, list):
-            for turn in conversation_history[-8:]:
-                turn_role = "user" if turn.get("role") == "user" else "model"
-                turn_text = str(turn.get("content", ""))
-                if turn_text.strip():
-                    contents.append({
-                        "role": turn_role,
-                        "parts": [{"text": turn_text}],
-                    })
-
         current_parts: list[dict[str, Any]] = [{"text": prompt}]
 
         # Multimodal image attachment support
@@ -78,7 +65,7 @@ class GeminiProvider(BaseLLMProvider):
                 }
             })
 
-        contents.append({"role": "user", "parts": current_parts})
+        contents = self._sanitize_gemini_contents(conversation_history, current_parts)
 
         payload = {
             "contents": contents,
@@ -89,11 +76,22 @@ class GeminiProvider(BaseLLMProvider):
         }
 
         body = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        }
 
         # Candidate models for high availability failover (e.g. on 503 Service Unavailable or 404/429)
         models_to_try = [self.model]
-        for fallback_candidate in ("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.7-flash", "gemini-2.5-flash", "gemini-2.0-flash"):
+        for fallback_candidate in (
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.7-flash",
+            "gemini-2.5-flash",
+        ):
             if fallback_candidate not in models_to_try:
                 models_to_try.append(fallback_candidate)
 
@@ -144,6 +142,45 @@ class GeminiProvider(BaseLLMProvider):
             tokens_used=0,
             metadata={"status": "fallback"},
         )
+
+    @staticmethod
+    def _sanitize_gemini_contents(
+        history: list[dict[str, Any]] | None,
+        current_parts: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Normalize conversation turns according to strict Gemini API rules:
+        1. First turn MUST be 'user' (cannot start with 'model').
+        2. Turns must strictly alternate ('user' -> 'model' -> 'user' -> 'model').
+        3. Preceding turn before current_parts cannot be 'user' (merge/pop to avoid consecutive user turns).
+        4. Final turn must be 'user' containing current_parts.
+        """
+        valid_turns: list[dict[str, Any]] = []
+
+        if history and isinstance(history, list):
+            for turn in history[-6:]:
+                role = "user" if turn.get("role") == "user" else "model"
+                text = str(turn.get("content", "")).strip()
+                if not text:
+                    continue
+
+                if not valid_turns:
+                    # Rule 1: First turn MUST be "user"
+                    if role == "user":
+                        valid_turns.append({"role": "user", "parts": [{"text": text}]})
+                else:
+                    last_role = valid_turns[-1]["role"]
+                    if role != last_role:
+                        valid_turns.append({"role": role, "parts": [{"text": text}]})
+                    else:
+                        valid_turns[-1]["parts"].append({"text": text})
+
+        # Rule 3: Ensure turn preceding current_parts is NOT "user"
+        if valid_turns and valid_turns[-1]["role"] == "user":
+            valid_turns.pop()
+
+        # Rule 4: Append current user query
+        valid_turns.append({"role": "user", "parts": current_parts})
+        return valid_turns
 
     async def generate_explanation(self, context: MarketContext) -> AgentExplanation:
         """Adhere to BaseAIProvider contract for legacy and copilot pipelines."""
