@@ -1814,28 +1814,36 @@ with tab_settings:
 
     with c_cfg1:
         st.markdown("### 📢 Canales de Notificación")
-        enable_discord = st.checkbox("Habilitar Discord Webhook", value=bool(os.getenv("DISCORD_WEBHOOK_URL")))
+        def _get_sec(key: str, default: str = "") -> str:
+            try:
+                if key in st.secrets:
+                    return str(st.secrets[key])
+            except Exception:
+                pass
+            return os.getenv(key, default)
+
+        enable_discord = st.checkbox("Habilitar Discord Webhook", value=bool(_get_sec("DISCORD_WEBHOOK_URL")))
         discord_url_input = st.text_input(
             "Discord Webhook URL",
-            value=os.getenv("DISCORD_WEBHOOK_URL", ""),
+            value=_get_sec("DISCORD_WEBHOOK_URL", ""),
             type="password",
         )
 
-        enable_telegram = st.checkbox("Habilitar Telegram Bot", value=bool(os.getenv("TELEGRAM_BOT_TOKEN")))
+        enable_telegram = st.checkbox("Habilitar Telegram Bot", value=bool(_get_sec("TELEGRAM_BOT_TOKEN")))
         telegram_token_input = st.text_input(
             "Telegram Bot Token",
-            value=os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            value=_get_sec("TELEGRAM_BOT_TOKEN", ""),
             type="password",
         )
         telegram_chat_id_input = st.text_input(
             "Telegram Chat ID",
-            value=os.getenv("TELEGRAM_CHAT_ID", ""),
+            value=_get_sec("TELEGRAM_CHAT_ID", ""),
         )
 
-        enable_webhook = st.checkbox("Habilitar Generic Webhook", value=bool(os.getenv("GENERIC_WEBHOOK_URL")))
+        enable_webhook = st.checkbox("Habilitar Generic Webhook", value=bool(_get_sec("GENERIC_WEBHOOK_URL")))
         generic_url_input = st.text_input(
             "Webhook Target URL",
-            value=os.getenv("GENERIC_WEBHOOK_URL", ""),
+            value=_get_sec("GENERIC_WEBHOOK_URL", ""),
         )
 
     with c_cfg2:
