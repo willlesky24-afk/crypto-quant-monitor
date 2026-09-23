@@ -1374,13 +1374,22 @@ with tab_backtest:
         run_sim = st.button("🚀 Simular Estrategia con Datos Reales", type="primary", use_container_width=True)
 
         if run_sim:
-            b_cfg = build_strategy_config(
-                strategy_key=chosen_strategy_key,
-                initial_capital=selected_cap,
-                taker_fee_pct=0.0005,
-                slippage_pct=0.0005,
-                leverage=selected_leverage,
-            )
+            try:
+                b_cfg = build_strategy_config(
+                    strategy_key=chosen_strategy_key,
+                    initial_capital=selected_cap,
+                    taker_fee_pct=0.0005,
+                    slippage_pct=0.0005,
+                    leverage=selected_leverage,
+                )
+            except TypeError:
+                b_cfg = build_strategy_config(
+                    strategy_key=chosen_strategy_key,
+                    initial_capital=selected_cap,
+                    taker_fee_pct=0.0005,
+                    slippage_pct=0.0005,
+                )
+                b_cfg.leverage = float(selected_leverage)
 
     else:
         st.markdown("##### ⚙️ Parámetros Avanzados de Simulación")

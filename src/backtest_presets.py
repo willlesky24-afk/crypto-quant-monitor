@@ -64,6 +64,7 @@ def build_strategy_config(
     taker_fee_pct: float = 0.0005,
     slippage_pct: float = 0.0005,
     leverage: float = 1.0,
+    **kwargs: Any,
 ) -> BacktestConfig:
     """Build a deterministic BacktestConfig from a battle-tested strategy preset."""
     preset = PROVEN_STRATEGIES.get(strategy_key, PROVEN_STRATEGIES["capital_preservation"])
