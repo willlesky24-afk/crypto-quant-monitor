@@ -152,6 +152,8 @@ class TradeResult:
     is_win: bool
     side: str = PositionSide.LONG.value
     funding_fees: float = 0.0
+    tp_price: float = 0.0
+    sl_price: float = 0.0
 
     def to_dict(self) -> dict:
         d = asdict(self)

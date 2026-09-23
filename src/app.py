@@ -1325,6 +1325,31 @@ with tab_backtest:
         )
         st.session_state["guided_capital"] = selected_cap
 
+        # Educational Leverage Selector
+        lev_c1, lev_c2 = st.columns([1.6, 2.4])
+        with lev_c1:
+            selected_leverage = st.selectbox(
+                "⚡ Nivel de Apalancamiento:",
+                options=[1.0, 2.0, 3.0, 5.0],
+                format_func=lambda x: (
+                    f"{int(x)}x (Spot • Sin Deuda • Seguro Novato)" if x == 1.0 else (
+                        f"{int(x)}x (Moderado • Doble Retorno / Doble Riesgo)" if x == 2.0 else (
+                            f"{int(x)}x (Avanzado • Triple Exposición)" if x == 3.0 else f"{int(x)}x (Agresivo • Alto Riesgo)"
+                        )
+                    )
+                ),
+                index=0,
+                key="sel_guided_leverage",
+            )
+        with lev_c2:
+            if selected_leverage == 1.0:
+                st.info("🛡️ **Apalancamiento 1x (Recomendado Novatos)**: Operas exclusivamente con tu capital real. Sin riesgo de liquidación forzada.")
+            else:
+                st.warning(
+                    f"⚠️ **Apalancamiento {int(selected_leverage)}x Activo**: Tu posición será de "
+                    f"**${selected_cap * selected_leverage:,.2f}**. Tus ganancias y pérdidas se multiplicarán por {int(selected_leverage)}."
+                )
+
         st.markdown("##### 2️⃣ Elige una Estrategia Estándar Probada de la Industria")
         strategy_keys = list(PROVEN_STRATEGIES.keys())
         strategy_labels = [PROVEN_STRATEGIES[k]["name"] for k in strategy_keys]
@@ -1354,6 +1379,7 @@ with tab_backtest:
                 initial_capital=selected_cap,
                 taker_fee_pct=0.0005,
                 slippage_pct=0.0005,
+                leverage=selected_leverage,
             )
 
     else:
@@ -1493,6 +1519,96 @@ with tab_backtest:
         with m_col6:
             st.metric("Retorno Neto", f"${metrics.get('net_pnl', 0.0):,.2f}")
 
+        # 1.1 Breakdown: LONG vs SHORT
+        long_trades = [t for t in report.trades if str(getattr(t, "side", getattr(t, "direction", ""))).upper() == "LONG"]
+        short_trades = [t for t in report.trades if str(getattr(t, "side", getattr(t, "direction", ""))).upper() == "SHORT"]
+
+        long_count = len(long_trades)
+        short_count = len(short_trades)
+        long_wins = sum(1 for t in long_trades if t.net_pnl > 0)
+        short_wins = sum(1 for t in short_trades if t.net_pnl > 0)
+        long_wr = (long_wins / long_count * 100) if long_count > 0 else 0.0
+        short_wr = (short_wins / short_count * 100) if short_count > 0 else 0.0
+        long_pnl = sum(t.net_pnl for t in long_trades)
+        short_pnl = sum(t.net_pnl for t in short_trades)
+
+        st.markdown("##### ⚖️ ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)")
+        dir_c1, dir_c2 = st.columns(2)
+        with dir_c1:
+            st.markdown(
+                f"""
+                <div style="background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 10px; padding: 12px 14px;">
+                    <div style="font-weight: 700; color: #00FF88; font-size: 0.95rem;">🟢 Operaciones de Compra (LONG)</div>
+                    <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
+                        • <strong>{long_count}</strong> operaciones ejecutadas<br/>
+                        • Tasa de Acierto: <strong>{long_wr:.1f}%</strong> ({long_wins} ganadas)<br/>
+                        • Retorno Acumulado: <strong style="color: {'#00FF88' if long_pnl >= 0 else '#FF2E63'};">${long_pnl:+,.2f}</strong>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with dir_c2:
+            st.markdown(
+                f"""
+                <div style="background: rgba(255, 46, 99, 0.06); border: 1px solid rgba(255, 46, 99, 0.3); border-radius: 10px; padding: 12px 14px;">
+                    <div style="font-weight: 700; color: #FF2E63; font-size: 0.95rem;">🔴 Operaciones de Venta (SHORT)</div>
+                    <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
+                        • <strong>{short_count}</strong> operaciones ejecutadas<br/>
+                        • Tasa de Acierto: <strong>{short_wr:.1f}%</strong> ({short_wins} ganadas)<br/>
+                        • Retorno Acumulado: <strong style="color: {'#00FF88' if short_pnl >= 0 else '#FF2E63'};">${short_pnl:+,.2f}</strong>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        if long_count > 0 and short_count > 0:
+            if long_pnl > short_pnl:
+                st.caption(f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **COMPRAS (LONG)** (+${long_pnl:,.2f} vs ${short_pnl:,.2f} en Ventas).")
+            elif short_pnl > long_pnl:
+                st.caption(f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **VENTAS (SHORT)** (+${short_pnl:,.2f} vs ${long_pnl:,.2f} en Compras).")
+            else:
+                st.caption("⚖️ **Conclusión Cuantitativa**: Compras y Ventas tuvieron rendimientos equivalentes en esta muestra histórica.")
+        elif long_count > 0 and short_count == 0:
+            st.caption(f"🛡️ **Estrategia Unidireccional**: Esta configuración operó exclusivamente **COMPRAS (LONG)** para protegerte de la volatilidad corta ({long_count} compras, {long_wr:.1f}% acierto).")
+        elif short_count > 0 and long_count == 0:
+            st.caption(f"📉 **Estrategia en Corto**: Esta configuración operó exclusivamente **VENTAS (SHORT)** ({short_count} ventas, {short_wr:.1f}% acierto).")
+
+        # 1.2 Risk Management Metrics (Stop Loss, Take Profit, Risk/Reward)
+        sl_pct_list = []
+        tp_pct_list = []
+        for t in report.trades:
+            e_p = getattr(t, "entry_price", 0.0)
+            if e_p > 0:
+                s_p = getattr(t, "sl_price", 0.0)
+                if s_p > 0:
+                    sl_pct_list.append(abs(e_p - s_p) / e_p * 100.0)
+                t_p = getattr(t, "tp_price", 0.0)
+                if t_p > 0:
+                    tp_pct_list.append(abs(t_p - e_p) / e_p * 100.0)
+
+        avg_sl_pct = (sum(sl_pct_list) / len(sl_pct_list)) if sl_pct_list else 0.0
+        avg_tp_pct = (sum(tp_pct_list) / len(tp_pct_list)) if tp_pct_list else 0.0
+        default_rr = (b_cfg.tp_atr_multiple / max(b_cfg.sl_atr_multiple, 0.01)) if b_cfg else 2.0
+        avg_rr = (avg_tp_pct / avg_sl_pct) if avg_sl_pct > 0 else default_rr
+
+        winning_pnls = [t.net_pnl for t in report.trades if t.net_pnl > 0]
+        losing_pnls = [abs(t.net_pnl) for t in report.trades if t.net_pnl < 0]
+        avg_win_usd = (sum(winning_pnls) / len(winning_pnls)) if winning_pnls else 0.0
+        avg_loss_usd = (sum(losing_pnls) / len(losing_pnls)) if losing_pnls else 0.0
+
+        st.markdown("##### 🛡️ Parámetros de Riesgo Promedio Aplicados a Cada Orden")
+        r_col1, r_col2, r_col3, r_col4 = st.columns(4)
+        with r_col1:
+            st.metric("Stop Loss Promedio", f"-{avg_sl_pct:.2f}%", help="Distancia porcentual media a la que se colocó la orden de corte de pérdidas.")
+        with r_col2:
+            st.metric("Take Profit Promedio", f"+{avg_tp_pct:.2f}%", help="Distancia porcentual media a la que se colocó la orden de recogida de beneficios.")
+        with r_col3:
+            st.metric("Ratio Riesgo : Beneficio", f"1 : {avg_rr:.2f}", help="Por cada dólar que arriesgó la estrategia, buscó ganar esta proporción.")
+        with r_col4:
+            st.metric("Ganancia Media / Pérdida Media", f"${avg_win_usd:,.2f} / -${avg_loss_usd:,.2f}", help="Promedio ganado en trades positivos vs promedio perdido en fallos.")
+
         # 2. Equity Curve & Underwater Drawdown Plot
         if report.equity_curve:
             eq_df = pd.DataFrame([pt.to_dict() for pt in report.equity_curve])
@@ -1593,6 +1709,8 @@ with tab_backtest:
                     "side": "Dirección",
                     "entry_timestamp": "Entrada",
                     "entry_price": "P. Entrada",
+                    "sl_price": "P. Stop Loss",
+                    "tp_price": "P. Take Profit",
                     "exit_timestamp": "Salida",
                     "exit_price": "P. Salida",
                     "net_pnl": "PnL Neto ($)",

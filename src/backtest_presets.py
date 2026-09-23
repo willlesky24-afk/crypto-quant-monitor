@@ -63,6 +63,7 @@ def build_strategy_config(
     initial_capital: float = 100.0,
     taker_fee_pct: float = 0.0005,
     slippage_pct: float = 0.0005,
+    leverage: float = 1.0,
 ) -> BacktestConfig:
     """Build a deterministic BacktestConfig from a battle-tested strategy preset."""
     preset = PROVEN_STRATEGIES.get(strategy_key, PROVEN_STRATEGIES["capital_preservation"])
@@ -70,6 +71,7 @@ def build_strategy_config(
         initial_capital=max(5.0, float(initial_capital)),
         taker_fee_pct=taker_fee_pct,
         slippage_pct=slippage_pct,
+        leverage=max(1.0, float(leverage)),
         direction=preset["direction"],
         min_quant_score=preset["min_quant_score"],
         tp_atr_multiple=preset["tp_atr_multiple"],

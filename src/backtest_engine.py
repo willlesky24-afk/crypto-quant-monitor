@@ -93,11 +93,12 @@ class BacktestEngine:
                 else:
                     entry_price = bar_open * (1.0 - slip)
 
-                # Position sizing based on available cash
+                # Position sizing based on available cash and leverage
                 allocated_cash = current_cash * max(0.0, min(1.0, self.config.position_size_pct))
+                lev = max(1.0, float(self.config.leverage))
                 if allocated_cash > 0 and entry_price > 0:
-                    fee_entry = allocated_cash * self.config.taker_fee_pct
-                    actual_capital_invested = allocated_cash - fee_entry
+                    fee_entry = (allocated_cash * lev) * self.config.taker_fee_pct
+                    actual_capital_invested = (allocated_cash * lev) - fee_entry
                     size_units = actual_capital_invested / entry_price
 
                     # Multipliers based on signal ATR (custom signal multiples or config defaults)
@@ -243,8 +244,9 @@ class BacktestEngine:
                     funding_fee_total = active_position.funding_fees_accumulated
                     net_pnl = gross_pnl - active_position.fee_entry - fee_exit - funding_fee_total
 
-                    # Return collateral + profit - exit fee - funding
-                    current_cash += (active_position.notional_entry + gross_pnl) - fee_exit - funding_fee_total
+                    # Return collateral + profit - exit fee - funding (floored at 0 for exchange insurance limit)
+                    returned_cash = (active_position.notional_entry + gross_pnl) - fee_exit - funding_fee_total
+                    current_cash += max(0.0, returned_cash)
 
                     # Performance ratios
                     initial_risk = abs(
@@ -316,6 +318,8 @@ class BacktestEngine:
                         is_win=net_pnl > 0,
                         side=active_position.side,
                         funding_fees=funding_fee_total,
+                        tp_price=active_position.tp_price,
+                        sl_price=active_position.sl_price,
                     )
                     closed_trades.append(trade_result)
                     active_position = None
