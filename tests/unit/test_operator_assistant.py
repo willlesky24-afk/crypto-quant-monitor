@@ -122,7 +122,7 @@ async def test_operator_assistant_ask_success():
 @pytest.mark.anyio
 async def test_operator_assistant_ask_no_context():
     provider = InMemoryMarketContextProvider()
-    assistant = OperatorAssistant(context_provider=provider)
+    assistant = OperatorAssistant(context_provider=provider, enable_on_demand_context=False)
 
     query = OperatorQuery(query="Analyze SOLUSDT", symbol="SOLUSDT", timeframe="15m")
     response = await assistant.ask(query)
@@ -236,3 +236,33 @@ async def test_operator_assistant_deep_analyze_missing():
 
     assert res.current_price == 0.0
     assert "No data available" in res.technical_summary
+
+
+def test_resolve_mentioned_symbol():
+    from src.operator_assistant.on_demand_context import resolve_mentioned_symbol
+
+    # Forex tests
+    sym, tf, is_fx = resolve_mentioned_symbol("USDCAD, me conviene entrar a comprar?", "EURUSD=X", "1h")
+    assert sym == "USDCAD=X"
+    assert tf == "1h"
+    assert is_fx is True
+
+    sym, tf, is_fx = resolve_mentioned_symbol("Que opinas de USD/JPY en 15m?", "BTCUSDT", "1h")
+    assert sym == "USDJPY=X"
+    assert tf == "15m"
+    assert is_fx is True
+
+    # Crypto tests
+    sym, tf, is_fx = resolve_mentioned_symbol("Cual es la proyeccion de SOL?", "BTCUSDT", "1h")
+    assert sym == "SOLUSDT"
+    assert is_fx is False
+
+    sym, tf, is_fx = resolve_mentioned_symbol("Como ves ETH en 4h?", "BTCUSDT", "1h")
+    assert sym == "ETHUSDT"
+    assert tf == "4h"
+    assert is_fx is False
+
+    # Fallback test
+    sym, tf, is_fx = resolve_mentioned_symbol("Cual es el riesgo general?", "EURUSD=X", "1h")
+    assert sym == "EURUSD=X"
+    assert is_fx is True

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from src.ai_agent.interfaces import BaseAIProvider, MockAIProvider
 from src.ai_agent.models import MarketContext
@@ -13,6 +12,10 @@ from src.operator_assistant.models import (
     AnalysisResponse,
     OperatorQuery,
     OperatorResponse,
+)
+from src.operator_assistant.on_demand_context import (
+    build_on_demand_context,
+    resolve_mentioned_symbol,
 )
 from src.operator_service.interfaces import BaseMarketContextProvider
 
@@ -34,10 +37,12 @@ class OperatorAssistant(BaseOperatorAssistant):
         context_provider: BaseMarketContextProvider,
         ai_provider: BaseAIProvider | None = None,
         prompt_builder: PromptBuilder | None = None,
+        enable_on_demand_context: bool = True,
     ) -> None:
         self._context_provider = context_provider
         self._ai_provider = ai_provider or MockAIProvider()
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._enable_on_demand_context = enable_on_demand_context
 
     @property
     def context_provider(self) -> BaseMarketContextProvider:
@@ -54,33 +59,25 @@ class OperatorAssistant(BaseOperatorAssistant):
 
     def _extract_symbol_timeframe(self, text: str, fallback_symbol: str, fallback_tf: str) -> tuple[str, str]:
         """Extract symbol and timeframe tokens if explicitly mentioned in query string."""
-        symbol = fallback_symbol
-        tf = fallback_tf
-
-        # Look for explicit crypto pairs e.g. BTCUSDT, ETHUSDT, SOLUSDT, or specific known base assets
-        match_sym = re.search(r"\b([A-Z]{2,10}(?:USDT|USD|BUSD))\b", text.upper())
-        if match_sym:
-            symbol = match_sym.group(1)
-        else:
-            match_base = re.search(r"\b(BTC|ETH|SOL|ADA|XRP|DOGE|BNB|AVAX|DOT|LINK)\b", text.upper())
-            if match_base:
-                symbol = f"{match_base.group(1)}USDT"
-
-        # Look for timeframes e.g. 15m, 1h, 4h, 1d
-        match_tf = re.search(r"\b(15[mM]|1[hH]|4[hH]|1[dD])\b", text)
-        if match_tf:
-            tf = match_tf.group(1).lower()
-
-        return symbol, tf
-
+        sym, tf, _ = resolve_mentioned_symbol(text, fallback_symbol, fallback_tf)
+        return sym, tf
 
     async def ask(self, query: OperatorQuery) -> OperatorResponse:
         """Process an operator query and return structured market interpretation and decision support."""
-        symbol, timeframe = self._extract_symbol_timeframe(
+        symbol, timeframe, is_fx = resolve_mentioned_symbol(
             query.query, query.symbol, query.timeframe
         )
 
         context = await self._context_provider.get_latest_context(symbol, timeframe)
+        if context is None and self._enable_on_demand_context:
+            # Build on-demand live context dynamically
+            context = build_on_demand_context(symbol, timeframe, is_fx)
+            if context is not None:
+                try:
+                    await self._context_provider.update_context(context)
+                except Exception:
+                    pass
+
         if context is None:
             return OperatorResponse(
                 answer=(

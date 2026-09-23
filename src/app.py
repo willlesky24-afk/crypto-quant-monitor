@@ -50,6 +50,10 @@ try:
     from src.notifications.models import NotificationPriority, SignalEvent
     from src.operator_assistant.assistant import OperatorAssistant
     from src.operator_assistant.models import OperatorQuery
+    from src.operator_assistant.on_demand_context import (
+        build_on_demand_context,
+        resolve_mentioned_symbol,
+    )
     from src.operator_service.interfaces import InMemoryMarketContextProvider
     from src.operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
     from src.predictive_engine import PredictiveEngine
@@ -86,6 +90,10 @@ except ImportError:
     from notifications.models import NotificationPriority, SignalEvent
     from operator_assistant.assistant import OperatorAssistant
     from operator_assistant.models import OperatorQuery
+    from operator_assistant.on_demand_context import (
+        build_on_demand_context,
+        resolve_mentioned_symbol,
+    )
     from operator_service.interfaces import InMemoryMarketContextProvider
     from operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
     from predictive_engine import PredictiveEngine
@@ -1171,17 +1179,28 @@ with tab_copilot:
 
                 st.session_state["copilot_chat_history"].append(user_msg)
 
+                # Dynamically resolve mentioned symbol from user query
+                target_sym, target_tf, target_is_fx = resolve_mentioned_symbol(chat_input_val, symbol, interval)
+                if target_sym != symbol or target_tf != interval:
+                    with st.spinner(f"Analizando métricas cuantitativas en vivo para {target_sym} ({target_tf})..."):
+                        od_ctx = build_on_demand_context(target_sym, target_tf, target_is_fx)
+                        if od_ctx is not None:
+                            try:
+                                copilot_provider.update_context(od_ctx)
+                            except Exception:
+                                pass
+
                 with st.spinner("AI Copilot razonando y formulando respuesta en español..."):
                     try:
                         query_obj = OperatorQuery(
                             query=chat_input_val,
-                            symbol=symbol,
-                            timeframe=interval,
+                            symbol=target_sym,
+                            timeframe=target_tf,
                             operator_id="dashboard_operator",
                             metadata={
                                 "image_bytes": img_bytes,
                                 "mime_type": mime_type,
-                                "market_type": "Forex" if is_forex else "Crypto",
+                                "market_type": "Forex" if target_is_fx else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
                                     for m in st.session_state["copilot_chat_history"][-6:]
