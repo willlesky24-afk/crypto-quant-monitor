@@ -386,6 +386,13 @@ class BacktestEngine:
 
         if signal.quant_score < self.config.min_quant_score:
             return False
-        if self.config.require_favorable_decision and signal.decision != "FAVORABLE":
-            return False
+        if self.config.require_favorable_decision:
+            decision_str = str(signal.decision).upper()
+            is_favorable = (
+                ("FAVORABLE" in decision_str)
+                or ("CONDICIÓN FAVORABLE" in decision_str)
+                or ("CONDICION FAVORABLE" in decision_str)
+            )
+            if not is_favorable:
+                return False
         return True

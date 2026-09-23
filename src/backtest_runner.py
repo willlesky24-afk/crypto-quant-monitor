@@ -108,13 +108,15 @@ class BacktestRunner:
                 end_time=end_time,
             )
 
-        if raw_df.empty or len(raw_df) < warmup_bars:
+        effective_warmup = min(warmup_bars, max(35, len(raw_df) // 4)) if len(raw_df) >= 35 else warmup_bars
+
+        if raw_df.empty or len(raw_df) < effective_warmup:
             logger.warning(
                 "Dataset para %s %s tiene solo %d velas (mínimo requerido: %d para warm-up).",
                 sym,
                 inv,
                 len(raw_df),
-                warmup_bars,
+                effective_warmup,
             )
             empty_metrics = BacktestMetricsCalculator.calculate_metrics([], [], self.config.initial_capital)
             return self._build_report(
@@ -143,7 +145,7 @@ class BacktestRunner:
         if use_predictive and total_bars >= 25:
             all_regimes = self.regime_classifier.classify_series(enriched_df, warmup_bars=25)
 
-        for t_idx in range(warmup_bars - 1, total_bars):
+        for t_idx in range(effective_warmup - 1, total_bars):
             sub_df = enriched_df.iloc[: t_idx + 1]
             profile = self.volume_profile.calculate(sub_df)
             analysis = self.market_engine.analyze(sub_df, profile)

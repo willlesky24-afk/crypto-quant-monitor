@@ -77,7 +77,7 @@ class BacktestConfig:
     funding_rate_8h: float = 0.0001  # 0.01% per 8h funding cycle on PERP
     leverage: float = 1.0
     min_quant_score: float = 60.0
-    require_favorable_decision: bool = True
+    require_favorable_decision: bool = False
     trade_direction: Any = None
 
     def __post_init__(self):

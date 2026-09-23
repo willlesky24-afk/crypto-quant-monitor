@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -75,6 +75,7 @@ def build_strategy_config(
         tp_atr_multiple=preset["tp_atr_multiple"],
         sl_atr_multiple=preset["sl_atr_multiple"],
         enable_trailing_stop=preset["enable_trailing_stop"],
+        require_favorable_decision=preset.get("require_favorable_decision", False),
     )
 
 
