@@ -1843,54 +1843,152 @@ with tab_settings:
         min_pred_score = st.slider("Umbral Mínimo de Predictive Score", 0.0, 1.0, 0.60, 0.05)
         min_conf = st.slider("Umbral Mínimo de Confianza", 0.0, 1.0, 0.60, 0.05)
         cooldown_sec = st.slider("Tiempo de Cooldown Anti-Spam (Segundos)", 0, 1800, 300, 30)
-        dry_run_mode = st.toggle("Modo Simulación (Dry-Run / Sin I/O)", value=True)
+        dry_run_mode = st.toggle("Modo Simulación (Dry-Run / Sin I/O)", value=False, help="Desactiva esto para que los mensajes lleguen realmente a tu Telegram/Discord.")
 
     st.markdown("---")
-    st.subheader("🧪 Envío de Alerta de Prueba (Test Ping)")
+    st.subheader("⚡ Acciones de Despacho de Señales")
 
-    if st.button("🔔 Enviar Notificación de Prueba", type="primary"):
-        test_channels = []
-        if enable_discord and discord_url_input:
-            test_channels.append(DiscordWebhookChannel(webhook_url=discord_url_input, dry_run=dry_run_mode))
-        if enable_telegram and telegram_token_input and telegram_chat_id_input:
-            test_channels.append(
-                TelegramChannel(bot_token=telegram_token_input, chat_id=telegram_chat_id_input, dry_run=dry_run_mode)
-            )
-        if enable_webhook and generic_url_input:
-            test_channels.append(WebhookChannel(url=generic_url_input, dry_run=dry_run_mode))
+    act_col1, act_col2 = st.columns([1, 1])
 
-        if not test_channels:
-            st.warning("No hay ningún canal configurado y habilitado para enviar alertas.")
-        else:
-            dispatcher = NotificationDispatcher(
-                channels=test_channels,
-                min_predictive_score=min_pred_score,
-                min_confidence=min_conf,
-                cooldown_seconds=float(cooldown_sec),
-            )
+    with act_col1:
+        st.markdown("#### 🧪 1. Prueba de Conexión (Ping)")
+        st.caption("Verifica si tu Bot de Telegram o Webhook de Discord responde correctamente.")
+        if st.button("🔔 Enviar Notificación de Prueba", type="secondary", use_container_width=True):
+            test_channels = []
+            if enable_discord and discord_url_input:
+                test_channels.append(DiscordWebhookChannel(webhook_url=discord_url_input, dry_run=dry_run_mode))
+            if enable_telegram and telegram_token_input and telegram_chat_id_input:
+                test_channels.append(
+                    TelegramChannel(bot_token=telegram_token_input, chat_id=telegram_chat_id_input, dry_run=dry_run_mode)
+                )
+            if enable_webhook and generic_url_input:
+                test_channels.append(WebhookChannel(url=generic_url_input, dry_run=dry_run_mode))
 
-            test_signal = SignalEvent(
-                timestamp=pd.Timestamp.now("UTC"),
-                symbol=symbol,
-                timeframe=interval,
-                action="BUY",
-                direction="LONG",
-                confidence=0.88,
-                predictive_score=0.82,
-                regime="TRENDING_BULL",
-                reasoning="Test ping de verificación de canal desde Crypto Quant Monitor Dashboard.",
-                price=float(df.iloc[-1]["close"]),
-                quant_score=85.0,
-                stop_loss=round(float(df.iloc[-1]["close"]) * 0.98, 2),
-                take_profit=round(float(df.iloc[-1]["close"]) * 1.04, 2),
-                signal_id="test-ping-01",
-            )
+            if not test_channels:
+                st.warning("⚠️ Configura y activa al menos un canal (Telegram o Discord) arriba.")
+            else:
+                dispatcher = NotificationDispatcher(
+                    channels=test_channels,
+                    min_predictive_score=min_pred_score,
+                    min_confidence=min_conf,
+                    cooldown_seconds=float(cooldown_sec),
+                )
 
-            results = dispatcher.dispatch_signal(test_signal, priority=NotificationPriority.HIGH)
+                test_signal = SignalEvent(
+                    timestamp=pd.Timestamp.now("UTC"),
+                    symbol=symbol,
+                    timeframe=interval,
+                    action="BUY",
+                    direction="LONG",
+                    confidence=0.88,
+                    predictive_score=0.82,
+                    regime="TRENDING_BULL",
+                    reasoning="Test ping de verificación de canal desde Crypto Quant Monitor Dashboard.",
+                    price=float(df.iloc[-1]["close"]),
+                    quant_score=85.0,
+                    stop_loss=round(float(df.iloc[-1]["close"]) * 0.98, 4 if is_forex else 2),
+                    take_profit=round(float(df.iloc[-1]["close"]) * 1.04, 4 if is_forex else 2),
+                    signal_id="test-ping-01",
+                )
 
-            st.success(f"Despacho completado. {len(results)} canales procesados.")
-            result_rows = [r.to_dict() for r in results]
-            st.table(pd.DataFrame(result_rows))
+                results = dispatcher.dispatch_signal(test_signal, priority=NotificationPriority.HIGH)
+                st.success(f"Despacho completado. {len(results)} canales procesados.")
+                result_rows = [r.to_dict() for r in results]
+                st.table(pd.DataFrame(result_rows))
+
+    with act_col2:
+        st.markdown("#### 📡 2. Escanear y Despachar Alertas Reales")
+        st.caption("Escanea los pares en vivo y envía las señales de alta probabilidad a tu Telegram.")
+        min_quant_thresh = st.slider("Quant Score Mínimo para Alerta Real", 60.0, 95.0, 75.0, 5.0)
+
+        if st.button("🚀 Escanear Mercado y Enviar Alertas Reales", type="primary", use_container_width=True):
+            alert_channels = []
+            if enable_discord and discord_url_input:
+                alert_channels.append(DiscordWebhookChannel(webhook_url=discord_url_input, dry_run=dry_run_mode))
+            if enable_telegram and telegram_token_input and telegram_chat_id_input:
+                alert_channels.append(
+                    TelegramChannel(bot_token=telegram_token_input, chat_id=telegram_chat_id_input, dry_run=dry_run_mode)
+                )
+
+            if not alert_channels:
+                st.warning("⚠️ Debes habilitar y configurar Telegram o Discord para despachar alertas.")
+            else:
+                with st.spinner("Escaneando mercado institucional y evaluando confluencias..."):
+                    dispatcher = NotificationDispatcher(
+                        channels=alert_channels,
+                        min_predictive_score=min_pred_score,
+                        min_confidence=min_conf,
+                        cooldown_seconds=float(cooldown_sec),
+                    )
+
+                    # Scan pairs based on active market
+                    if is_forex:
+                        scanner = MarketScanner(data_loader=ForexDataLoader())
+                        f_pairs = [s for s in FOREX_PAIRS.values() if not s.startswith("CUSTOM")][:8]
+                        scan_results = scanner.scan_market(symbols=f_pairs, timeframe=interval)
+                    else:
+                        scanner = MarketScanner()
+                        scan_results = scanner.scan_market(timeframe=interval)
+
+                    sent_count = 0
+                    if "dispatched_signals_history" not in st.session_state:
+                        st.session_state["dispatched_signals_history"] = []
+
+                    for cand in scan_results:
+                        is_wait = any(w in cand.action.upper() for w in ("WAIT", "ESPERAR", "DÉBIL", "DEBIL"))
+                        if cand.quant_score >= min_quant_thresh and not is_wait:
+                            is_cand_fx = "=X" in cand.symbol or cand.price < 10
+                            sl_val = cand.stop_loss
+                            tp_val = cand.take_profit
+                            atr_ref = cand.price * (0.003 if is_cand_fx else 0.015)
+
+                            if sl_val is None:
+                                sl_val = max(0.0, cand.price - 1.5 * atr_ref) if "LONG" in cand.direction else cand.price + 1.5 * atr_ref
+                            if tp_val is None:
+                                tp_val = cand.price + 3.0 * atr_ref if "LONG" in cand.direction else max(0.0, cand.price - 3.0 * atr_ref)
+
+                            sig_ev = SignalEvent(
+                                timestamp=pd.Timestamp.now("UTC"),
+                                symbol=cand.symbol,
+                                timeframe=interval,
+                                action=cand.action,
+                                direction=cand.direction,
+                                confidence=cand.confidence,
+                                predictive_score=cand.predictive_score,
+                                regime=cand.regime,
+                                reasoning=f"Quant Score {cand.quant_score:.1f}/100. Confluencia: {cand.primary_reason}.",
+                                price=cand.price,
+                                quant_score=cand.quant_score,
+                                stop_loss=round(sl_val, 4 if is_cand_fx else 2),
+                                take_profit=round(tp_val, 4 if is_cand_fx else 2),
+                                signal_id=f"alert-{cand.symbol}-{interval}-{int(pd.Timestamp.now('UTC').timestamp())}",
+                                metadata={"risk_reward_ratio": cand.risk_reward},
+                            )
+                            dispatcher.dispatch_signal(sig_ev, priority=NotificationPriority.HIGH)
+                            sent_count += 1
+                            st.session_state["dispatched_signals_history"].append({
+                                "Fecha (UTC)": str(sig_ev.timestamp)[:19],
+                                "Par": cand.symbol,
+                                "Dirección": cand.direction,
+                                "Precio Entrada": f"${cand.price:,.4f}" if is_cand_fx else f"${cand.price:,.2f}",
+                                "Stop Loss": f"${sig_ev.stop_loss:,.4f}" if is_cand_fx else f"${sig_ev.stop_loss:,.2f}",
+                                "Take Profit": f"${sig_ev.take_profit:,.4f}" if is_cand_fx else f"${sig_ev.take_profit:,.2f}",
+                                "Quant Score": f"{cand.quant_score:.1f}",
+                                "R:R": f"1:{cand.risk_reward:.2f}",
+                            })
+
+                    if sent_count > 0:
+                        st.success(f"🎯 ¡Se detectaron y despacharon {sent_count} alertas reales a tu Telegram!")
+                    else:
+                        st.info("ℹ️ Ningún par superó el umbral sin estado de espera en este ciclo de mercado.")
+
+    # Audit log of dispatched signals
+    if st.session_state.get("dispatched_signals_history"):
+        st.markdown("---")
+        st.markdown("### 📋 Historial de Alertas Despachadas (Auditoría de Tasa de Éxito)")
+        st.caption("Registro histórico de señales enviadas a Telegram para medir la tasa de acierto en el tiempo.")
+        hist_df = pd.DataFrame(st.session_state["dispatched_signals_history"])
+        st.dataframe(hist_df, use_container_width=True)
 
 
 # =====================================================================

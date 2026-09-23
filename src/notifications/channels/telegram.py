@@ -61,11 +61,14 @@ class TelegramChannel(BaseNotificationChannel):
         safe_regime = html.escape(payload.regime)
         safe_reasoning = html.escape(payload.reasoning or "N/A")
 
+        is_fx = "=X" in payload.symbol or payload.price < 10
+        p_str = f"${payload.price:,.4f}" if is_fx else f"${payload.price:,.2f}"
+
         lines = [
             f"<b>{icon} SIGNAL ALERT: {safe_symbol} [{safe_tf}]</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"<b>Action:</b> {safe_action} ({safe_dir})",
-            f"<b>Price:</b> ${payload.price:,.2f}",
+            f"<b>Price:</b> {p_str}",
             f"<b>Market Regime:</b> <code>{safe_regime}</code>",
             f"<b>Confidence:</b> {payload.confidence * 100:.1f}%",
             f"<b>Predictive Score:</b> {payload.predictive_score:.2f}",
@@ -73,9 +76,11 @@ class TelegramChannel(BaseNotificationChannel):
         ]
 
         if payload.stop_loss is not None:
-            lines.append(f"<b>🛑 Stop Loss:</b> ${payload.stop_loss:,.2f}")
+            sl_str = f"${payload.stop_loss:,.4f}" if is_fx else f"${payload.stop_loss:,.2f}"
+            lines.append(f"<b>🛑 Stop Loss:</b> {sl_str}")
         if payload.take_profit is not None:
-            lines.append(f"<b>🎯 Take Profit:</b> ${payload.take_profit:,.2f}")
+            tp_str = f"${payload.take_profit:,.4f}" if is_fx else f"${payload.take_profit:,.2f}"
+            lines.append(f"<b>🎯 Take Profit:</b> {tp_str}")
         if payload.risk_reward_ratio is not None:
             lines.append(f"<b>⚖️ R:R Ratio:</b> {payload.risk_reward_ratio:.2f}")
 
