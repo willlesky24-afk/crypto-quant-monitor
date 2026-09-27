@@ -33,6 +33,7 @@ class PromptBuilder:
         query: str,
         briefing: DailyBriefingReport | None = None,
         alerts: list[MarketAlert] | None = None,
+        has_image: bool = False,
     ) -> str:
         """Compose structured operator prompt merging market context, reports, anomalies, and query."""
         is_forex = "=X" in context.symbol or context.current_price < 10
@@ -44,7 +45,7 @@ class PromptBuilder:
             "==================================================",
             "IMMUTABLE QUANTITATIVE SNAPSHOT (CLOSED CANDLE T)",
             "==================================================",
-            f"Asset: {context.symbol} | Interval: {context.timeframe.upper()}",
+            f"Default Context Asset: {context.symbol} | Interval: {context.timeframe.upper()}",
             f"Timestamp: {context.timestamp}",
             f"Current Price: {price_str}",
             f"Market Regime: {context.market_regime}",
@@ -82,7 +83,6 @@ class PromptBuilder:
             f"  - ATR: {context.risk.atr or 'N/A'}",
         ])
 
-
         if context.volume_profile:
             lines.extend([
                 "",
@@ -112,6 +112,24 @@ class PromptBuilder:
             for alt in alerts:
                 lines.append(f"[{alt.severity.value}] {alt.headline}: {alt.reason}")
 
+        if has_image:
+            lines.extend([
+                "",
+                "==================================================",
+                "📸 MULTIMODAL IMAGE / SCREENSHOT ATTACHED",
+                "==================================================",
+                "El operador ha subido una captura de pantalla de un gráfico técnico o señal de trading para análisis visual multimodal.",
+                "DIRECTIVAS ESTRICTAS DE VISIÓN:",
+                "1. IDENTIFICA EL ACTIVO EN LA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en la imagen.",
+                f"2. NO asumas que la imagen es {context.symbol} a menos que la imagen lo indique expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis es LA IMAGEN ADJUNTA.",
+                "3. DESGLOSA VISUALMENTE:",
+                "   - Par y temporalidad identificados en la imagen.",
+                "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrón gráfico observado.",
+                "   - Precios clave visibles: Entrada, Stop Loss, Take Profit.",
+                "   - Ratio Riesgo : Beneficio e indicadores visibles.",
+                "   - Veredicto profesional y recomendaciones para el operador en lenguaje cotidiano.",
+            ])
+
         lines.extend([
             "",
             "==================================================",
@@ -120,14 +138,23 @@ class PromptBuilder:
             f"Query: \"{query}\"",
             "",
             "RESPONSE INSTRUCTIONS:",
-            "- Directly answer the operator's query using the quantitative snapshot above.",
-            "- Responde OBLIGATORIAMENTE en Español. Explica cada concepto cuantitativo en lenguaje cotidiano, pedagógico y amigable.",
-            "- Mantén ESTRICTA COHERENCIA con la señal: Si la 'Engine Signal Action' es 'WAIT' o existen advertencias activas (como momentum débil o falta de volumen), NO recomiendes entrar; enfatiza prudencia y esperar mejores condiciones.",
-            "- Si el operador consulta si conviene entrar a comprar o vender, evalúa de forma directa y concluyente con el régimen de mercado, el RSI, medias móviles y el Quant Score.",
-            "- Si el operador consulta sobre qué par presenta el mejor escenario, compara los datos objetivamente.",
-            "- Si se adjunta una imagen o gráfico técnico, detalla patrones de velas, soportes, resistencias y divergencias observadas.",
-            "- Structure the response with clear headings (Assessment, Scenarios, Risk Factors).",
-            "- Remind the operator that all trading decisions remain their responsibility.",
         ])
+
+        if has_image:
+            lines.extend([
+                "- Prioriza el análisis visual directo de la imagen/gráfico adjunto.",
+                "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación del Par y Temporalidad, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica y Veredicto.",
+                "- Remind the operator that all trading decisions remain their responsibility.",
+            ])
+        else:
+            lines.extend([
+                "- Directly answer the operator's query using the quantitative snapshot above.",
+                "- Responde OBLIGATORIAMENTE en Español. Explica cada concepto cuantitativo en lenguaje cotidiano, pedagógico y amigable.",
+                "- Mantén ESTRICTA COHERENCIA con la señal: Si la 'Engine Signal Action' es 'WAIT' o existen advertencias activas (como momentum débil o falta de volumen), NO recomiendes entrar; enfatiza prudencia y esperar mejores condiciones.",
+                "- Si el operador consulta si conviene entrar a comprar o vender, evalúa de forma directa y concluyente con el régimen de mercado, el RSI, medias móviles y el Quant Score.",
+                "- Si el operador consulta sobre qué par presenta el mejor escenario, compara los datos objetivamente.",
+                "- Structure the response with clear headings (Assessment, Scenarios, Risk Factors).",
+                "- Remind the operator that all trading decisions remain their responsibility.",
+            ])
 
         return "\n".join(lines)

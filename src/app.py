@@ -992,12 +992,10 @@ with tab_copilot:
             cfg_col1, cfg_col2 = st.columns([2, 1])
             with cfg_col1:
                 gemini_model_options = [
-                    "gemini-2.0-flash (Recomendado • Máxima Estabilidad y Disponibilidad)",
+                    "gemini-flash-latest (Recomendado • Máxima Disponibilidad y Visión Multimodal)",
                     "gemini-3.8-flash (Nueva Generación • Mayor Capacidad)",
-                    "gemini-3.5-flash-lite (Ultra Rápido • Menor Demanda)",
-                    "gemini-2.0-flash-lite (Rápido • Menor Consumo)",
                     "gemini-3.7-flash (Estándar)",
-                    "gemini-1.5-flash (Universal)",
+                    "gemini-3.5-flash-lite (Ultra Rápido)",
                 ]
                 selected_model_str = st.selectbox(
                     "Modelo Activo de Google Gemini:",

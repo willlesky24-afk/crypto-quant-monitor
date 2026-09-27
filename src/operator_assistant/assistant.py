@@ -95,16 +95,26 @@ class OperatorAssistant(BaseOperatorAssistant):
                 scenarios=(),
             )
 
+        has_image = bool(query.metadata and query.metadata.get("image_bytes"))
+
         # Delegate narrative generation to AI provider
         if isinstance(self._ai_provider, BaseLLMProvider):
             prompt = self._prompt_builder.build_copilot_prompt(
                 context=context,
                 query=query.query,
+                has_image=has_image,
             )
             llm_res = await self._ai_provider.generate_response(prompt, metadata=query.metadata)
             if llm_res.content.startswith("⚠️") or "fallback" in llm_res.provider:
-                local_explanation = self._generate_local_explanation_es(context, query.query)
-                explanation_summary = f"{llm_res.content}\n\n{local_explanation}"
+                if has_image:
+                    explanation_summary = (
+                        f"{llm_res.content}\n\n"
+                        f"⚠️ *Nota: No fue posible procesar la imagen con el servicio multimodal en este intento. "
+                        f"Por favor verifica la clave de Gemini o reintenta subir el gráfico.*"
+                    )
+                else:
+                    local_explanation = self._generate_local_explanation_es(context, query.query)
+                    explanation_summary = f"{llm_res.content}\n\n{local_explanation}"
             else:
                 explanation_summary = llm_res.content
             market_outlook = f"Provider: {llm_res.provider} ({llm_res.model}) | Latencia: {llm_res.latency_ms:.1f}ms"
@@ -134,6 +144,7 @@ class OperatorAssistant(BaseOperatorAssistant):
             explanation_summary=explanation_summary,
             market_outlook=market_outlook,
             scenarios=scenarios,
+            has_image=has_image,
         )
 
         return OperatorResponse(
@@ -306,8 +317,19 @@ class OperatorAssistant(BaseOperatorAssistant):
         explanation_summary: str,
         market_outlook: str,
         scenarios: list[str],
+        has_image: bool = False,
     ) -> str:
         """Assemble structured markdown narrative for the human operator."""
+        if has_image:
+            lines = [
+                "### 🤖 Copilot Intelligence — Análisis Visual de Gráfico / Señal Adjunta",
+                "",
+                explanation_summary,
+                "",
+                f"*{market_outlook}*",
+            ]
+            return "\n".join(lines)
+
         lines = [
             f"### 🤖 Copilot Intelligence (Diagnóstico Cuantitativo): {context.symbol} [{context.timeframe.upper()}]",
             f"**Precio Actual:** ${context.current_price:,.2f} | **Régimen de Mercado:** `{context.market_regime}`",
