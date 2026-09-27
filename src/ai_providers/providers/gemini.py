@@ -48,22 +48,35 @@ class GeminiProvider(BaseLLMProvider):
             )
 
         meta = metadata or {}
+        images_list = meta.get("images") or []
         image_bytes = meta.get("image_bytes")
         mime_type = meta.get("mime_type", "image/png")
         conversation_history = meta.get("conversation_history")
 
         current_parts: list[dict[str, Any]] = [{"text": prompt}]
 
-        # Multimodal image attachment support
-        if image_bytes and isinstance(image_bytes, (bytes, bytearray)):
-            import base64
-            encoded_img = base64.b64encode(image_bytes).decode("utf-8")
+        # Multimodal image attachment support (single or multiple images)
+        import base64
+        if images_list and isinstance(images_list, list):
+            for im in images_list:
+                b = im.get("bytes")
+                m = im.get("mime_type", "image/png")
+                if b and isinstance(b, (bytes, bytearray)):
+                    current_parts.append({
+                        "inline_data": {
+                            "mime_type": m,
+                            "data": base64.b64encode(b).decode("utf-8"),
+                        }
+                    })
+        elif image_bytes and isinstance(image_bytes, (bytes, bytearray)):
             current_parts.append({
                 "inline_data": {
                     "mime_type": mime_type,
-                    "data": encoded_img,
+                    "data": base64.b64encode(image_bytes).decode("utf-8"),
                 }
             })
+
+        has_images = len(current_parts) > 1
 
         contents = self._sanitize_gemini_contents(conversation_history, current_parts)
 
@@ -93,7 +106,7 @@ class GeminiProvider(BaseLLMProvider):
             if fallback_candidate not in models_to_try:
                 models_to_try.append(fallback_candidate)
 
-        timeout = max(self.timeout_seconds, 40.0) if image_bytes else self.timeout_seconds
+        timeout = max(self.timeout_seconds, 40.0) if has_images else self.timeout_seconds
         last_exc: Exception | None = None
         for current_model in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{current_model}:generateContent?key={self.api_key}"
@@ -109,7 +122,7 @@ class GeminiProvider(BaseLLMProvider):
                             if r.status_code == 200:
                                 resp_data = r.json()
                             else:
-                                if r.status_code in (400, 404, 503):
+                                if r.status_code in (400, 404, 429, 503):
                                     last_exc = Exception(f"HTTP {r.status_code}: {r.text[:150]}")
                                     break
                                 r.raise_for_status()
@@ -142,7 +155,7 @@ class GeminiProvider(BaseLLMProvider):
                 except urllib.error.HTTPError as http_err:
                     last_exc = http_err
                     # Failover immediately on unavailable or obsolete models
-                    if http_err.code in (400, 404, 503):
+                    if http_err.code in (400, 404, 429, 503):
                         break
                     if attempt < self.max_retries:
                         time.sleep(0.5 * (attempt + 1))

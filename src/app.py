@@ -1097,17 +1097,23 @@ with tab_copilot:
                 ]
 
             # File/Image Uploader
-            with st.expander("📎 Adjuntar Gráfico o Archivo para Análisis Multimodal (Foto, TradingView o CSV)", expanded=False):
-                uploaded_file = st.file_uploader(
-                    "Sube una captura de gráfico (PNG, JPG, WEBP) o archivo de datos:",
+            with st.expander("📎 Adjuntar Gráficos o Archivos para Análisis Multimodal (Fotos, TradingView o CSV)", expanded=False):
+                uploaded_files = st.file_uploader(
+                    "Sube una o varias capturas de gráficos (PNG, JPG, WEBP) o archivos de datos:",
                     type=["png", "jpg", "jpeg", "webp", "csv", "txt"],
+                    accept_multiple_files=True,
                     key="copilot_file_uploader",
                 )
-                if uploaded_file is not None:
-                    if uploaded_file.type.startswith("image/"):
-                        st.image(uploaded_file, caption="📷 Gráfico adjunto para análisis visual", width=320)
-                    else:
-                        st.info(f"📄 Archivo cargado: {uploaded_file.name} ({uploaded_file.size} bytes)")
+                if uploaded_files:
+                    img_files = [f for f in uploaded_files if f.type.startswith("image/")]
+                    other_files = [f for f in uploaded_files if not f.type.startswith("image/")]
+                    if img_files:
+                        img_cols = st.columns(min(len(img_files), 4))
+                        for idx, img_file in enumerate(img_files):
+                            with img_cols[idx % len(img_cols)]:
+                                st.image(img_file, caption=f"📷 {img_file.name}", use_container_width=True)
+                    for of in other_files:
+                        st.info(f"📄 Archivo cargado: {of.name} ({of.size} bytes)")
 
             # Render Chat Messages
             chat_container = st.container()
@@ -1115,7 +1121,16 @@ with tab_copilot:
                 for msg in st.session_state["copilot_chat_history"]:
                     with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
                         st.markdown(msg["content"])
-                        if msg.get("image_bytes"):
+                        if msg.get("images"):
+                            chat_img_cols = st.columns(min(len(msg["images"]), 3))
+                            for idx, img_info in enumerate(msg["images"]):
+                                with chat_img_cols[idx % len(chat_img_cols)]:
+                                    st.image(
+                                        img_info["bytes"],
+                                        caption=img_info.get("name", f"📷 Gráfico {idx+1}"),
+                                        use_container_width=True,
+                                    )
+                        elif msg.get("image_bytes"):
                             st.image(msg["image_bytes"], width=300)
 
             # Handler for Market Scanner Quick Action
@@ -1204,18 +1219,30 @@ with tab_copilot:
                         st.error(f"Error generando explicación: {exp_err}")
 
             # Chat Input Form
-            chat_input_val = st.chat_input("Escribe tu consulta al Copilot (ej. ¿Cuál es el mejor par? o analiza la foto adjunta)...")
+            chat_input_val = st.chat_input("Escribe tu consulta al Copilot (ej. ¿Cuál es el mejor par? o analiza los gráficos adjuntos)...")
             if chat_input_val:
                 user_msg = {
                     "role": "user",
                     "content": chat_input_val,
                 }
+                images_payload = []
                 img_bytes = None
                 mime_type = "image/png"
-                if uploaded_file is not None and uploaded_file.type.startswith("image/"):
-                    img_bytes = uploaded_file.getvalue()
-                    mime_type = uploaded_file.type
-                    user_msg["image_bytes"] = img_bytes
+                if uploaded_files:
+                    for f in uploaded_files:
+                        if f.type.startswith("image/"):
+                            f_bytes = f.getvalue()
+                            images_payload.append({
+                                "bytes": f_bytes,
+                                "mime_type": f.type,
+                                "name": f.name,
+                            })
+                    if images_payload:
+                        user_msg["images"] = images_payload
+                        # Backwards compatibility for single-image consumers
+                        img_bytes = images_payload[0]["bytes"]
+                        mime_type = images_payload[0]["mime_type"]
+                        user_msg["image_bytes"] = img_bytes
 
                 st.session_state["copilot_chat_history"].append(user_msg)
 
@@ -1251,6 +1278,7 @@ with tab_copilot:
                             timeframe=target_tf,
                             operator_id="dashboard_operator",
                             metadata={
+                                "images": images_payload if images_payload else None,
                                 "image_bytes": img_bytes,
                                 "mime_type": mime_type,
                                 "market_type": "Forex" if target_is_fx else "Crypto",

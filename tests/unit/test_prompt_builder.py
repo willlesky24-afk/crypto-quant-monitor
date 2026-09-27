@@ -99,3 +99,30 @@ def test_prompt_builder_with_reports_and_anomalies():
     assert "Overview: Executive macro overview" in prompt
     assert "PASSIVE MARKET ANOMALY ALERTS DETECTED" in prompt
     assert "[WARNING] BTC Volatility Expansion (+35%): ATR jumped from 900 to 1200" in prompt
+
+
+def test_prompt_builder_multimodal_single_and_multiple_images():
+    builder = PromptBuilder()
+    ctx = _create_sample_context()
+
+    # Single image test
+    prompt_single = builder.build_copilot_prompt(
+        context=ctx,
+        query="Analiza este gráfico",
+        has_image=True,
+        num_images=1,
+    )
+    assert "(1 imagen adjunta)" in prompt_single
+    assert "El operador ha subido 1 captura(s)" in prompt_single
+    assert "DIRECTIVAS ESTRICTAS DE VISIÓN" in prompt_single
+
+    # Multiple images test
+    prompt_multi = builder.build_copilot_prompt(
+        context=ctx,
+        query="Compara estos dos gráficos",
+        has_image=True,
+        num_images=3,
+    )
+    assert "(3 imágenes adjuntas)" in prompt_multi
+    assert "El operador ha subido 3 captura(s)" in prompt_multi
+    assert "Si se adjuntaron múltiples imágenes, compáralas o relaciónalas" in prompt_multi

@@ -34,6 +34,7 @@ class PromptBuilder:
         briefing: DailyBriefingReport | None = None,
         alerts: list[MarketAlert] | None = None,
         has_image: bool = False,
+        num_images: int = 1,
     ) -> str:
         """Compose structured operator prompt merging market context, reports, anomalies, and query."""
         is_forex = "=X" in context.symbol or context.current_price < 10
@@ -113,20 +114,21 @@ class PromptBuilder:
                 lines.append(f"[{alt.severity.value}] {alt.headline}: {alt.reason}")
 
         if has_image:
+            img_label = f"({num_images} imágenes adjuntas)" if num_images > 1 else "(1 imagen adjunta)"
             lines.extend([
                 "",
                 "==================================================",
-                "📸 MULTIMODAL IMAGE / SCREENSHOT ATTACHED",
+                f"📸 ANÁLISIS MULTIMODAL DE IMÁGENES / GRÁFICOS {img_label}",
                 "==================================================",
-                "El operador ha subido una captura de pantalla de un gráfico técnico o señal de trading para análisis visual multimodal.",
+                f"El operador ha subido {num_images} captura(s) de pantalla de gráficos o señales de trading para análisis visual multimodal.",
                 "DIRECTIVAS ESTRICTAS DE VISIÓN:",
-                "1. IDENTIFICA EL ACTIVO EN LA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en la imagen.",
-                f"2. NO asumas que la imagen es {context.symbol} a menos que la imagen lo indique expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis es LA IMAGEN ADJUNTA.",
+                "1. IDENTIFICA EL ACTIVO EN CADA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en cada imagen.",
+                f"2. NO asumas que las imágenes son {context.symbol} a menos que lo indiquen expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis son LAS IMÁGENES ADJUNTAS.",
                 "3. DESGLOSA VISUALMENTE:",
-                "   - Par y temporalidad identificados en la imagen.",
-                "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrón gráfico observado.",
+                "   - Par y temporalidad identificados en cada captura.",
+                "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrones gráficos observados.",
                 "   - Precios clave visibles: Entrada, Stop Loss, Take Profit.",
-                "   - Ratio Riesgo : Beneficio e indicadores visibles.",
+                "   - Si se adjuntaron múltiples imágenes, compáralas o relaciónalas (análisis multi-temporal 1H vs 4H, o comparación de señales).",
                 "   - Veredicto profesional y recomendaciones para el operador en lenguaje cotidiano.",
             ])
 
@@ -142,8 +144,8 @@ class PromptBuilder:
 
         if has_image:
             lines.extend([
-                "- Prioriza el análisis visual directo de la imagen/gráfico adjunto.",
-                "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación del Par y Temporalidad, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica y Veredicto.",
+                "- Prioriza el análisis visual directo de las imágenes/gráficos adjuntos.",
+                "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación de Activos y Temporalidades, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica / Comparación y Veredicto.",
                 "- Remind the operator that all trading decisions remain their responsibility.",
             ])
         else:

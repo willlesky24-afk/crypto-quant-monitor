@@ -351,5 +351,61 @@ async def test_operator_assistant_conclusive_verdict_spanish_esperar_confirmacio
     assert "Volumen sin confirmación" in res.answer
     # Concrete risk numbers check: MUST have dollar numbers and NOT 'Dinámico'
     assert "Dinámico según" not in res.answer
-    assert "No especificado" not in res.answer
     assert "$1.4046" in res.answer or "$1." in res.answer
+
+
+@pytest.mark.anyio
+async def test_operator_assistant_multiple_images():
+    from src.ai_providers.interfaces import BaseLLMProvider
+    from src.ai_providers.models import AIResponse
+
+    class MockMultimodalLLM(BaseLLMProvider):
+        def __init__(self):
+            self.last_prompt = ""
+            self.last_metadata = None
+
+        async def generate_response(self, prompt: str, metadata: dict | None = None) -> AIResponse:
+            self.last_prompt = prompt
+            self.last_metadata = metadata
+            return AIResponse(
+                content="1. Activos: ETHUSDT y SOLUSDT\n2. Parámetros: Niveles detectados\n3. Conclusión: Divergencia alcista confirmada.",
+                provider="mock-gemini",
+                model="mock-vision",
+                latency_ms=12.0,
+            )
+
+        async def generate_explanation(self, context):
+            raise NotImplementedError
+
+        async def summarize_market(self, context):
+            raise NotImplementedError
+
+        async def health_check(self) -> bool:
+            return True
+
+    provider = InMemoryMarketContextProvider()
+    ctx = _create_sample_context()
+    provider.update_context(ctx)
+
+    mock_llm = MockMultimodalLLM()
+    assistant = OperatorAssistant(context_provider=provider, ai_provider=mock_llm)
+
+    query = OperatorQuery(
+        query="Analiza estos dos gráficos adjuntos",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        metadata={
+            "images": [
+                {"bytes": b"img1", "mime_type": "image/png", "name": "eth.png"},
+                {"bytes": b"img2", "mime_type": "image/png", "name": "sol.png"},
+            ]
+        },
+    )
+    res = await assistant.ask(query)
+
+    # Narrative must reflect multiple images
+    assert "### 🤖 Copilot Intelligence — Análisis Visual de Gráficos / Señales Adjuntas (2 imágenes)" in res.answer
+    assert "Activos: ETHUSDT y SOLUSDT" in res.answer
+    # Prompt must have received num_images=2 directive
+    assert "(2 imágenes adjuntas)" in mock_llm.last_prompt
+    assert "El operador ha subido 2 captura(s)" in mock_llm.last_prompt

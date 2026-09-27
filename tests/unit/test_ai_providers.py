@@ -62,6 +62,46 @@ async def test_gemini_provider_successful_request():
 
 
 @pytest.mark.anyio
+async def test_gemini_provider_multiple_images():
+    provider = GeminiProvider(api_key="valid_key", model="gemini-2.5-flash")
+    mock_payload = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [{"text": "Ambos gráficos muestran estructura alcista clara en 1H y 4H."}]
+                }
+            }
+        ],
+        "usageMetadata": {"totalTokenCount": 85},
+    }
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(mock_payload).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+        metadata = {
+            "images": [
+                {"bytes": b"fake_png_data_1", "mime_type": "image/png", "name": "btc_1h.png"},
+                {"bytes": b"fake_jpg_data_2", "mime_type": "image/jpeg", "name": "btc_4h.jpg"},
+            ]
+        }
+        res = await provider.generate_response("Compara estos dos marcos temporales", metadata=metadata)
+        assert res.provider == "gemini"
+        assert "Ambos gráficos muestran estructura alcista" in res.content
+
+        # Verify that the request body sent to urlopen contains both images as inline_data parts
+        call_args, _ = mock_urlopen.call_args
+        req = call_args[0]
+        req_body = json.loads(req.data.decode("utf-8"))
+        parts = req_body["contents"][0]["parts"]
+        # 1 prompt text part + 2 inline_data parts
+        assert len(parts) == 3
+        assert "text" in parts[0]
+        assert parts[1]["inline_data"]["mime_type"] == "image/png"
+        assert parts[2]["inline_data"]["mime_type"] == "image/jpeg"
+
+
+@pytest.mark.anyio
 async def test_gemini_provider_retry_and_failure():
     provider = GeminiProvider(api_key="valid_key", max_retries=1, timeout_seconds=1.0)
     with patch("urllib.request.urlopen", side_effect=Exception("HTTP 500 error")):

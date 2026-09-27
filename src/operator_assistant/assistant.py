@@ -95,7 +95,13 @@ class OperatorAssistant(BaseOperatorAssistant):
                 scenarios=(),
             )
 
-        has_image = bool(query.metadata and query.metadata.get("image_bytes"))
+        images_list = query.metadata.get("images") if query.metadata else None
+        num_images = (
+            len(images_list)
+            if images_list
+            else (1 if bool(query.metadata and query.metadata.get("image_bytes")) else 0)
+        )
+        has_image = num_images > 0
 
         # Delegate narrative generation to AI provider
         if isinstance(self._ai_provider, BaseLLMProvider):
@@ -103,13 +109,15 @@ class OperatorAssistant(BaseOperatorAssistant):
                 context=context,
                 query=query.query,
                 has_image=has_image,
+                num_images=num_images,
             )
             llm_res = await self._ai_provider.generate_response(prompt, metadata=query.metadata)
             if llm_res.content.startswith("⚠️") or "fallback" in llm_res.provider:
                 if has_image:
+                    image_noun = "las imágenes" if num_images > 1 else "la imagen"
                     explanation_summary = (
                         f"{llm_res.content}\n\n"
-                        f"⚠️ *Nota: No fue posible procesar la imagen con el servicio multimodal en este intento. "
+                        f"⚠️ *Nota: No fue posible procesar {image_noun} con el servicio multimodal en este intento. "
                         f"Por favor verifica la clave de Gemini o reintenta subir el gráfico.*"
                     )
                 else:
@@ -145,6 +153,7 @@ class OperatorAssistant(BaseOperatorAssistant):
             market_outlook=market_outlook,
             scenarios=scenarios,
             has_image=has_image,
+            num_images=num_images,
         )
 
         return OperatorResponse(
@@ -318,11 +327,17 @@ class OperatorAssistant(BaseOperatorAssistant):
         market_outlook: str,
         scenarios: list[str],
         has_image: bool = False,
+        num_images: int = 1,
     ) -> str:
         """Assemble structured markdown narrative for the human operator."""
         if has_image:
+            header = (
+                f"### 🤖 Copilot Intelligence — Análisis Visual de Gráficos / Señales Adjuntas ({num_images} imágenes)"
+                if num_images > 1
+                else "### 🤖 Copilot Intelligence — Análisis Visual de Gráfico / Señal Adjunta"
+            )
             lines = [
-                "### 🤖 Copilot Intelligence — Análisis Visual de Gráfico / Señal Adjunta",
+                header,
                 "",
                 explanation_summary,
                 "",
