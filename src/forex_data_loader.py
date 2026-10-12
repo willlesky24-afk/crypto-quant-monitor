@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import json
-import logging
 import urllib.request
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
-logger = logging.getLogger(__name__)
 
 FOREX_PAIRS: dict[str, str] = {
     "💶 EUR / USD (Euro / Dólar)": "EURUSD=X",
@@ -27,6 +24,18 @@ INTERVAL_MAP: dict[str, str] = {
     "4h": "1h",  # Resampled from 1h if needed
     "1d": "1d",
 }
+
+
+class ForexDataError(RuntimeError):
+    """Forex candles could not be used for operational analysis."""
+
+
+class ForexProviderUnavailableError(ForexDataError):
+    """The Forex price provider could not supply a response."""
+
+
+class ForexInvalidDataError(ForexDataError):
+    """The Forex price provider returned missing or invalid candles."""
 
 
 class ForexDataLoader:
@@ -77,113 +86,105 @@ class ForexDataLoader:
         try:
             req = urllib.request.Request(url, headers=headers, method="GET")
             with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                payload = resp.read()
+        except Exception as exc:
+            raise ForexProviderUnavailableError(
+                f"Forex provider unavailable for {sym}"
+            ) from exc
 
-            chart = data.get("chart", {})
-            results = chart.get("result")
-            if not results:
-                err = chart.get("error", {}).get("description", "No result found")
-                logger.warning(f"Forex fetch failed for {sym}: {err}")
-                return self._generate_fallback_candles(sym, limit)
+        try:
+            data = json.loads(payload.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ForexInvalidDataError(f"Invalid Forex response for {sym}") from exc
 
-            res = results[0]
-            timestamps = res.get("timestamp", [])
-            indicators = res.get("indicators", {}).get("quote", [{}])[0]
+        chart = data.get("chart") if isinstance(data, dict) else None
+        if not isinstance(chart, dict):
+            raise ForexInvalidDataError(f"Missing Forex chart for {sym}")
+        if chart.get("error"):
+            raise ForexProviderUnavailableError(
+                f"Forex provider returned an error for {sym}: {chart['error']}"
+            )
 
-            opens = indicators.get("open", [])
-            highs = indicators.get("high", [])
-            lows = indicators.get("low", [])
-            closes = indicators.get("close", [])
-            volumes = indicators.get("volume", [])
+        results = chart.get("result")
+        if (
+            not isinstance(results, list)
+            or not results
+            or not isinstance(results[0], dict)
+        ):
+            raise ForexInvalidDataError(f"No Forex candles returned for {sym}")
+        result = results[0]
+        timestamps = result.get("timestamp")
+        indicators = result.get("indicators")
+        quotes = indicators.get("quote") if isinstance(indicators, dict) else None
+        if (
+            not isinstance(timestamps, list)
+            or not timestamps
+            or not isinstance(quotes, list)
+            or not quotes
+            or not isinstance(quotes[0], dict)
+        ):
+            raise ForexInvalidDataError(f"Missing Forex candle fields for {sym}")
 
-            if not timestamps or not closes:
-                return self._generate_fallback_candles(sym, limit)
+        quote = quotes[0]
+        fields = ("open", "high", "low", "close", "volume")
+        if any(
+            not isinstance(quote.get(field), list)
+            or len(quote[field]) != len(timestamps)
+            for field in fields
+        ):
+            raise ForexInvalidDataError(f"Incomplete Forex candle fields for {sym}")
 
-            records: list[dict[str, Any]] = []
-            for i in range(len(timestamps)):
-                val_c = closes[i]
-                if val_c is None or np.isnan(val_c):
-                    continue
-                val_o = opens[i] if opens[i] is not None and not np.isnan(opens[i]) else val_c
-                val_h = highs[i] if highs[i] is not None and not np.isnan(highs[i]) else max(val_o, val_c)
-                val_l = lows[i] if lows[i] is not None and not np.isnan(lows[i]) else min(val_o, val_c)
-                val_v = volumes[i] if (volumes and i < len(volumes) and volumes[i] is not None and not np.isnan(volumes[i])) else 1000.0
+        records: list[dict[str, Any]] = []
+        for index, raw_timestamp in enumerate(timestamps):
+            try:
+                timestamp = pd.to_datetime(raw_timestamp, unit="s", utc=True)
+                values = {field: float(quote[field][index]) for field in fields}
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ForexInvalidDataError(
+                    f"Invalid Forex candle at index {index} for {sym}"
+                ) from exc
 
-                records.append({
-                    "timestamp": pd.to_datetime(timestamps[i], unit="s", utc=True),
-                    "open": float(val_o),
-                    "high": float(val_h),
-                    "low": float(val_l),
-                    "close": float(val_c),
-                    "volume": float(val_v) if float(val_v) > 0 else 1000.0,
-                })
+            if pd.isna(timestamp) or not all(
+                np.isfinite(value) for value in values.values()
+            ):
+                raise ForexInvalidDataError(
+                    f"Non-finite Forex candle at index {index} for {sym}"
+                )
+            if (
+                any(values[field] <= 0 for field in ("open", "high", "low", "close"))
+                or values["volume"] < 0
+                or values["high"] < max(values["open"], values["close"])
+                or values["low"] > min(values["open"], values["close"])
+            ):
+                raise ForexInvalidDataError(
+                    f"Inconsistent Forex candle at index {index} for {sym}"
+                )
 
-            df = pd.DataFrame(records)
-            if df.empty:
-                return self._generate_fallback_candles(sym, limit)
+            records.append({"timestamp": timestamp, **values})
 
-            df = df.sort_values("timestamp").reset_index(drop=True)
+        df = pd.DataFrame(records).sort_values("timestamp").reset_index(drop=True)
+        if df["timestamp"].duplicated().any():
+            raise ForexInvalidDataError(f"Duplicate Forex timestamps for {sym}")
 
-            # If 4h was requested, resample from 1h
-            if interval.lower() == "4h" and len(df) > 10:
-                df = (
-                    df.set_index("timestamp")
-                    .resample("4h")
-                    .agg({
+        # If 4h was requested, resample from 1h.
+        if interval.lower() == "4h" and len(df) > 10:
+            df = (
+                df.set_index("timestamp")
+                .resample("4h")
+                .agg(
+                    {
                         "open": "first",
                         "high": "max",
                         "low": "min",
                         "close": "last",
                         "volume": "sum",
-                    })
-                    .dropna()
-                    .reset_index()
+                    }
                 )
+                .dropna()
+                .reset_index()
+            )
 
-            # Return requested limit
-            if len(df) > limit:
-                df = df.iloc[-limit:].reset_index(drop=True)
+        if len(df) > limit:
+            df = df.iloc[-limit:].reset_index(drop=True)
 
-            return df
-
-        except Exception as exc:
-            logger.warning(f"Error fetching live Forex data for {sym}: {exc}. Using fallback.")
-            return self._generate_fallback_candles(sym, limit)
-
-    def _generate_fallback_candles(self, symbol: str, limit: int = 150) -> pd.DataFrame:
-        """Deterministic baseline candle generator if network is restricted."""
-        base_prices = {
-            "EURUSD=X": 1.0850,
-            "GBPUSD=X": 1.2950,
-            "USDJPY=X": 152.40,
-            "AUDUSD=X": 0.6550,
-            "USDCAD=X": 1.3850,
-            "USDCHF=X": 0.8850,
-            "EURGBP=X": 0.8350,
-        }
-        center = base_prices.get(symbol, 1.0000)
-        rng = np.random.default_rng(42)
-        returns = rng.normal(0.00005, 0.0015, limit)
-        prices = center * np.cumprod(1 + returns)
-
-        now = pd.Timestamp.now(tz="UTC")
-        timestamps = [now - pd.Timedelta(hours=limit - i) for i in range(limit)]
-
-        records = []
-        for i in range(limit):
-            close = float(prices[i])
-            spread = close * 0.0008
-            val_o = close - (spread * 0.2)
-            val_h = max(val_o, close) + (spread * 0.5)
-            val_l = min(val_o, close) - (spread * 0.5)
-            val_v = float(rng.integers(500, 5000))
-            records.append({
-                "timestamp": timestamps[i],
-                "open": round(val_o, 5 if center < 10 else 3),
-                "high": round(val_h, 5 if center < 10 else 3),
-                "low": round(val_l, 5 if center < 10 else 3),
-                "close": round(close, 5 if center < 10 else 3),
-                "volume": val_v,
-            })
-
-        return pd.DataFrame(records)
+        return df
