@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pandas as pd
 
 from src.ai_agent.models import MarketContext, RiskMetrics, SignalInfo
 from src.notifications.models import SignalEvent
+from src.risk_engine import RiskEngine
 
 
 class ContextBuilder:
@@ -38,6 +40,45 @@ class ContextBuilder:
         if extra_metadata:
             meta.update(extra_metadata)
 
+        entry = meta["entry_price"] if "entry_price" in meta else signal_event.price
+        levels = RiskEngine().calculate_levels(
+            entry, signal_event.stop_loss, signal_event.take_profit, signal_event.direction
+        )
+        reported_ratio = meta.get("risk_reward_ratio")
+        if levels["reason"] is None and reported_ratio is not None:
+            try:
+                reported = float(reported_ratio)
+            except (TypeError, ValueError, OverflowError):
+                reported = math.nan
+            if not math.isfinite(reported) or not math.isclose(
+                reported, levels["gross_risk_reward"], rel_tol=1e-6, abs_tol=0.005
+            ):
+                levels = {**levels, "reason": "R:R reportado no coincide con niveles efectivos."}
+
+        if levels["reason"] is None and meta.get("signal_status") in {
+            "NO DISPONIBLE", "DESCARTADA", "ESPERANDO CONFIRMACIÓN"
+        }:
+            levels = {**levels, "reason": "El estado de señal no autoriza niveles operativos."}
+
+        if levels["reason"] is not None:
+            meta["risk_validation_error"] = levels["reason"]
+            if meta.get("signal_status") not in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}:
+                meta["signal_status"] = "NO DISPONIBLE"
+            meta["entry_confirmed"] = False
+            meta["entry_price"] = None
+            sl = tp = risk_ratio = None
+        else:
+            sl = levels["stop_loss"]
+            tp = levels["take_profit"]
+            risk_ratio = levels["gross_risk_reward"]
+            meta["risk_reward_ratio"] = risk_ratio
+            meta["risk_levels_source"] = "RiskEngine"
+
+        status = meta.get("signal_status")
+        unconfirmed = status is not None and not (
+            status == "ACTIVADA" and meta.get("entry_confirmed") is True
+        )
+
         # 1. Signal Information
         positives_raw = meta.get("positives", [])
         warnings_raw = meta.get("warnings", [])
@@ -47,7 +88,7 @@ class ContextBuilder:
             warnings_raw = market_report.get("decision", {}).get("warnings", [])
 
         signal_info = SignalInfo(
-            action=signal_event.action,
+            action="WAIT" if levels["reason"] is not None or unconfirmed else signal_event.action,
             direction=signal_event.direction,
             confidence=float(signal_event.confidence),
             reasoning=str(signal_event.reasoning),
@@ -56,16 +97,7 @@ class ContextBuilder:
         )
 
         # 2. Risk Metrics & Ratio
-        sl = signal_event.stop_loss
-        tp = signal_event.take_profit
         price = float(signal_event.price)
-
-        risk_ratio: float | None = None
-        if sl is not None and tp is not None and price > 0:
-            risk_dist = abs(price - sl)
-            reward_dist = abs(tp - price)
-            if risk_dist > 1e-9:
-                risk_ratio = round(reward_dist / risk_dist, 4)
 
         risk_cat = str(meta.get("risk_category", ""))
         if not risk_cat and market_report:

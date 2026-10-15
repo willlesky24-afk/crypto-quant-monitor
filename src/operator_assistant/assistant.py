@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from src.ai_agent.interfaces import BaseAIProvider, MockAIProvider
 from src.ai_agent.models import MarketContext
@@ -18,6 +19,7 @@ from src.operator_assistant.on_demand_context import (
     resolve_mentioned_symbol,
 )
 from src.operator_service.interfaces import BaseMarketContextProvider
+from src.risk_engine import RiskEngine
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,44 @@ class OperatorAssistant(BaseOperatorAssistant):
     @property
     def prompt_builder(self) -> PromptBuilder:
         return self._prompt_builder
+
+    @staticmethod
+    def _validated_risk_plan(context: MarketContext) -> dict:
+        """Use effective levels from RiskEngine; never infer an activation or fill."""
+        meta = context.metadata
+        entry = meta["entry_price"] if "entry_price" in meta else context.current_price
+        levels = RiskEngine().calculate_levels(
+            entry, context.risk.stop_loss, context.risk.take_profit, context.signal.direction
+        )
+        status = meta.get("signal_status", "SIN CONFIRMACIÓN")
+        reason = levels["reason"]
+        if status in {"NO DISPONIBLE", "DESCARTADA", "ESPERANDO CONFIRMACIÓN"}:
+            reason = meta.get("risk_reason") or "No existe un plan de riesgo activo."
+        if reason is None:
+            for reported in (context.risk.risk_ratio, meta.get("risk_reward_ratio")):
+                if reported is None:
+                    continue
+                try:
+                    value = float(reported)
+                except (TypeError, ValueError, OverflowError):
+                    value = math.nan
+                if not math.isfinite(value) or not math.isclose(
+                    value, levels["gross_risk_reward"], rel_tol=1e-6, abs_tol=0.005
+                ):
+                    reason = "R:R informado no coincide con los niveles efectivos."
+                    break
+        if reason is not None:
+            return {
+                "status": status if status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"} else "NO DISPONIBLE",
+                "reason": reason, "entry_price": None,
+                "stop_loss": None, "take_profit": None, "gross_risk_reward": None,
+                "entry_confirmed": False,
+            }
+        return {
+            **levels,
+            "status": status,
+            "entry_confirmed": status == "ACTIVADA" and meta.get("entry_confirmed") is True,
+        }
 
 
     def _extract_symbol_timeframe(self, text: str, fallback_symbol: str, fallback_tf: str) -> tuple[str, str]:
@@ -141,6 +181,7 @@ class OperatorAssistant(BaseOperatorAssistant):
                 key_drivers.append(f"Quant Score: {context.quant_score:.1f}")
 
         # Build scenario matrix based on quantitative and predictive metrics
+        plan = self._validated_risk_plan(context)
         scenarios = self._formulate_scenarios(context)
         risk_factors = list(context.signal.warnings)
         if context.risk.risk_category:
@@ -172,8 +213,13 @@ class OperatorAssistant(BaseOperatorAssistant):
                 "current_price": context.current_price,
                 "action_bias": context.signal.action,
                 "direction_bias": context.signal.direction,
-                "stop_loss": context.risk.stop_loss,
-                "take_profit": context.risk.take_profit,
+                "signal_status": plan["status"],
+                "entry_confirmed": plan["entry_confirmed"],
+                "entry_price": plan["entry_price"],
+                "stop_loss": plan["stop_loss"],
+                "take_profit": plan["take_profit"],
+                "gross_risk_reward": plan["gross_risk_reward"],
+                "risk_reason": plan["reason"],
             },
         )
 
@@ -214,11 +260,13 @@ class OperatorAssistant(BaseOperatorAssistant):
         vol_summary = f"POC: {poc} | Value Area High (VAH): {vah} | Value Area Low (VAL): {val}"
 
         # Risk parameters
+        plan = self._validated_risk_plan(context)
         risk_summary = (
-            f"Category: {context.risk.risk_category or 'Moderate'} | "
-            f"Stop Loss: {context.risk.stop_loss or 'N/A'} | "
-            f"Take Profit: {context.risk.take_profit or 'N/A'} | "
-            f"ATR: {context.risk.atr or 'N/A'}"
+            f"Estado: {plan['status']} | Entrada: {plan['entry_price'] if plan['entry_price'] is not None else 'N/A'} | "
+            f"Stop Loss: {plan['stop_loss'] if plan['stop_loss'] is not None else 'N/A'} | "
+            f"Take Profit: {plan['take_profit'] if plan['take_profit'] is not None else 'N/A'} | "
+            f"R bruto: {plan['gross_risk_reward'] if plan['gross_risk_reward'] is not None else 'N/A'} | "
+            f"Motivo: {plan['reason'] or 'Ninguno'}"
         )
 
         return AnalysisResponse(
@@ -263,10 +311,11 @@ class OperatorAssistant(BaseOperatorAssistant):
             else "El perfil de volumen institucional no define una concentración anómala."
         )
 
-        sl = context.risk.stop_loss
-        tp = context.risk.take_profit
-        sl_text = f"${sl:,.2f}" if sl else "dinámico por volatilidad"
-        tp_text = f"${tp:,.2f}" if tp else "dinámico por volatilidad"
+        plan = self._validated_risk_plan(context)
+        sl = plan["stop_loss"]
+        tp = plan["take_profit"]
+        sl_text = f"${sl:,.2f}" if sl is not None else "N/A"
+        tp_text = f"${tp:,.2f}" if tp is not None else "N/A"
 
         lines = [
             f"📊 **Diagnóstico Cuantitativo en Lenguaje Cotidiano para {context.symbol} ({context.timeframe.upper()}):**",
@@ -275,7 +324,7 @@ class OperatorAssistant(BaseOperatorAssistant):
             f"- **Fuerza Técnica (Quant Score):** **{context.quant_score:.1f}/100** (fuerza {quant_fuerza}). De cada 10 métricas analizadas, aproximadamente **{int(context.quant_score/10)} respaldan** este diagnóstico.",
             f"- **Probabilidad Predictiva:** **{context.predictive_score:.2f}** con una confianza estadística del **{context.signal.confidence * 100:.1f}%**.",
             f"- **Nivel Clave Institucional:** {poc_text}",
-            f"- **Parámetros de Seguridad:** Corte de riesgo (Stop Loss) recomendado en **{sl_text}** y objetivo (Take Profit) en **{tp_text}**.",
+            f"- **Plan de riesgo ({plan['status']}):** Stop Loss **{sl_text}**; Take Profit **{tp_text}**. {plan['reason'] or 'Niveles validados; entrada no confirmada salvo estado ACTIVADA.'}",
         ]
 
         if context.signal.positives:
@@ -291,9 +340,14 @@ class OperatorAssistant(BaseOperatorAssistant):
         quant = context.quant_score
 
         if "BULL" in regime or pred > 0.65:
+            plan = self._validated_risk_plan(context)
+            support = (
+                f"SL técnico indicativo {plan['stop_loss']}"
+                if plan["stop_loss"] is not None else "soporte aún no validado"
+            )
             scenarios.append(
                 f"Escenario Principal (Bullish Expansion / Expansión Alcista): Continuación hacia resistencia manteniendo soporte "
-                f"en nivel de Stop Loss ({context.risk.stop_loss or 'pivote cercano'})."
+                f"en {support}."
             )
             scenarios.append(
                 "Escenario Alternativo (Exhaustion / Agotamiento): Pérdida de impulso podría provocar "
@@ -339,10 +393,13 @@ class OperatorAssistant(BaseOperatorAssistant):
             lines = [
                 header,
                 "",
+                "**Observaciones visuales generadas por IA: no son niveles verificados ni entradas operativas.**",
                 explanation_summary,
                 "",
                 f"*{market_outlook}*",
             ]
+            plan = self._validated_risk_plan(context)
+            lines.extend(self._format_risk_plan(plan, context.symbol))
             return "\n".join(lines)
 
         lines = [
@@ -350,7 +407,7 @@ class OperatorAssistant(BaseOperatorAssistant):
             f"**Precio Actual:** ${context.current_price:,.2f} | **Régimen de Mercado:** `{context.market_regime}`",
             f"**Puntuación Quant:** {context.quant_score:.1f}/100 | **Puntaje Predictivo:** {context.predictive_score:.2f} | **Confianza:** {context.signal.confidence*100:.1f}%",
             "",
-            "#### 📊 Evaluación Cuantitativa y Diagnóstico (Quantitative Assessment)",
+            "#### 📊 Interpretación descriptiva de IA (no modifica el estado de señal)",
             f"{explanation_summary}",
             f"{market_outlook}",
             "",
@@ -359,44 +416,8 @@ class OperatorAssistant(BaseOperatorAssistant):
         for sc in scenarios:
             lines.append(f"- {sc}")
 
-        price = context.current_price
-        is_fx = "=X" in context.symbol or price < 10
-
-        def _fmt(val: float | None) -> str:
-            if val is None:
-                return "N/A"
-            if is_fx or val < 10:
-                return f"${val:,.4f}"
-            return f"${val:,.2f}"
-
-        atr = context.risk.atr or (price * 0.003 if is_fx else price * 0.015)
-        direction = (context.signal.direction or "").upper()
-        action = (context.signal.action or "").upper()
-
-        sl = context.risk.stop_loss
-        tp = context.risk.take_profit
-        if sl is None and price > 0:
-            if "SHORT" in direction or "SELL" in action:
-                sl = price + 1.5 * atr
-            else:
-                sl = max(0.0, price - 1.5 * atr)
-
-        if tp is None and price > 0:
-            if "SHORT" in direction or "SELL" in action:
-                tp = max(0.0, price - 3.0 * atr)
-            else:
-                tp = price + 3.0 * atr
-
-        sl_str = _fmt(sl)
-        tp_str = _fmt(tp)
-
-        lines.extend([
-            "",
-            "#### 🛡️ Parámetros de Riesgo y Protección (Risk & Boundaries)",
-            f"- **Nivel de Stop Loss (Corte de Riesgo):** {sl_str}",
-            f"- **Objetivo de Take Profit (Toma de Ganancias):** {tp_str}",
-            f"- **Categoría de Riesgo:** {context.risk.risk_category or 'Estándar'}",
-        ])
+        plan = self._validated_risk_plan(context)
+        lines.extend(self._format_risk_plan(plan, context.symbol))
 
         if context.signal.warnings:
             lines.append("- **Advertencias Activas:**")
@@ -404,135 +425,58 @@ class OperatorAssistant(BaseOperatorAssistant):
                 lines.append(f"  * ⚠️ {w}")
 
         lines.append("")
-        lines.extend(self._build_conclusive_verdict(context, sl, tp, atr, is_fx))
+        lines.extend(self._build_conclusive_verdict(context, plan))
 
         return "\n".join(lines)
 
-    def _build_conclusive_verdict(
-        self,
-        context: MarketContext,
-        sl: float | None,
-        tp: float | None,
-        atr: float,
-        is_fx: bool,
-    ) -> list[str]:
-        """Construct a structured, fully coherent trading verdict block (resumen conclusivo y parámetros de riesgo)."""
-        price = context.current_price
-        quant = context.quant_score
-        regime = context.market_regime
-        action = (context.signal.action or "").upper()
-        direction = (context.signal.direction or "").upper()
-        confidence = context.signal.confidence
-        conf_pct = confidence * 100.0 if confidence <= 1.0 else confidence
-        rsi = context.technical_indicators.get("rsi")
-        warnings = list(context.signal.warnings)
+    @staticmethod
+    def _format_risk_plan(plan: dict, symbol: str) -> list[str]:
+        """Render only levels validated by RiskEngine, never image or AI estimates."""
+        is_fx = "=X" in symbol
 
-        def _fmt(val: float | None) -> str:
-            if val is None:
+        def fmt(value: float | None) -> str:
+            if value is None:
                 return "N/A"
-            if is_fx or val < 10:
-                return f"${val:,.4f}"
-            return f"${val:,.2f}"
+            return f"${value:,.4f}" if is_fx or value < 10 else f"${value:,.2f}"
 
-        rsi_str = f" y un RSI en ~{rsi:.1f}" if rsi is not None else ""
-        warn_str = f" ({', '.join(warnings)})" if warnings else ""
-
-        # Strict coherence: Check for wait or caution states in both Spanish and English
-        is_wait = any(w in action for w in ("WAIT", "HOLD", "ESPERAR", "DÉBIL", "DEBIL", "PAUSA", "CONFIRMACIÓN", "CONFIRMACION"))
-        is_buy = (any(b in action for b in ("BUY", "COMPRAR", "FAVORABLE", "ALCISTA")) or "LONG" in action) and not is_wait
-        is_sell = (any(s in action for s in ("SELL", "VENDER", "BAJISTA")) or "SHORT" in action) and not is_wait
-
-        if is_wait:
-            if "LONG" in direction or "COMPRA" in direction or "ALCISTA" in regime:
-                v_title = "En Espera / Precaución (NO entrar ahora):"
-                v_desc = (
-                    f"{v_title} Aunque la estructura de fondo muestra sesgo alcista (`{regime}`) con fuerza técnica ({quant:.1f}/100), "
-                    f"la señal del motor es '{context.signal.action}' con confianza del {conf_pct:.1f}%. "
-                    f"Existen advertencias activas{warn_str}, por lo que ingresar a comprar en este instante conlleva un riesgo elevado de falso impulso o retroceso. "
-                    f"Se aconseja esperar confirmación de volumen o retroceso hacia zonas de soporte antes de abrir posiciones."
-                )
-            elif "SHORT" in direction or "VENTA" in direction or "BAJISTA" in regime:
-                v_title = "En Espera / Precaución (NO entrar ahora):"
-                v_desc = (
-                    f"{v_title} Aunque el sesgo técnico muestra presión bajista (`{regime}`), "
-                    f"el motor mantiene la señal en espera ('{context.signal.action}') con confianza del {conf_pct:.1f}%. "
-                    f"Existen advertencias activas{warn_str}. Se aconseja no entrar hasta confirmar volumen o ruptura."
-                )
-            else:
-                v_title = "En Espera / Neutral (NO entrar ahora):"
-                v_desc = (
-                    f"{v_title} El mercado se encuentra en consolidación o indecisión bajo régimen `{regime}` "
-                    f"con el precio en {_fmt(price)}{rsi_str}. "
-                    f"La puntuación cuantitativa ({quant:.1f}/100) indica que no hay ventaja estadística suficiente; conviene aguardar confirmación."
-                )
-        elif is_buy:
-            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w or "Volumen sin confirmación" in w for w in warnings):
-                v_title = "Sí, el sesgo matemático favorece las compras (LONG)."
-                v_desc = (
-                    f"{v_title} El par se encuentra en una estructura alcista confirmada bajo régimen `{regime}` "
-                    f"con el precio cotizando en {_fmt(price)}{rsi_str}. "
-                    f"La puntuación cuantitativa ({quant:.1f}/100) y la confianza ({conf_pct:.1f}%) respaldan la entrada."
-                )
-            else:
-                v_title = "Posible compra con cautela (LONG moderado / esperar confirmación):"
-                v_desc = (
-                    f"{v_title} La condición general es favorable, pero la confianza es moderada ({conf_pct:.1f}%){warn_str}. "
-                    f"Se recomienda esperar confirmación de volumen institucional o mantener un tamaño de posición reducido con estricto Stop Loss."
-                )
-        elif is_sell:
-            if quant >= 70.0 and conf_pct >= 60.0 and not any("Momentum débil" in w or "Volumen sin confirmación" in w for w in warnings):
-                v_title = "Sí, el sesgo matemático favorece las ventas (SHORT)."
-                v_desc = (
-                    f"{v_title} El par se encuentra bajo presión bajista confirmada en régimen `{regime}` "
-                    f"con el precio en {_fmt(price)}{rsi_str}. "
-                    f"La fuerza técnica y el flujo vendedor respaldan la posición corta o mantenerse fuera de compras."
-                )
-            else:
-                v_title = "Precaución: Presión vendedora detectada (SHORT moderado):"
-                v_desc = (
-                    f"{v_title} El activo enfrenta debilidad técnica en régimen `{regime}` "
-                    f"con el precio en {_fmt(price)}{rsi_str}{warn_str}. "
-                    f"El modelo cuantitativo no recomienda compras en este entorno."
-                )
+        lines = [
+            "",
+            "#### 🛡️ Parámetros de Riesgo Sugeridos — contrato RiskEngine",
+            f"- **Estado:** {plan['status']}",
+            f"- **Entrada propuesta:** {fmt(plan['entry_price'])}",
+            f"- **Stop Loss (Corte de pérdida):** {fmt(plan['stop_loss'])}",
+            f"- **Take Profit (Toma de beneficio):** {fmt(plan['take_profit'])}",
+        ]
+        if plan["gross_risk_reward"] is None:
+            lines.append("- **R bruto:** N/A")
+            lines.append(f"- **Motivo:** {plan['reason'] or 'Sin niveles validados.'}")
         else:
-            v_title = "En Espera / Neutral: No se recomienda entrar en este momento."
-            v_desc = (
-                f"{v_title} El mercado se encuentra en consolidación o rango bajo régimen `{regime}` con precio en {_fmt(price)}. "
-                f"Conviene aguardar una ruptura con volumen institucional."
+            lines.append(f"- **R bruto sin costes:** 1:{plan['gross_risk_reward']:.2f}")
+            if not plan["entry_confirmed"]:
+                lines.append("- **Entrada no confirmada:** escenario técnico, no señal activada.")
+        return lines
+
+    @staticmethod
+    def _build_conclusive_verdict(context: MarketContext, plan: dict) -> list[str]:
+        """Keep descriptive market bias separate from operational activation."""
+        direction = context.signal.direction
+        if plan["status"] == "ACTIVADA" and plan["entry_confirmed"]:
+            verdict = (
+                f"Estado ACTIVADA para {direction}; los niveles indicados arriba fueron "
+                "validados por RiskEngine. La ejecución real y los costes no se infieren."
             )
-
-        # 2. Concrete risk parameters (Never fallback to generic text)
-        spread = min(0.25 * atr, price * 0.001) if price > 0 else 0.0
-        if "SHORT" in direction or is_sell:
-            e_min = price
-            e_max = price + spread
+        elif plan["gross_risk_reward"] is not None:
+            verdict = (
+                f"En Espera / Precaución (NO entrar ahora): sesgo técnico {direction}, "
+                f"estado {plan['status']}. La entrada propuesta no está confirmada."
+            )
         else:
-            e_min = max(0.0, price - spread)
-            e_max = price
-
-        entry_text = f"Zona de {_fmt(e_min)} – {_fmt(e_max)}"
-
-        if sl is None or sl <= 0:
-            sl = price + 1.5 * atr if ("SHORT" in direction or is_sell) else max(0.0, price - 1.5 * atr)
-        sl_pct = abs(price - sl) / price * 100 if price > 0 else 0.0
-        sl_text = f"{_fmt(sl)} (Riesgo controlado de ~{sl_pct:.2f}%)"
-
-        if tp is None or tp <= 0:
-            tp = max(0.0, price - 3.0 * atr) if ("SHORT" in direction or is_sell) else price + 3.0 * atr
-        tp_pct = abs(tp - price) / price * 100 if price > 0 else 0.0
-        if sl is not None and abs(price - sl) > 0:
-            rr = abs(tp - price) / abs(price - sl)
-            rr_text = f", Ratio Riesgo:Beneficio de 1 : {rr:.1f}" if rr >= 0.1 else ""
-        else:
-            rr_text = ", Ratio Riesgo:Beneficio de 1 : 2.0"
-        tp_text = f"{_fmt(tp)} (Objetivo técnico ~+{tp_pct:.2f}%{rr_text})"
-
+            verdict = (
+                "En Espera / Precaución (NO entrar ahora): no existe un plan de riesgo "
+                f"validado. {plan['reason'] or 'Datos insuficientes.'}"
+            )
         return [
             "---",
             "### 🏁 Conclusión Operativa y Veredicto Técnico:",
-            f"* **Respuesta técnica**: {v_desc}",
-            "* **Parámetros de Riesgo Sugeridos**:",
-            f"  * **Entrada**: {entry_text}",
-            f"  * **Stop Loss (Corte de pérdida)**: {sl_text}",
-            f"  * **Take Profit (Toma de beneficio)**: {tp_text}",
+            f"* **Respuesta técnica**: {verdict}",
         ]

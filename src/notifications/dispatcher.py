@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -15,6 +17,9 @@ from src.notifications.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from src.notifications.tracker import AlertOutcomeTracker
 
 
 class CooldownManager:
@@ -83,6 +88,8 @@ class NotificationDispatcher:
         self.allow_critical_bypass = allow_critical_bypass
         self.max_workers = max_workers
         self._executor: ThreadPoolExecutor | None = None
+        # Never accept authorization supplied by a caller's payload or metadata.
+        self.__registered_dispatch_grant = object()
 
     def register_channel(self, channel: BaseNotificationChannel) -> None:
         """Register a notification delivery channel."""
@@ -129,7 +136,22 @@ class NotificationDispatcher:
         return True, None
 
     def dispatch(self, payload: NotificationPayload) -> list[NotificationResult]:
-        """Synchronously dispatch a payload across all registered and enabled channels."""
+        """Dispatch informational payloads; operational alerts require registration."""
+        return self.__dispatch_payload(payload)
+
+    def __dispatch_payload(
+        self, payload: NotificationPayload, *, grant: object | None = None
+    ) -> list[NotificationResult]:
+        """Deliver only after the tracked path grants this exact dispatcher call."""
+        if payload.action.upper() in {"BUY", "SELL"} and grant is not self.__registered_dispatch_grant:
+            return [
+                NotificationResult(
+                    success=False,
+                    channel=NotificationChannelType.LOG,
+                    error_message="Operational alerts require dispatch_tracked_signal registration.",
+                    event_id=payload.event_id,
+                )
+            ]
         should_send, reason = self.should_dispatch(payload)
         if not should_send:
             logger.info(f"Notification suppressed: {reason}")
@@ -175,13 +197,79 @@ class NotificationDispatcher:
         priority: NotificationPriority | None = None,
         custom_summary: str | None = None,
     ) -> list[NotificationResult]:
-        """Convenience method to construct a NotificationPayload directly from a SignalEvent and dispatch."""
+        """Dispatch informational events; operational events require registration."""
         payload = NotificationPayload.from_signal_event(
             event=signal,
             priority=priority,
             custom_summary=custom_summary,
         )
+        if payload.action.upper() in {"BUY", "SELL"}:
+            return [
+                NotificationResult(
+                    success=False,
+                    channel=NotificationChannelType.LOG,
+                    error_message="Operational alerts require dispatch_tracked_signal registration.",
+                    event_id=payload.event_id,
+                )
+            ]
         return self.dispatch(payload)
+
+    def dispatch_tracked_signal(
+        self,
+        signal: SignalEvent,
+        tracker: AlertOutcomeTracker,
+        *,
+        is_forex: bool = False,
+        risk_reward: float | None = None,
+        priority: NotificationPriority | None = None,
+    ) -> tuple[dict[str, Any] | None, list[NotificationResult]]:
+        """Register a validated operational alert before any external dispatch.
+
+        Informational events never enter the operational tracker or channels.
+        Persistence failures propagate to the caller without sending anything.
+        """
+        payload = NotificationPayload.from_signal_event(signal, priority=priority)
+        if (
+            payload.action not in {"BUY", "SELL"}
+            or payload.metadata.get("signal_status") != "ACTIVADA"
+            or payload.metadata.get("entry_confirmed") is not True
+        ):
+            return None, []
+
+        if not any(channel.is_enabled for channel in self.channels):
+            return None, []
+        should_send, reason = self.should_dispatch(payload)
+        if not should_send:
+            logger.info("Operational alert %s suppressed before registration: %s", signal.signal_id, reason)
+            return None, []
+
+        record = tracker.record_alert(signal, is_forex=is_forex, risk_reward=risk_reward)
+        if (
+            record.get("risk_integrity_status") != "VALIDATED"
+            or record.get("id") != signal.signal_id
+            or record.get("status") != "OPEN"
+            or not record.get("risk_recorded_at")
+            or record.get("timestamp") != str(signal.timestamp)[:19]
+            or record.get("symbol") != payload.symbol
+            or record.get("timeframe") != payload.timeframe
+            or record.get("direction") != payload.direction
+            or record.get("entry_price") != payload.price
+            or record.get("stop_loss") != payload.stop_loss
+            or record.get("take_profit") != payload.take_profit
+            or record.get("risk_reward") != payload.risk_reward_ratio
+        ):
+            raise ValueError("No se despacha una alerta sin registro operativo validado.")
+
+        payload = replace(
+            payload,
+            metadata={
+                **payload.metadata,
+                "tracking_id": record["id"],
+                "tracking_recorded_at": record["risk_recorded_at"],
+                "tracking_status": record["status"],
+            },
+        )
+        return record, self.__dispatch_payload(payload, grant=self.__registered_dispatch_grant)
 
     def dispatch_async(self, payload: NotificationPayload) -> Future[list[NotificationResult]]:
         """Submit dispatch to a background thread pool to prevent blocking the caller."""

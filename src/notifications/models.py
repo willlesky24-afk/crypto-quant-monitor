@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
 import pandas as pd
+
+from src.risk_engine import RiskEngine
 
 
 class NotificationChannelType(str, Enum):
@@ -145,28 +148,68 @@ class NotificationPayload:
         custom_summary: str | None = None,
     ) -> NotificationPayload:
         """Derive a normalized notification payload directly from a SignalEvent."""
-        # Calculate risk/reward ratio if SL and TP are defined
-        rr_ratio: float | None = None
-        if event.stop_loss is not None and event.take_profit is not None:
-            risk = abs(event.price - event.stop_loss)
-            reward = abs(event.take_profit - event.price)
-            if risk > 1e-6:
-                rr_ratio = round(reward / risk, 2)
+        metadata = dict(event.metadata)
+        levels = RiskEngine().calculate_levels(
+            event.price, event.stop_loss, event.take_profit, event.direction
+        )
+        expected_ratio = metadata.get("risk_reward_ratio")
+        ratio_mismatch = False
+        if expected_ratio is not None:
+            try:
+                reported_ratio = float(expected_ratio)
+            except (TypeError, ValueError, OverflowError):
+                ratio_mismatch = True
+            else:
+                actual_ratio = levels["gross_risk_reward"]
+                ratio_mismatch = (
+                    not math.isfinite(reported_ratio)
+                    or actual_ratio is None
+                    or not math.isclose(reported_ratio, actual_ratio, rel_tol=1e-6, abs_tol=0.005)
+                )
+
+        validation_error = (
+            "R:R reportado no coincide con los niveles efectivos."
+            if ratio_mismatch else levels["reason"]
+        )
+        if ratio_mismatch or (
+            levels["reason"] is not None
+            and (event.stop_loss is not None or event.take_profit is not None)
+        ):
+            metadata["risk_validation_error"] = validation_error
+        invalid_operational = event.action in ("BUY", "SELL") and validation_error is not None
+        has_status = "signal_status" in metadata
+        unconfirmed = (
+            (has_status and not (
+                metadata["signal_status"] == "ACTIVADA"
+                and metadata.get("entry_confirmed") is True
+            ))
+            or metadata.get("entry_confirmed") is False
+        )
+        action = "WAIT" if invalid_operational or unconfirmed else event.action
+        direction = "NEUTRAL" if invalid_operational else event.direction
+        stop_loss = levels["stop_loss"] if not ratio_mismatch else None
+        take_profit = levels["take_profit"] if not ratio_mismatch else None
+        rr_ratio = levels["gross_risk_reward"] if not ratio_mismatch else None
 
         # Automatic priority assignment if not provided
         if priority is None:
-            if event.action in ("BUY", "SELL") and event.confidence >= 0.75:
+            if action in ("BUY", "SELL") and event.confidence >= 0.75:
                 prio = NotificationPriority.HIGH
-            elif event.action in ("BUY", "SELL"):
+            elif action in ("BUY", "SELL"):
                 prio = NotificationPriority.NORMAL
             else:
                 prio = NotificationPriority.LOW
         else:
-            prio = priority
+            prio = NotificationPriority.LOW if invalid_operational or unconfirmed else priority
 
+        try:
+            summary_price = float(event.price)
+        except (TypeError, ValueError, OverflowError):
+            summary_price = math.nan
+        price_label = f"{summary_price:.2f}" if math.isfinite(summary_price) else "N/D"
         summary_text = (
-            custom_summary
-            or f"[{event.symbol} {event.timeframe}] {event.action} ({event.direction}) @ {event.price:.2f}"
+            (custom_summary if not invalid_operational and not unconfirmed else None)
+            or f"[{event.symbol} {event.timeframe}] {action} ({direction}) @ {price_label}"
         )
 
         return cls(
@@ -174,8 +217,8 @@ class NotificationPayload:
             timestamp=event.timestamp,
             symbol=event.symbol,
             timeframe=event.timeframe,
-            action=event.action,
-            direction=event.direction,
+            action=action,
+            direction=direction,
             price=event.price,
             confidence=event.confidence,
             predictive_score=event.predictive_score,
@@ -184,10 +227,10 @@ class NotificationPayload:
             summary=summary_text,
             reasoning=event.reasoning,
             quant_score=event.quant_score,
-            stop_loss=event.stop_loss,
-            take_profit=event.take_profit,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             risk_reward_ratio=rr_ratio,
-            metadata=dict(event.metadata),
+            metadata=metadata,
         )
 
 

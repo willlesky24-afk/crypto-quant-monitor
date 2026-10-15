@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import replace
 
 import pandas as pd
 
@@ -177,44 +178,49 @@ def build_on_demand_context(
 
         last_row = enr_df.iloc[-1]
         curr_p = float(last_row["close"])
-        atr_val = float(ana.get("atr", 0.0))
-        sl_mult = getattr(dec, "sl_multiplier", 1.5) or 1.5
-        tp_mult = getattr(dec, "tp_multiplier", 3.0) or 3.0
-
-        calc_sl = rsk.get("stop_loss")
-        calc_tp = rsk.get("take_profit")
-        if calc_sl is None and atr_val > 0:
-            if "SHORT" in dec.direction.upper() or "SELL" in dec.decision.upper():
-                calc_sl = round(curr_p + sl_mult * atr_val, 5 if is_fx else 2)
-                calc_tp = round(max(0.0, curr_p - tp_mult * atr_val), 5 if is_fx else 2)
-            else:
-                calc_sl = round(max(0.0, curr_p - sl_mult * atr_val), 5 if is_fx else 2)
-                calc_tp = round(curr_p + tp_mult * atr_val, 5 if is_fx else 2)
+        plan = r_eng.plan_from_decision(
+            decision=dec.decision,
+            direction=dec.direction,
+            reference_price=curr_p,
+            atr=last_row.get("atr"),
+            sl_multiplier=dec.sl_multiplier,
+            tp_multiplier=dec.tp_multiplier,
+        )
 
         live_sig = SignalEvent(
             timestamp=pd.Timestamp(last_row["timestamp"]),
             symbol=symbol,
             timeframe=timeframe,
-            action=dec.decision,
-            direction=dec.direction,
+            action="WAIT",  # On-demand analysis cannot confirm an entry.
+            direction=plan["direction"],
             confidence=dec.confidence if dec.confidence <= 1.0 else dec.confidence / 100.0,
             predictive_score=prd_res.predictive_score,
             regime=reg_res.regime.value,
-            reasoning=dec.reasoning,
+            reasoning=f"{dec.reasoning} Estado: {plan['status']}. {plan['reason']}",
             price=curr_p,
             quant_score=sc["score"],
-            stop_loss=calc_sl,
-            take_profit=calc_tp,
+            stop_loss=plan["stop_loss"],
+            take_profit=plan["take_profit"],
             signal_id=f"on_demand-{symbol}-{timeframe}",
             metadata={
-                "risk_reward_ratio": round(tp_mult / max(sl_mult, 0.01), 2),
-                "atr": atr_val,
+                "risk_reward_ratio": plan["gross_risk_reward"],
+                "risk_reward_basis": "bruto_sin_costes",
+                "signal_status": plan["status"],
+                "entry_confirmed": plan["entry_confirmed"],
+                "entry_price": plan["entry_price"],
+                "risk_distance": plan["risk_distance"],
+                "reward_distance": plan["reward_distance"],
+                "risk_reason": plan["reason"],
+                "risk_methodology": plan["methodology"],
+                "risk_levels_source": "RiskEngine",
+                "decision_label": dec.decision,
+                "atr": plan["atr"],
                 "positives": dec.positives,
                 "warnings": dec.warnings,
             },
         )
         ctx_b = ContextBuilder()
-        return ctx_b.build_context(
+        context = ctx_b.build_context(
             signal_event=live_sig,
             technical_indicators={
                 "rsi": float(last_row.get("rsi", 50.0)),
@@ -223,6 +229,15 @@ def build_on_demand_context(
             },
             volume_profile=prof,
             metadata={"source": "On-demand Live Copilot Query"},
+        )
+        return replace(
+            context,
+            risk=replace(
+                context.risk,
+                stop_loss=plan["stop_loss"],
+                take_profit=plan["take_profit"],
+                risk_ratio=plan["gross_risk_reward"],
+            ),
         )
     except Exception as exc:
         logger.error("Error generando contexto on-demand para %s: %s", symbol, exc)

@@ -126,10 +126,14 @@ def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
         assert live_s.timestamp == bt_s["timestamp"], f"Bar {i}: timestamp mismatch"
         # Exact price match
         assert abs(live_s.price - bt_s["price"]) < 1e-6, f"Bar {i}: price mismatch"
-        # Exact action / decision match
-        assert live_s.action == bt_s["decision"], f"Bar {i}: action mismatch ({live_s.action} vs {bt_s['decision']})"
-        # Exact direction match
-        assert live_s.direction == bt_s["direction"], f"Bar {i}: direction mismatch"
+        # Closed-candle decisions remain informative until an activation rule exists.
+        assert live_s.action == "WAIT"
+        assert live_s.metadata["decision_label"] == bt_s["decision"]
+        # The decision keeps its bias; only a valid candidate exposes an operable direction.
+        if live_s.metadata["signal_status"] == "CANDIDATA":
+            assert live_s.direction == bt_s["direction"], f"Bar {i}: direction mismatch"
+        else:
+            assert live_s.direction == "SIN OPERACIÓN"
         # Numerical confidence parity
         assert abs(live_s.confidence - bt_s["confidence"]) < 1e-4, f"Bar {i}: confidence mismatch"
         # Quant score parity
@@ -271,25 +275,10 @@ def test_end_to_end_streaming_and_notification_pipeline(mock_post, make_syntheti
     assert last_sig.symbol == "BTCUSDT"
     assert last_sig.price == 55300.0
 
-    # Verification: 2 HTTP calls dispatched (1 Discord, 1 Telegram)
-    assert len(mock_post_calls) == 2
-    urls = [c["url"] for c in mock_post_calls]
-    assert any("discord" in u for u in urls)
-    assert any("telegram" in u for u in urls)
-
-    # Verify Discord payload structure
-    discord_call = next(c for c in mock_post_calls if "discord" in c["url"])
-    discord_json = discord_call["kwargs"]["json"]
-    assert "embeds" in discord_json
-    assert len(discord_json["embeds"]) == 1
-    assert "BTCUSDT" in discord_json["embeds"][0]["title"]
-
-    # Verify Telegram payload structure
-    telegram_call = next(c for c in mock_post_calls if "telegram" in c["url"])
-    telegram_json = telegram_call["kwargs"]["json"]
-    assert telegram_json["chat_id"] == "test_chat_999"
-    assert "BTCUSDT" in telegram_json["text"]
-    assert telegram_json["parse_mode"] == "HTML"
+    # Closed candles produce informational events, not entry alerts.
+    assert last_sig.metadata["entry_confirmed"] is False
+    assert last_sig.metadata["signal_status"] != "ACTIVADA"
+    assert len(mock_post_calls) == 0
 
     # -------------------------------------------------------------------------
     # Scenario C: Immediate Duplicate Close within Cooldown Window
@@ -299,7 +288,7 @@ def test_end_to_end_streaming_and_notification_pipeline(mock_post, make_syntheti
 
     # A second signal is recorded in the engine history
     assert len(engine.signal_history) == 2
-    # BUT external dispatch is suppressed by CooldownManager!
+    # No external dispatch occurs without an activation rule.
     assert len(mock_post_calls) == 0
 
     # Clean shutdown

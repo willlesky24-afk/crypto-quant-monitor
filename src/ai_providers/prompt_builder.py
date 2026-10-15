@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import math
+
 from src.ai_agent.models import MarketContext
 from src.anomaly_detection.models import MarketAlert
 from src.market_reports.models import DailyBriefingReport
+from src.risk_engine import RiskEngine
 
 
 class PromptBuilder:
@@ -24,7 +27,10 @@ class PromptBuilder:
         "4. DO NOT provide definitive financial or investment instructions.\n"
         "5. DO NOT generate or execute trades. You have ZERO execution authority.\n"
         "6. DO NOT invent or extrapolate missing quantitative figures.\n"
-        "7. Keep the narrative objective, probabilistic, structured, and pedagogical for human review."
+        "7. Keep the narrative objective, structured, and pedagogical for human review.\n"
+        "8. Treat image/text levels as OBSERVED and UNVERIFIED; never call them engine-verified, confirmed entries, or executable signals.\n"
+        "9. Only RiskEngine-validated levels in the verified plan section may be described as engine levels. Never replace them with AI estimates.\n"
+        "10. AI interpretation cannot change CANDIDATA/WAIT into ACTIVADA."
     )
 
     def build_copilot_prompt(
@@ -39,6 +45,33 @@ class PromptBuilder:
         """Compose structured operator prompt merging market context, reports, anomalies, and query."""
         is_forex = "=X" in context.symbol or context.current_price < 10
         price_str = f"${context.current_price:,.4f}" if is_forex else f"${context.current_price:,.2f}"
+        meta = context.metadata
+        entry = meta["entry_price"] if "entry_price" in meta else context.current_price
+        levels = RiskEngine().calculate_levels(
+            entry, context.risk.stop_loss, context.risk.take_profit, context.signal.direction
+        )
+        verified = levels["reason"] is None
+        if verified:
+            for reported in (context.risk.risk_ratio, meta.get("risk_reward_ratio")):
+                if reported is None:
+                    continue
+                try:
+                    value = float(reported)
+                except (TypeError, ValueError, OverflowError):
+                    value = math.nan
+                if not math.isfinite(value) or not math.isclose(
+                    value, levels["gross_risk_reward"], rel_tol=1e-6, abs_tol=0.005
+                ):
+                    verified = False
+                    break
+        if meta.get("signal_status") in {"NO DISPONIBLE", "DESCARTADA", "ESPERANDO CONFIRMACIÓN"}:
+            verified = False
+        status = meta.get("signal_status", "SIN CONFIRMACIÓN")
+        activated = status == "ACTIVADA" and meta.get("entry_confirmed") is True and verified
+        displayed_status = (
+            status if verified or status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}
+            else "NO DISPONIBLE"
+        )
 
         lines = [
             self.SYSTEM_ROLE_PROMPT,
@@ -52,7 +85,9 @@ class PromptBuilder:
             f"Market Regime: {context.market_regime}",
             f"Quant Score: {context.quant_score:.1f}/100",
             f"Predictive Score: {context.predictive_score:.2f} (Scale: 0.0 - 1.0)",
-            f"Engine Signal Action: {context.signal.action} ({context.signal.direction})",
+            f"Engine Signal Action: {context.signal.action if activated else 'WAIT'} ({context.signal.direction})",
+            f"Technical Decision Label: {meta.get('decision_label', context.signal.action)}",
+            f"Operational Status: {displayed_status}; entry confirmed: {activated}",
             f"Signal Confidence: {context.signal.confidence*100:.1f}%",
             f"Quantitative Reasoning: {context.signal.reasoning or 'N/A'}",
         ]
@@ -72,14 +107,20 @@ class PromptBuilder:
                 return "None"
             return f"${v:,.4f}" if is_forex or v < 10 else f"${v:,.2f}"
 
-        sl_str = _fmt_p(context.risk.stop_loss)
-        tp_str = _fmt_p(context.risk.take_profit)
+        entry_str = _fmt_p(levels["entry_price"] if verified else None)
+        sl_str = _fmt_p(levels["stop_loss"] if verified else None)
+        tp_str = _fmt_p(levels["take_profit"] if verified else None)
+        rr_str = f"{levels['gross_risk_reward']:.4f}" if verified else "N/A"
 
         lines.extend([
             "",
-            "Risk Parameters:",
+            "Risk Parameters — VERIFIED BY RiskEngine ONLY:",
+            f"  - Proposed Entry: {entry_str}",
             f"  - Stop Loss: {sl_str}",
             f"  - Take Profit: {tp_str}",
+            f"  - Gross R:R without costs: {rr_str}",
+            f"  - Entry activation: {'CONFIRMED' if activated else 'NOT CONFIRMED; no operational entry alert'}",
+            f"  - Validation reason: {'None' if verified else levels['reason'] or 'Reported risk data inconsistent'}",
             f"  - Risk Category: {context.risk.risk_category or 'Standard'}",
             f"  - ATR: {context.risk.atr or 'N/A'}",
         ])
@@ -87,7 +128,7 @@ class PromptBuilder:
         if context.volume_profile:
             lines.extend([
                 "",
-                "Volume Profile Levels:",
+                "DESCRIPTIVE TECHNICAL LEVELS (not verified entry/SL/TP):",
                 f"  - POC: {context.volume_profile.get('poc', 'N/A')}",
                 f"  - Value Area High (VAH): {context.volume_profile.get('vah', 'N/A')}",
                 f"  - Value Area Low (VAL): {context.volume_profile.get('val', 'N/A')}",
@@ -122,14 +163,15 @@ class PromptBuilder:
                 "==================================================",
                 f"El operador ha subido {num_images} captura(s) de pantalla de gráficos o señales de trading para análisis visual multimodal.",
                 "DIRECTIVAS ESTRICTAS DE VISIÓN:",
+                "Los niveles leídos en imágenes o texto son OBSERVADOS, NO VERIFICADOS; sepáralos del plan RiskEngine y nunca los presentes como entrada confirmada.",
                 "1. IDENTIFICA EL ACTIVO EN CADA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en cada imagen.",
                 f"2. NO asumas que las imágenes son {context.symbol} a menos que lo indiquen expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis son LAS IMÁGENES ADJUNTAS.",
                 "3. DESGLOSA VISUALMENTE:",
                 "   - Par y temporalidad identificados en cada captura.",
                 "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrones gráficos observados.",
-                "   - Precios clave visibles: Entrada, Stop Loss, Take Profit.",
+                "   - Precios clave visibles, si son legibles: Entrada, Stop Loss, Take Profit; etiquétalos como observados y no verificados.",
                 "   - Si se adjuntaron múltiples imágenes, compáralas o relaciónalas (análisis multi-temporal 1H vs 4H, o comparación de señales).",
-                "   - Veredicto profesional y recomendaciones para el operador en lenguaje cotidiano.",
+                "   - Interpretación descriptiva para el operador, sin activar ni completar una señal.",
             ])
 
         lines.extend([
@@ -145,6 +187,7 @@ class PromptBuilder:
         if has_image:
             lines.extend([
                 "- Prioriza el análisis visual directo de las imágenes/gráficos adjuntos.",
+                "- No transfieras niveles visuales al bloque de riesgo verificado; si difieren de RiskEngine, informa la discrepancia sin sustituir el plan.",
                 "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación de Activos y Temporalidades, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica / Comparación y Veredicto.",
                 "- Remind the operator that all trading decisions remain their responsibility.",
             ])

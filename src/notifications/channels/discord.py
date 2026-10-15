@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 import pandas as pd
@@ -19,6 +20,12 @@ logger = logging.getLogger(__name__)
 COLOR_LONG = 0x2ECC71  # Vibrant Green
 COLOR_SHORT = 0xE74C3C  # Vibrant Red
 COLOR_NEUTRAL = 0x3498DB  # Info Blue
+
+
+def _discord_text(value: Any) -> str:
+    """Keep untrusted content from changing Markdown or mentioning users."""
+    escaped = str(value).replace("@", "@\u200b")
+    return re.sub(r"([\\*_`~|>])", r"\\\1", escaped)
 
 
 class DiscordWebhookChannel(BaseNotificationChannel):
@@ -47,6 +54,12 @@ class DiscordWebhookChannel(BaseNotificationChannel):
 
     def format_message(self, payload: NotificationPayload) -> dict[str, Any]:
         """Convert a NotificationPayload into a structured Discord Rich Embed."""
+        tracked = (
+            payload.action in {"BUY", "SELL"}
+            and payload.metadata.get("tracking_id")
+            and payload.metadata.get("tracking_recorded_at")
+            and payload.metadata.get("signal_status") == "ACTIVADA"
+        )
         # Determine semantic color based on action & direction
         if payload.direction == "LONG" or payload.action == "BUY":
             color = COLOR_LONG
@@ -59,34 +72,45 @@ class DiscordWebhookChannel(BaseNotificationChannel):
             title_emoji = "⏳"
 
         embed_fields: list[dict[str, Any]] = [
-            {"name": "Action / Direction", "value": f"{payload.action} ({payload.direction})", "inline": True},
-            {"name": "Price", "value": f"${payload.price:,.2f}", "inline": True},
-            {"name": "Market Regime", "value": f"`{payload.regime}`", "inline": True},
+            {"name": "Action / Direction", "value": f"{_discord_text(payload.action)} ({_discord_text(payload.direction)})", "inline": True},
+            {"name": "Entrada validada" if tracked else "Price", "value": f"${payload.price}" if tracked else f"${payload.price:,.2f}", "inline": True},
+            {"name": "Market Regime", "value": _discord_text(payload.regime), "inline": True},
             {"name": "Confidence", "value": f"{payload.confidence * 100:.1f}%", "inline": True},
             {"name": "Predictive Score", "value": f"{payload.predictive_score:.2f}", "inline": True},
             {"name": "Quant Score", "value": f"{payload.quant_score:.1f}", "inline": True},
         ]
 
+        if tracked:
+            embed_fields.extend([
+                {"name": "ID de seguimiento", "value": _discord_text(payload.metadata["tracking_id"]), "inline": True},
+                {"name": "Registro (UTC)", "value": _discord_text(payload.metadata["tracking_recorded_at"]), "inline": True},
+                {"name": "Estado de señal", "value": _discord_text(payload.metadata["signal_status"]), "inline": True},
+            ])
+
         if payload.stop_loss is not None:
-            embed_fields.append({"name": "Stop Loss", "value": f"${payload.stop_loss:,.2f}", "inline": True})
+            embed_fields.append({"name": "Stop Loss", "value": f"${payload.stop_loss}" if tracked else f"${payload.stop_loss:,.2f}", "inline": True})
         if payload.take_profit is not None:
-            embed_fields.append({"name": "Take Profit", "value": f"${payload.take_profit:,.2f}", "inline": True})
+            embed_fields.append({"name": "Take Profit", "value": f"${payload.take_profit}" if tracked else f"${payload.take_profit:,.2f}", "inline": True})
         if payload.risk_reward_ratio is not None:
-            embed_fields.append({"name": "R:R Ratio", "value": f"{payload.risk_reward_ratio:.2f}", "inline": True})
+            embed_fields.append({
+                "name": "R:R bruto (sin costes)" if tracked else "R:R Ratio",
+                "value": str(payload.risk_reward_ratio) if tracked else f"{payload.risk_reward_ratio:.2f}",
+                "inline": True,
+            })
 
         embed_fields.append({
             "name": "Reasoning & Context",
-            "value": payload.reasoning or "No additional reasoning provided.",
+            "value": _discord_text(payload.reasoning or "No additional reasoning provided."),
             "inline": False,
         })
 
         embed = {
-            "title": f"{title_emoji} SIGNAL ALERT: {payload.symbol} [{payload.timeframe.upper()}]",
-            "description": payload.summary,
+            "title": f"{title_emoji} SIGNAL ALERT: {_discord_text(payload.symbol)} [{_discord_text(payload.timeframe.upper())}]",
+            "description": _discord_text(payload.summary),
             "color": color,
             "fields": embed_fields,
             "footer": {
-                "text": f"Event ID: {payload.event_id} • Priority: {payload.priority.value} • Crypto Quant Monitor"
+                "text": f"Event ID: {_discord_text(payload.event_id)} • Priority: {payload.priority.value} • Crypto Quant Monitor"
             },
             "timestamp": payload.timestamp.isoformat(),
         }

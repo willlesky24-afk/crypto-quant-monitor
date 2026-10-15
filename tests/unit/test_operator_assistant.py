@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+from dataclasses import replace
+
 import pandas as pd
 import pytest
 
@@ -13,6 +16,7 @@ from src.operator_assistant.models import (
     OperatorResponse,
 )
 from src.operator_service.interfaces import InMemoryMarketContextProvider
+from src.risk_engine import RiskEngine
 
 
 def _create_sample_context(
@@ -409,3 +413,148 @@ async def test_operator_assistant_multiple_images():
     # Prompt must have received num_images=2 directive
     assert "(2 imágenes adjuntas)" in mock_llm.last_prompt
     assert "El operador ha subido 2 captura(s)" in mock_llm.last_prompt
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("direction", "stop", "target"),
+    [("LONG", 95.0, 110.0), ("SHORT", 105.0, 90.0)],
+)
+async def test_assistant_uses_only_validated_candidate_levels(direction, stop, target):
+    base = _create_sample_context()
+    ctx = replace(
+        base,
+        current_price=100.0,
+        signal=replace(base.signal, action="WAIT", direction=direction),
+        risk=RiskMetrics(stop_loss=stop, take_profit=target, risk_ratio=2.0, atr=2.0),
+        metadata={
+            "entry_price": 100.0, "signal_status": "CANDIDATA",
+            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+        },
+    )
+    provider = InMemoryMarketContextProvider()
+    provider.update_context(ctx)
+    response = await OperatorAssistant(provider, ai_provider=MockAIProvider()).ask(
+        OperatorQuery(query="Analiza BTCUSDT", symbol="BTCUSDT")
+    )
+    central = RiskEngine().calculate_levels(100.0, stop, target, direction)
+    assert response.metadata["entry_price"] == central["entry_price"]
+    assert response.metadata["stop_loss"] == central["stop_loss"]
+    assert response.metadata["take_profit"] == central["take_profit"]
+    assert response.metadata["gross_risk_reward"] == central["gross_risk_reward"]
+    assert response.metadata["entry_confirmed"] is False
+    assert "Estado:** CANDIDATA" in response.answer
+    assert "Entrada no confirmada" in response.answer
+    assert "NO entrar ahora" in response.answer
+    assert "Zona de" not in response.answer
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("atr", [None, 0.0, math.nan, math.inf])
+async def test_assistant_without_plan_never_fabricates_levels_from_atr(atr):
+    base = _create_sample_context()
+    ctx = replace(
+        base,
+        current_price=100.0,
+        signal=replace(base.signal, action="WAIT", direction="LONG"),
+        risk=RiskMetrics(stop_loss=None, take_profit=None, risk_ratio=None, atr=atr),
+        metadata={"signal_status": "NO DISPONIBLE", "entry_price": None},
+    )
+    provider = InMemoryMarketContextProvider()
+    provider.update_context(ctx)
+    response = await OperatorAssistant(provider, ai_provider=MockAIProvider()).ask(
+        OperatorQuery(query="Analiza BTCUSDT", symbol="BTCUSDT")
+    )
+    assert response.metadata["entry_price"] is None
+    assert response.metadata["stop_loss"] is None
+    assert response.metadata["take_profit"] is None
+    assert response.metadata["gross_risk_reward"] is None
+    verified_block = response.answer.split("Parámetros de Riesgo Sugeridos — contrato RiskEngine", 1)[1]
+    assert "Stop Loss (Corte de pérdida):** N/A" in verified_block
+    assert "Take Profit (Toma de beneficio):** N/A" in verified_block
+    assert "R bruto:** N/A" in verified_block
+    assert "Zona de" not in verified_block
+    assert "Ratio Riesgo:Beneficio de 1 : 2.0" not in response.answer
+
+
+@pytest.mark.anyio
+async def test_image_levels_remain_unverified_and_do_not_replace_engine_plan():
+    from src.ai_providers.interfaces import BaseLLMProvider
+    from src.ai_providers.models import AIResponse
+
+    class ObservedLevelsLLM(BaseLLMProvider):
+        async def generate_response(self, prompt, metadata=None):
+            return AIResponse(
+                content="En la imagen observo SL $61,000 y TP $70,000.",
+                provider="fixture-vision", model="fixture", latency_ms=1.0,
+            )
+
+        async def generate_explanation(self, context):
+            raise NotImplementedError
+
+        async def summarize_market(self, context):
+            raise NotImplementedError
+
+        async def health_check(self):
+            return True
+
+    base = _create_sample_context()
+    ctx = replace(
+        base,
+        current_price=64500.0,
+        signal=replace(base.signal, action="WAIT"),
+        risk=RiskMetrics(stop_loss=63000.0, take_profit=67500.0, risk_ratio=2.0),
+        metadata={
+            "entry_price": 64500.0, "signal_status": "CANDIDATA",
+            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+        },
+    )
+    provider = InMemoryMarketContextProvider()
+    provider.update_context(ctx)
+    response = await OperatorAssistant(provider, ai_provider=ObservedLevelsLLM()).ask(
+        OperatorQuery(
+            query="Analiza esta imagen", symbol="BTCUSDT",
+            metadata={"images": [{"bytes": b"fixture", "mime_type": "image/png"}]},
+        )
+    )
+    observation, verified = response.answer.split(
+        "Parámetros de Riesgo Sugeridos — contrato RiskEngine", 1
+    )
+    assert "Observaciones visuales generadas por IA: no son niveles verificados" in observation
+    assert "$61,000" in observation and "$70,000" in observation
+    assert "$61,000" not in verified and "$70,000" not in verified
+    assert "$63,000.00" in verified and "$67,500.00" in verified
+    assert response.metadata["stop_loss"] == 63000.0
+    assert response.metadata["take_profit"] == 67500.0
+    assert response.metadata["signal_status"] == "CANDIDATA"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("stop", "target", "reported"),
+    [(105.0, 110.0, 2.0), (95.0, 90.0, 2.0), (100.0, 110.0, 2.0),
+     (95.0, 110.0, 3.0)],
+)
+async def test_assistant_rejects_inverted_zero_or_inconsistent_plan(
+    stop, target, reported
+):
+    base = _create_sample_context()
+    ctx = replace(
+        base,
+        current_price=100.0,
+        signal=replace(base.signal, action="BUY", direction="LONG"),
+        risk=RiskMetrics(stop_loss=stop, take_profit=target, risk_ratio=reported),
+        metadata={"entry_price": 100.0, "risk_reward_ratio": reported},
+    )
+    provider = InMemoryMarketContextProvider()
+    provider.update_context(ctx)
+    assistant = OperatorAssistant(provider, ai_provider=MockAIProvider())
+    response = await assistant.ask(OperatorQuery(query="BTCUSDT", symbol="BTCUSDT"))
+    detail = await assistant.analyze(AnalysisRequest(symbol="BTCUSDT"))
+    assert response.metadata["stop_loss"] is None
+    assert response.metadata["take_profit"] is None
+    assert response.metadata["gross_risk_reward"] is None
+    assert "En Espera / Precaución (NO entrar ahora)" in response.answer
+    assert "R bruto:** N/A" in response.answer
+    assert "Stop Loss: N/A" in detail.risk_assessment
+    assert "Take Profit: N/A" in detail.risk_assessment

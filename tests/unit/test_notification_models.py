@@ -1,4 +1,5 @@
 import json
+import math
 from dataclasses import FrozenInstanceError
 from typing import Any
 
@@ -185,6 +186,80 @@ def test_notification_payload_priority_and_neutral():
     assert payload_wait.risk_reward_ratio is None
 
 
+@pytest.mark.parametrize(
+    ("direction", "stop", "target"),
+    [("LONG", 95.0, 110.0), ("SHORT", 105.0, 90.0)],
+)
+def test_payload_validates_direction_and_uses_effective_gross_r(direction, stop, target):
+    event = SignalEvent(
+        timestamp=pd.Timestamp("2026-03-15 12:00:00"),
+        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
+        direction=direction, confidence=0.8, predictive_score=0.7, regime="TRENDING",
+        reasoning="Fixture", price=100.0, stop_loss=stop, take_profit=target,
+        metadata={"risk_reward_ratio": 2.0},
+    )
+    payload = NotificationPayload.from_signal_event(event)
+    assert payload.action == event.action
+    assert payload.risk_reward_ratio == 2.0
+    assert payload.stop_loss == stop
+    assert payload.take_profit == target
+    assert "risk_validation_error" not in payload.metadata
+
+
+@pytest.mark.parametrize(
+    ("direction", "stop", "target", "price", "reported"),
+    [
+        ("LONG", 105.0, 110.0, 100.0, None),
+        ("SHORT", 95.0, 90.0, 100.0, None),
+        ("LONG", 95.0, 90.0, 100.0, None),
+        ("SHORT", 105.0, 110.0, 100.0, None),
+        ("LONG", 100.0, 110.0, 100.0, None),
+        ("LONG", None, 110.0, 100.0, None),
+        ("LONG", 95.0, None, 100.0, None),
+        ("LONG", 95.0, 110.0, math.nan, None),
+        ("LONG", 95.0, 110.0, None, None),
+        ("SHORT", math.inf, 90.0, 100.0, None),
+        ("LONG", 95.0, 110.0, 100.0, 3.0),
+    ],
+)
+def test_invalid_operational_event_is_not_upgraded_to_valid_payload(
+    direction, stop, target, price, reported
+):
+    event = SignalEvent(
+        timestamp=pd.Timestamp("2026-03-15 12:00:00"),
+        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
+        direction=direction, confidence=0.9, predictive_score=0.7, regime="TRENDING",
+        reasoning="Fixture", price=price, stop_loss=stop, take_profit=target,
+        metadata={"risk_reward_ratio": reported} if reported is not None else {},
+    )
+    payload = NotificationPayload.from_signal_event(event, priority=NotificationPriority.HIGH)
+    assert payload.action == "WAIT"
+    assert payload.direction == "NEUTRAL"
+    assert payload.priority == NotificationPriority.LOW
+    assert payload.stop_loss is None
+    assert payload.take_profit is None
+    assert payload.risk_reward_ratio is None
+    assert payload.metadata["risk_validation_error"]
+    if price is None or (isinstance(price, float) and not math.isfinite(price)):
+        assert payload.summary.endswith("@ N/D")
+    assert event.action in {"BUY", "SELL"}  # persisted source event remains unchanged
+
+
+def test_candidate_payload_keeps_indicative_levels_but_not_operational_action():
+    event = SignalEvent(
+        timestamp=pd.Timestamp("2026-03-15 12:00:00"),
+        symbol="BTCUSDT", timeframe="1h", action="BUY", direction="LONG",
+        confidence=0.9, predictive_score=0.7, regime="TRENDING", reasoning="Fixture",
+        price=100.0, stop_loss=95.0, take_profit=110.0,
+        metadata={"signal_status": "CANDIDATA", "entry_confirmed": False},
+    )
+    payload = NotificationPayload.from_signal_event(event)
+    assert payload.action == "WAIT"
+    assert payload.priority == NotificationPriority.LOW
+    assert payload.risk_reward_ratio == 2.0
+    assert payload.metadata["signal_status"] == "CANDIDATA"
+
+
 def test_notification_result():
     ts = pd.Timestamp("2026-03-15 12:00:00")
     result = NotificationResult(
@@ -306,15 +381,18 @@ def test_signal_event_from_decision_with_string_ts_and_series():
         event,
         custom_summary="Custom Sell Alert",
     )
-    assert payload.priority == NotificationPriority.NORMAL
-    assert payload.summary == "Custom Sell Alert"
+    assert payload.priority == NotificationPriority.LOW
+    assert payload.action == "WAIT"
+    assert payload.risk_reward_ratio is None
+    assert "WAIT (NEUTRAL)" in payload.summary
+    assert "Custom Sell Alert" not in payload.summary
 
     # Test explicit priority override
     payload_crit = NotificationPayload.from_signal_event(
         event,
         priority=NotificationPriority.CRITICAL,
     )
-    assert payload_crit.priority == NotificationPriority.CRITICAL
+    assert payload_crit.priority == NotificationPriority.LOW
 
 
 def test_base_notification_channel_abstract_method_bodies():

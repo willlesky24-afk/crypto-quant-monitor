@@ -139,8 +139,6 @@ class LiveExecutionEngine:
                 predictive_mode=True,
             )
 
-            tp_mult = decision.tp_multiplier
-            sl_mult = decision.sl_multiplier
             regime_val = regime_res.regime.value
             pred_score_val = float(pred_res.predictive_score)
             p_cont = float(pred_res.probability_continuation)
@@ -153,24 +151,20 @@ class LiveExecutionEngine:
                 intelligence=intel,
                 predictive_mode=False,
             )
-            tp_mult = 2.0
-            sl_mult = 1.0
             regime_val = "UNKNOWN"
             pred_score_val = 0.0
             p_cont = 0.0
             p_rev = 0.0
 
-        # 4. Stop Loss & Take Profit Calculation
-        sl_price: float | None = None
-        tp_price: float | None = None
-
-        if atr > 0:
-            if decision.direction == "LONG":
-                sl_price = round(price - (atr * sl_mult), 2)
-                tp_price = round(price + (atr * tp_mult), 2)
-            elif decision.direction == "SHORT":
-                sl_price = round(price + (atr * sl_mult), 2)
-                tp_price = round(price - (atr * tp_mult), 2)
+        # 4. Indicative risk plan; a closed candle is not an entry confirmation.
+        plan = self.risk_engine.plan_from_decision(
+            decision=decision.decision,
+            direction=decision.direction,
+            reference_price=price,
+            atr=atr,
+            sl_multiplier=decision.sl_multiplier,
+            tp_multiplier=decision.tp_multiplier,
+        )
 
         # 5. Construct Single Source of Truth: SignalEvent
         ts = pd.Timestamp(last_bar["timestamp"])
@@ -186,22 +180,33 @@ class LiveExecutionEngine:
             "market_state": decision.market_state,
             "positives": list(decision.positives),
             "warnings": list(decision.warnings),
+            "signal_status": plan["status"],
+            "entry_confirmed": plan["entry_confirmed"],
+            "entry_price": plan["entry_price"],
+            "risk_distance": plan["risk_distance"],
+            "reward_distance": plan["reward_distance"],
+            "risk_reward_ratio": plan["gross_risk_reward"],
+            "risk_reward_basis": "bruto_sin_costes",
+            "risk_reason": plan["reason"],
+            "risk_methodology": plan["methodology"],
+            "risk_levels_source": "RiskEngine",
+            "decision_label": decision.decision,
         }
 
         signal_event = SignalEvent(
             timestamp=ts,
             symbol=self.symbol,
             timeframe=self.interval,
-            action=decision.decision,
-            direction=decision.direction,
+            action="WAIT",  # No activation rule or confirmed fill exists.
+            direction=plan["direction"],
             confidence=float(decision.confidence),
             predictive_score=pred_score_val,
             regime=regime_val,
-            reasoning=decision.reasoning,
+            reasoning=f"{decision.reasoning} Estado: {plan['status']}. {plan['reason']}",
             price=price,
             quant_score=float(score["score"]),
-            stop_loss=sl_price,
-            take_profit=tp_price,
+            stop_loss=plan["stop_loss"],
+            take_profit=plan["take_profit"],
             signal_id=sig_id,
             metadata=meta,
         )
@@ -217,12 +222,20 @@ class LiveExecutionEngine:
             except Exception as exc:
                 logger.error(f"Error in signal listener: {exc}", exc_info=True)
 
-        # 7. Dispatch Notifications
+        # 7. Only confirmed, validated entries may be dispatched as operational alerts.
         notif_results: list[NotificationResult] = []
-        if self.dispatcher is not None:
+        if self.dispatcher is not None and plan["status"] == "ACTIVADA" and plan["entry_confirmed"]:
             try:
                 notif_results = self.dispatcher.dispatch_signal(signal_event)
             except Exception as exc:
                 logger.error(f"Error in notification dispatcher: {exc}", exc_info=True)
+        elif self.dispatcher is not None:
+            logger.info(
+                "[%s %s] Informational event %s not dispatched: %s",
+                self.symbol,
+                self.interval,
+                plan["status"],
+                plan["reason"],
+            )
 
         return signal_event, decision, notif_results

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pandas as pd
 
 from src.ai_agent.models import MarketContext, RiskMetrics, SignalInfo
@@ -126,3 +128,48 @@ def test_prompt_builder_multimodal_single_and_multiple_images():
     assert "(3 imágenes adjuntas)" in prompt_multi
     assert "El operador ha subido 3 captura(s)" in prompt_multi
     assert "Si se adjuntaron múltiples imágenes, compáralas o relaciónalas" in prompt_multi
+
+
+def test_prompt_separates_verified_engine_levels_from_image_observations():
+    ctx = _create_sample_context()
+    ctx = replace(
+        ctx,
+        risk=replace(ctx.risk, risk_ratio=2.0),
+        metadata={
+            "signal_status": "CANDIDATA", "entry_confirmed": False,
+            "entry_price": 64500.0, "risk_reward_ratio": 2.0,
+        },
+    )
+    prompt = PromptBuilder().build_copilot_prompt(
+        ctx, "La imagen muestra SL 61,000 y TP 70,000", has_image=True
+    )
+    verified_section = prompt.split("Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1)[1].split(
+        "DESCRIPTIVE TECHNICAL LEVELS", 1
+    )[0]
+    assert "Stop Loss: $63,000.00" in verified_section
+    assert "Take Profit: $67,500.00" in verified_section
+    assert "61,000" not in verified_section
+    assert "70,000" not in verified_section
+    assert "Engine Signal Action: WAIT" in prompt
+    assert "entry confirmed: False" in prompt
+    assert "OBSERVADOS, NO VERIFICADOS" in prompt
+    assert "No transfieras niveles visuales al bloque de riesgo verificado" in prompt
+
+
+def test_prompt_rejects_inverted_or_missing_levels_in_verified_section():
+    ctx = _create_sample_context()
+    for risk in (
+        replace(ctx.risk, stop_loss=66000.0, risk_ratio=2.0),
+        replace(ctx.risk, stop_loss=None, take_profit=None, atr=None, risk_ratio=None),
+    ):
+        prompt = PromptBuilder().build_copilot_prompt(
+            replace(ctx, risk=risk, metadata={"signal_status": "NO DISPONIBLE"}),
+            "Analiza el mercado", has_image=True,
+        )
+        section = prompt.split("Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1)[1].split(
+            "DESCRIPTIVE TECHNICAL LEVELS", 1
+        )[0]
+        assert "Stop Loss: None" in section
+        assert "Take Profit: None" in section
+        assert "Gross R:R without costs: N/A" in section
+        assert "66,000" not in section

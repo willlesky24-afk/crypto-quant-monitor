@@ -162,7 +162,7 @@ def test_forex_provider_failure_leaves_alert_open(monkeypatch, tmp_path):
         take_profit=1.09,
         signal_id="forex-outage-01",
     )
-    tracker.record_alert(signal, is_forex=True, risk_reward=2.0)
+    tracker.record_alert(signal, is_forex=True, risk_reward=1.0)
 
     assert (
         tracker.update_alert_outcomes(

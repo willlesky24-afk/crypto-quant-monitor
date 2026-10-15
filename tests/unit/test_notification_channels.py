@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -21,6 +22,7 @@ from src.notifications.models import (
     NotificationPayload,
     NotificationPriority,
 )
+from src.risk_engine import RiskEngine
 
 
 def _build_test_payload(
@@ -92,6 +94,49 @@ def test_discord_formatting_colors_and_fields():
     assert "⏳" in wait_embed["title"]
     wait_field_names = [f["name"] for f in wait_embed["fields"]]
     assert "Stop Loss" not in wait_field_names
+
+
+def test_tracked_discord_format_preserves_validated_plan_and_provenance():
+    levels = RiskEngine().calculate_levels(65000.0, 63500.0, 68000.0, "LONG")
+    payload = replace(
+        _build_test_payload(),
+        timestamp=pd.Timestamp("2026-09-23 10:00:00", tz="UTC"),
+        risk_reward_ratio=levels["gross_risk_reward"],
+        metadata={
+            "tracking_id": "sig-test-01",
+            "tracking_recorded_at": "2026-09-23T10:00:02+00:00",
+            "signal_status": "ACTIVADA",
+        },
+    )
+    embed = DiscordWebhookChannel(dry_run=True).format_message(payload)["embeds"][0]
+    fields = {item["name"]: item["value"] for item in embed["fields"]}
+
+    assert embed["timestamp"] == payload.timestamp.isoformat()
+    assert "BTCUSDT" in embed["title"]
+    assert fields["Action / Direction"] == "BUY (LONG)"
+    assert fields["ID de seguimiento"] == payload.event_id
+    assert fields["Registro (UTC)"] == payload.metadata["tracking_recorded_at"]
+    assert fields["Estado de señal"] == "ACTIVADA"
+    assert fields["Entrada validada"] == f"${levels['entry_price']}"
+    assert fields["Stop Loss"] == f"${levels['stop_loss']}"
+    assert fields["Take Profit"] == f"${levels['take_profit']}"
+    assert fields["R:R bruto (sin costes)"] == str(levels["gross_risk_reward"])
+
+
+def test_discord_escapes_untrusted_text_and_candidate_is_not_activated():
+    payload = replace(
+        _build_test_payload(action="WAIT", direction="NEUTRAL", stop_loss=None, take_profit=None, risk_reward_ratio=None),
+        symbol="BTC@everyone*",
+        reasoning="*untrusted* @everyone",
+        metadata={"signal_status": "CANDIDATA", "tracking_id": "forged"},
+    )
+    embed = DiscordWebhookChannel(dry_run=True).format_message(payload)["embeds"][0]
+    fields = {item["name"]: item["value"] for item in embed["fields"]}
+
+    assert "@everyone" not in embed["title"]
+    assert "@everyone" not in fields["Reasoning & Context"]
+    assert "ACTIVADA" not in str(embed)
+    assert "ID de seguimiento" not in fields
 
 
 @patch("requests.post")
@@ -172,6 +217,47 @@ def test_telegram_formatting_and_length_protection():
     msg_giant = channel.format_message(payload_giant)
     assert len(msg_giant) <= TELEGRAM_MAX_MESSAGE_LENGTH
     assert "[truncated]" in msg_giant
+
+
+def test_tracked_telegram_format_preserves_validated_plan_and_provenance():
+    levels = RiskEngine().calculate_levels(65000.0, 63500.0, 68000.0, "LONG")
+    payload = replace(
+        _build_test_payload(),
+        risk_reward_ratio=levels["gross_risk_reward"],
+        metadata={
+            "tracking_id": "sig-test-01",
+            "tracking_recorded_at": "2026-09-23T10:00:02+00:00",
+            "signal_status": "ACTIVADA",
+        },
+    )
+    message = TelegramChannel(dry_run=True).format_message(payload)
+
+    assert "BTCUSDT [1H]" in message
+    assert "BUY (LONG)" in message
+    assert "<b>ID de seguimiento:</b> sig-test-01" in message
+    assert "<b>Registro (UTC):</b> 2026-09-23T10:00:02+00:00" in message
+    assert "<b>Estado de señal:</b> ACTIVADA" in message
+    assert f"<b>Entrada validada:</b> ${levels['entry_price']}" in message
+    assert f"<b>🛑 Stop Loss:</b> ${levels['stop_loss']}" in message
+    assert f"<b>🎯 Take Profit:</b> ${levels['take_profit']}" in message
+    assert f"<b>⚖️ R:R bruto (sin costes):</b> {levels['gross_risk_reward']}" in message
+
+
+def test_telegram_escapes_untrusted_text_and_candidate_is_not_activated():
+    payload = replace(
+        _build_test_payload(action="WAIT", direction="NEUTRAL", stop_loss=None, take_profit=None, risk_reward_ratio=None),
+        symbol="<BTC&USDT>",
+        reasoning="<b>unsafe</b>",
+        event_id="<id&1>",
+        metadata={"signal_status": "CANDIDATA", "tracking_id": "forged"},
+    )
+    message = TelegramChannel(dry_run=True).format_message(payload)
+
+    assert "&lt;BTC&amp;USDT&gt;" in message
+    assert "&lt;b&gt;unsafe&lt;/b&gt;" in message
+    assert "&lt;id&amp;1&gt;" in message
+    assert "ACTIVADA" not in message
+    assert "ID de seguimiento" not in message
 
 
 @patch("requests.post")

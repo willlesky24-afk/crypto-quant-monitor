@@ -47,6 +47,12 @@ class TelegramChannel(BaseNotificationChannel):
 
     def format_message(self, payload: NotificationPayload) -> str:
         """Format a NotificationPayload into a structured HTML message for Telegram."""
+        tracked = (
+            payload.action in {"BUY", "SELL"}
+            and payload.metadata.get("tracking_id")
+            and payload.metadata.get("tracking_recorded_at")
+            and payload.metadata.get("signal_status") == "ACTIVADA"
+        )
         if payload.direction == "LONG" or payload.action == "BUY":
             icon = "🟢"
         elif payload.direction == "SHORT" or payload.action == "SELL":
@@ -62,31 +68,40 @@ class TelegramChannel(BaseNotificationChannel):
         safe_reasoning = html.escape(payload.reasoning or "N/A")
 
         is_fx = "=X" in payload.symbol or payload.price < 10
-        p_str = f"${payload.price:,.4f}" if is_fx else f"${payload.price:,.2f}"
+        p_str = f"${payload.price}" if tracked else (f"${payload.price:,.4f}" if is_fx else f"${payload.price:,.2f}")
 
         lines = [
             f"<b>{icon} SIGNAL ALERT: {safe_symbol} [{safe_tf}]</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"<b>Action:</b> {safe_action} ({safe_dir})",
-            f"<b>Price:</b> {p_str}",
+            f"<b>{'Entrada validada' if tracked else 'Price'}:</b> {p_str}",
             f"<b>Market Regime:</b> <code>{safe_regime}</code>",
             f"<b>Confidence:</b> {payload.confidence * 100:.1f}%",
             f"<b>Predictive Score:</b> {payload.predictive_score:.2f}",
             f"<b>Quant Score:</b> {payload.quant_score:.1f}",
         ]
 
+        if tracked:
+            lines.extend([
+                f"<b>ID de seguimiento:</b> {html.escape(str(payload.metadata['tracking_id']))}",
+                f"<b>Registro (UTC):</b> {html.escape(str(payload.metadata['tracking_recorded_at']))}",
+                f"<b>Estado de señal:</b> {html.escape(str(payload.metadata['signal_status']))}",
+            ])
+
         if payload.stop_loss is not None:
-            sl_str = f"${payload.stop_loss:,.4f}" if is_fx else f"${payload.stop_loss:,.2f}"
+            sl_str = f"${payload.stop_loss}" if tracked else (f"${payload.stop_loss:,.4f}" if is_fx else f"${payload.stop_loss:,.2f}")
             lines.append(f"<b>🛑 Stop Loss:</b> {sl_str}")
         if payload.take_profit is not None:
-            tp_str = f"${payload.take_profit:,.4f}" if is_fx else f"${payload.take_profit:,.2f}"
+            tp_str = f"${payload.take_profit}" if tracked else (f"${payload.take_profit:,.4f}" if is_fx else f"${payload.take_profit:,.2f}")
             lines.append(f"<b>🎯 Take Profit:</b> {tp_str}")
         if payload.risk_reward_ratio is not None:
-            lines.append(f"<b>⚖️ R:R Ratio:</b> {payload.risk_reward_ratio:.2f}")
+            ratio_label = "R:R bruto (sin costes)" if tracked else "R:R Ratio"
+            ratio_value = str(payload.risk_reward_ratio) if tracked else f"{payload.risk_reward_ratio:.2f}"
+            lines.append(f"<b>⚖️ {ratio_label}:</b> {ratio_value}")
 
         lines.append(f"<b>🧠 Reasoning:</b> {safe_reasoning}")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"<i>Event ID: {payload.event_id} | Priority: {payload.priority.value}</i>")
+        lines.append(f"<i>Event ID: {html.escape(payload.event_id)} | Priority: {payload.priority.value}</i>")
 
         full_message = "\n".join(lines)
 

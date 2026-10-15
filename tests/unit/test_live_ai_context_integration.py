@@ -120,7 +120,14 @@ def test_no_mutation_of_historical_snapshots():
 
     # Verify snapshot at T+1 reflects new data
     assert ctx_t1.current_price == 66500.0
-    assert ctx_t1.signal.action == "SELL"
+    # The legacy fixture carries LONG-sided levels for a SHORT; the bridge must not
+    # turn that historical event into an operational SELL plan.
+    assert sig_t1.action == "SELL"
+    assert ctx_t1.signal.action == "WAIT"
+    assert ctx_t1.risk.stop_loss is None
+    assert ctx_t1.risk.take_profit is None
+    assert ctx_t1.risk.risk_ratio is None
+    assert ctx_t1.metadata["risk_validation_error"]
     assert ctx_t1.timestamp == pd.Timestamp("2026-04-20 13:00:00")
 
 

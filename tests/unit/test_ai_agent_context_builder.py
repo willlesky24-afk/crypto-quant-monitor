@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
+
 import pandas as pd
+import pytest
 
 from src.ai_agent.context_builder import ContextBuilder
 from src.decision_engine import DecisionResult
 from src.notifications.models import SignalEvent
+from src.risk_engine import RiskEngine
 
 
 def test_build_from_signal_event_complete():
@@ -238,4 +242,69 @@ def test_build_from_signal_event_risk_engine_dict_fallback():
     }
     ctx = ContextBuilder.build_from_signal_event(sig, market_report=market_report)
     assert ctx.risk.risk_category == "Moderado"
+
+
+@pytest.mark.parametrize(
+    ("direction", "stop", "target"),
+    [("LONG", 95.0, 110.0), ("SHORT", 105.0, 90.0)],
+)
+def test_context_builder_uses_central_gross_r_and_keeps_candidate_wait(
+    direction, stop, target
+):
+    event = SignalEvent(
+        timestamp=pd.Timestamp("2026-10-12T12:00:00Z"),
+        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
+        direction=direction, confidence=0.8, predictive_score=0.7,
+        regime="TRENDING", reasoning="Fixture", price=100.0,
+        stop_loss=stop, take_profit=target,
+        metadata={
+            "entry_price": 100.0, "signal_status": "CANDIDATA",
+            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+        },
+    )
+    context = ContextBuilder.build_from_signal_event(event)
+    central = RiskEngine().calculate_levels(100.0, stop, target, direction)
+    assert context.signal.action == "WAIT"
+    assert context.risk.stop_loss == central["stop_loss"]
+    assert context.risk.take_profit == central["take_profit"]
+    assert context.risk.risk_ratio == central["gross_risk_reward"] == 2.0
+    assert context.metadata["risk_levels_source"] == "RiskEngine"
+
+
+@pytest.mark.parametrize(
+    ("direction", "stop", "target", "entry", "reported"),
+    [
+        ("LONG", 105.0, 110.0, 100.0, None),
+        ("SHORT", 95.0, 90.0, 100.0, None),
+        ("LONG", 95.0, 90.0, 100.0, None),
+        ("SHORT", 105.0, 110.0, 100.0, None),
+        ("LONG", 100.0, 110.0, 100.0, None),
+        ("LONG", 95.0, 110.0, None, None),
+        ("LONG", math.nan, 110.0, 100.0, None),
+        ("LONG", 95.0, math.inf, 100.0, None),
+        ("LONG", 95.0, 110.0, 100.0, 3.0),
+    ],
+)
+def test_context_builder_invalid_plan_exposes_no_levels_or_positive_r(
+    direction, stop, target, entry, reported
+):
+    event = SignalEvent(
+        timestamp=pd.Timestamp("2026-10-12T12:00:00Z"),
+        symbol="BTCUSDT", timeframe="1h", action="BUY", direction=direction,
+        confidence=0.8, predictive_score=0.7, regime="TRENDING",
+        reasoning="Fixture", price=100.0, stop_loss=stop, take_profit=target,
+        metadata={
+            "entry_price": entry,
+            "risk_reward_ratio": reported,
+            "signal_status": "CANDIDATA",
+            "entry_confirmed": False,
+        },
+    )
+    context = ContextBuilder.build_from_signal_event(event)
+    assert context.risk.stop_loss is None
+    assert context.risk.take_profit is None
+    assert context.risk.risk_ratio is None
+    assert context.signal.action == "WAIT"
+    assert context.metadata["signal_status"] == "NO DISPONIBLE"
+    assert context.metadata["risk_validation_error"]
 

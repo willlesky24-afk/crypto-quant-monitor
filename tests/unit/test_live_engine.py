@@ -4,14 +4,14 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
+import pytest
 
+from src.constants import DECISION_FAVORABLE
 from src.decision_engine import DecisionResult
+from src.indicators import TechnicalIndicators
 from src.notifications.channels.discord import DiscordWebhookChannel
 from src.notifications.dispatcher import NotificationDispatcher
-from src.notifications.models import (
-    NotificationChannelType,
-    SignalEvent,
-)
+from src.notifications.models import SignalEvent
 from src.streaming.candle_aggregator import CandleAggregator, KlineEvent
 from src.streaming.live_engine import LiveExecutionEngine
 
@@ -121,10 +121,10 @@ def test_live_engine_full_predictive_pipeline_execution():
     assert len(engine.signal_history) == 1
     assert len(received_signals) == 1
 
-    # Notification dispatch verification
-    assert len(notifs) >= 1
-    assert notifs[0].success is True
-    assert notifs[0].channel == NotificationChannelType.DISCORD
+    # No activation rule exists: listeners get context, not entry alerts.
+    assert signal_event.metadata["entry_confirmed"] is False
+    assert signal_event.metadata["signal_status"] != "ACTIVADA"
+    assert notifs == []
 
 
 def test_live_engine_legacy_mode_execution():
@@ -245,7 +245,7 @@ def test_live_engine_short_direction_sl_tp():
 
     # Mock decision engine to return SHORT
     mock_decision = DecisionResult(
-        decision="SELL",
+        decision=DECISION_FAVORABLE,
         confidence=0.85,
         positives=[],
         warnings=[],
@@ -275,8 +275,43 @@ def test_live_engine_short_direction_sl_tp():
     sig, dec, notifs = engine.on_candle_closed(full_df, kline)
     assert sig is not None
     assert sig.direction == "SHORT"
-    assert sig.action == "SELL"
-    # For SHORT, SL must be above close price, TP below close price
+    assert sig.action == "WAIT"
+    assert sig.metadata["decision_label"] == DECISION_FAVORABLE
+    assert sig.metadata["signal_status"] == "CANDIDATA"
     assert sig.stop_loss > sig.price
     assert sig.take_profit < sig.price
+
+
+@pytest.mark.parametrize("bad_atr", [0.0, np.nan, np.inf])
+def test_live_engine_invalid_risk_never_reaches_dispatcher(synthetic_ohlcv, bad_atr):
+    dispatcher = MagicMock()
+    engine = LiveExecutionEngine("BTCUSDT", "1h", dispatcher=dispatcher)
+    engine.decision_engine.evaluate = MagicMock(return_value=DecisionResult(
+        decision=DECISION_FAVORABLE,
+        confidence=85.0,
+        positives=[], warnings=[], market_state="fixture",
+        direction="LONG", sl_multiplier=1.5, tp_multiplier=3.0,
+    ))
+    enriched = TechnicalIndicators().calculate_all(synthetic_ohlcv.copy())
+    enriched.loc[enriched.index[-1], "atr"] = bad_atr
+    engine.indicators.calculate_all = MagicMock(return_value=enriched)
+    last = synthetic_ohlcv.iloc[-1]
+    candle = KlineEvent(
+        symbol="BTCUSDT", interval="1h",
+        start_time=pd.Timestamp(last["timestamp"]),
+        close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
+        open=float(last["open"]), high=float(last["high"]),
+        low=float(last["low"]), close=float(last["close"]),
+        volume=float(last["volume"]), is_closed=True,
+    )
+
+    event, _, notifications = engine.on_candle_closed(synthetic_ohlcv, candle)
+    assert event is not None
+    assert event.metadata["signal_status"] == "NO DISPONIBLE"
+    assert event.metadata["risk_reason"]
+    assert event.stop_loss is None
+    assert event.take_profit is None
+    assert event.metadata["risk_reward_ratio"] is None
+    assert notifications == []
+    dispatcher.dispatch_signal.assert_not_called()
 

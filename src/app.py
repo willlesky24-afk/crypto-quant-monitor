@@ -649,6 +649,18 @@ with tab_live:
 
     last_bar = df.iloc[-1]
     curr_price = float(last_bar["close"])
+    trade_plan = risk_engine.plan_from_decision(
+        decision=decision.decision,
+        direction=decision.direction,
+        reference_price=curr_price,
+        atr=last_bar.get("atr"),
+        sl_multiplier=decision.sl_multiplier,
+        tp_multiplier=decision.tp_multiplier,
+    )
+    risk_decimals = 5 if is_forex else (6 if curr_price < 1 else 2)
+
+    def format_risk_level(value):
+        return f"${value:,.{risk_decimals}f}" if value is not None else "No disponible"
 
     if is_manual_mode:
         st.warning(
@@ -663,7 +675,8 @@ with tab_live:
     with col2:
         st.metric("Régimen de Mercado", regime_res.regime.value)
     with col3:
-        st.metric("Decisión Estratégica", f"{decision.decision} ({decision.direction})")
+        st.metric("Estado de señal", f"{trade_plan['status']} ({trade_plan['direction']})")
+        st.caption(f"Decisión técnica: {decision.decision}")
     with col4:
         conf_pct = decision.confidence if decision.confidence > 1.0 else decision.confidence * 100.0
         st.metric("Confianza", f"{conf_pct:.1f}%")
@@ -744,7 +757,7 @@ with tab_live:
     # 4. Contextual Diagnostics & Modular Layer Navigation
     c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs([
         "🧠 Diagnóstico",
-        "📋 Operación",
+        "📋 Plan de riesgo",
         "🎯 Niveles",
         "🔮 Predicción",
         "🛠️ Datos",
@@ -759,11 +772,10 @@ with tab_live:
         pred_sc = getattr(decision, "predictive_score", pred_res.predictive_score)
 
         narrative_p = (
-            f"El motor cuantitativo determinó una postura de <strong>{decision.decision}</strong> en dirección <strong>{decision.direction}</strong> "
-            f"para <strong>{symbol}</strong> ({interval}). "
-            f"La señal técnica ({tech_score:.1f} pts) y la proyección predictiva ({pred_sc:.2f}) "
-            f"arrojan una confianza ponderada de <strong>{conf_val:.1f}%</strong>, con objetivo dinámico en <strong>{decision.tp_multiplier:.2f}x ATR</strong> "
-            f"y corte de riesgo en <strong>{decision.sl_multiplier:.2f}x ATR</strong>."
+            f"El motor cuantitativo clasifica a <strong>{symbol}</strong> ({interval}) como "
+            f"<strong>{trade_plan['status']}</strong>, dirección <strong>{trade_plan['direction']}</strong>. "
+            f"Puntaje técnico: {tech_score:.1f}; puntaje predictivo: {pred_sc:.2f}. "
+            f"{trade_plan['reason']}"
         )
 
         st.markdown(
@@ -780,8 +792,8 @@ with tab_live:
                     <span class="metric-pill metric-pill-green">📊 Técnico: {tech_score:.1f} pts</span>
                     <span class="metric-pill metric-pill-cyan">🔮 Predictivo: {pred_sc:.2f}</span>
                     <span class="metric-pill metric-pill-gold">🎯 Confianza: {conf_val:.1f}%</span>
-                    <span class="metric-pill metric-pill-coral">🛑 SL: {decision.sl_multiplier:.2f}x ATR</span>
-                    <span class="metric-pill metric-pill-green">🎯 TP: {decision.tp_multiplier:.2f}x ATR</span>
+                    <span class="metric-pill metric-pill-coral">🛑 SL: {format_risk_level(trade_plan['stop_loss'])}</span>
+                    <span class="metric-pill metric-pill-green">🎯 TP: {format_risk_level(trade_plan['take_profit'])}</span>
                 </div>
             </div>
             """,
@@ -828,22 +840,29 @@ with tab_live:
             st.caption(f"📌 Conclusión del Reporte: {conclusion}")
 
     with c_layer2:
-        tp_mult = getattr(decision, "tp_multiplier", 3.0)
-        sl_mult = getattr(decision, "sl_multiplier", 1.5)
-        atr_val = risk.get("atr", 0.0)
-
-        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        st.caption(f"{symbol} · {interval} · {trade_plan['status']} · {trade_plan['direction']}")
+        p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
         with p_col1:
-            st.metric("Sesgo Sugerido", f"{decision.decision} ({decision.direction})")
+            st.metric("Referencia", format_risk_level(trade_plan["reference_price"]))
         with p_col2:
-            st.metric("Target (TP)", f"{tp_mult:.2f}x ATR", f"+${(tp_mult * atr_val):,.2f}" if atr_val else None)
+            st.metric("Entrada propuesta", format_risk_level(trade_plan["entry_price"]))
         with p_col3:
-            st.metric("Stop Loss (SL)", f"{sl_mult:.2f}x ATR", f"-${(sl_mult * atr_val):,.2f}" if atr_val else None)
+            st.metric("Stop Loss", format_risk_level(trade_plan["stop_loss"]))
         with p_col4:
-            rr_ratio = tp_mult / max(sl_mult, 0.01)
-            st.metric("Ratio R:R", f"1 : {rr_ratio:.2f}")
+            st.metric("Take Profit", format_risk_level(trade_plan["take_profit"]))
+        with p_col5:
+            gross_rr = trade_plan["gross_risk_reward"]
+            st.metric("R bruto indicativo", f"1 : {gross_rr:.2f}" if gross_rr is not None else "No disponible")
 
-        st.caption("ℹ️ Multiplicadores calculados en base a la volatilidad ATR de velas cerradas.")
+        if trade_plan["risk_distance"] is not None:
+            st.caption(
+                f"Distancia de riesgo: {trade_plan['risk_distance']:.6g} · "
+                f"distancia de beneficio: {trade_plan['reward_distance']:.6g}. "
+                "R calculado desde entrada propuesta, SL y TP; sin spread, comisiones ni deslizamiento."
+            )
+        st.info(trade_plan["reason"])
+        if trade_plan["methodology"] is not None:
+            st.caption(f"Método: {trade_plan['methodology']}. Entrada no confirmada.")
 
     with c_layer3:
         poc_val = profile.get("poc")
@@ -890,6 +909,7 @@ with tab_live:
             "predictive_score": pred_res.predictive_score,
             "tp_multiplier": decision.tp_multiplier,
             "sl_multiplier": decision.sl_multiplier,
+            "risk_plan": trade_plan,
             "poc": profile.get("poc"),
             "vah": profile.get("vah"),
             "val": profile.get("val"),
@@ -906,38 +926,28 @@ with tab_copilot:
 
     try:
         curr_p = float(df.iloc[-1]["close"])
-        atr_val = float(analysis.get("atr", 0.0))
-        sl_mult = getattr(decision, "sl_multiplier", 1.5) or 1.5
-        tp_mult = getattr(decision, "tp_multiplier", 3.0) or 3.0
-
-        calc_sl = risk.get("stop_loss")
-        calc_tp = risk.get("take_profit")
-        if calc_sl is None and atr_val > 0:
-            if "SHORT" in decision.direction.upper() or "SELL" in decision.decision.upper():
-                calc_sl = round(curr_p + sl_mult * atr_val, 5 if is_forex else 2)
-                calc_tp = round(max(0.0, curr_p - tp_mult * atr_val), 5 if is_forex else 2)
-            else:
-                calc_sl = round(max(0.0, curr_p - sl_mult * atr_val), 5 if is_forex else 2)
-                calc_tp = round(curr_p + tp_mult * atr_val, 5 if is_forex else 2)
 
         live_signal_event = SignalEvent(
             timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
             symbol=symbol,
             timeframe=interval,
-            action=decision.decision,
-            direction=decision.direction,
+            action=decision.decision if trade_plan["status"] == "ACTIVADA" and trade_plan["entry_confirmed"] else "WAIT",
+            direction=trade_plan["direction"],
             confidence=decision.confidence if decision.confidence <= 1.0 else decision.confidence / 100.0,
             predictive_score=pred_res.predictive_score,
             regime=regime_res.regime.value,
-            reasoning=decision.reasoning,
+            reasoning=f"{decision.reasoning} Estado: {trade_plan['status']}. {trade_plan['reason']}",
             price=curr_p,
             quant_score=score["score"],
-            stop_loss=calc_sl,
-            take_profit=calc_tp,
+            stop_loss=trade_plan["stop_loss"],
+            take_profit=trade_plan["take_profit"],
             signal_id=f"live-{symbol}-{interval}",
             metadata={
-                "risk_reward_ratio": round(tp_mult / max(sl_mult, 0.01), 2),
-                "atr": atr_val,
+                "risk_reward_ratio": trade_plan["gross_risk_reward"],
+                "risk_reward_basis": "bruto_sin_costes" if trade_plan["gross_risk_reward"] is not None else None,
+                "signal_status": trade_plan["status"],
+                "entry_confirmed": trade_plan["entry_confirmed"],
+                "atr": trade_plan["atr"],
                 "positives": decision.positives,
                 "warnings": decision.warnings,
             },
@@ -952,7 +962,11 @@ with tab_copilot:
                 "volume": float(df.iloc[-1].get("volume", 0.0)),
             },
             volume_profile=profile,
-            metadata={"source": "Streamlit Live Dashboard"},
+            metadata={
+                "source": "Streamlit Live Dashboard",
+                "signal_status": trade_plan["status"],
+                "entry_confirmed": trade_plan["entry_confirmed"],
+            },
         )
 
         db_path = os.getenv("DATABASE_PATH", "data/market_contexts.db")
@@ -1343,7 +1357,8 @@ with tab_copilot:
             with snap_col3:
                 st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
             with snap_col4:
-                st.metric("Sesgo Operativo", f"{current_market_context.signal.action} ({current_market_context.signal.direction})")
+                context_status = current_market_context.metadata.get("signal_status", "NO DISPONIBLE")
+                st.metric("Estado de señal", f"{context_status} ({current_market_context.signal.direction})")
 
             with st.expander("🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)", expanded=False):
                 st.json({
@@ -1353,6 +1368,7 @@ with tab_copilot:
                     "quant_score": current_market_context.quant_score,
                     "predictive_score": current_market_context.predictive_score,
                     "action": current_market_context.signal.action,
+                    "signal_status": context_status,
                     "direction": current_market_context.signal.direction,
                     "confidence": current_market_context.signal.confidence,
                     "stop_loss": current_market_context.risk.stop_loss,
@@ -1914,27 +1930,25 @@ with tab_settings:
                     timestamp=pd.Timestamp.now("UTC"),
                     symbol=symbol,
                     timeframe=interval,
-                    action="BUY",
-                    direction="LONG",
-                    confidence=0.88,
-                    predictive_score=0.82,
+                    action="TEST",
+                    direction="SIN OPERACIÓN",
+                    confidence=0.0,
+                    predictive_score=0.0,
                     regime="TRENDING_BULL",
-                    reasoning="Test ping de verificación de canal desde Crypto Quant Monitor Dashboard.",
+                    reasoning="PRUEBA DE CANAL: no es una señal ni contiene niveles operativos.",
                     price=float(df.iloc[-1]["close"]),
-                    quant_score=85.0,
-                    stop_loss=round(float(df.iloc[-1]["close"]) * 0.98, 4 if is_forex else 2),
-                    take_profit=round(float(df.iloc[-1]["close"]) * 1.04, 4 if is_forex else 2),
+                    quant_score=0.0,
                     signal_id="test-ping-01",
                 )
 
                 results = dispatcher.dispatch_signal(test_signal, priority=NotificationPriority.HIGH)
-                st.success(f"Despacho completado. {len(results)} canales procesados.")
+                st.info(f"Prueba procesada: {len(results)} resultados de canal; consulta éxito o fallo en la tabla.")
                 result_rows = [r.to_dict() for r in results]
                 st.table(pd.DataFrame(result_rows))
 
     with act_col2:
         st.markdown("#### 📡 2. Escanear y Despachar Alertas Reales")
-        st.caption("Escanea los pares en vivo y envía las señales de alta probabilidad a tu Telegram.")
+        st.caption("Solo se despachan señales ACTIVADAS con entrada confirmada y niveles válidos. Las candidatas no se envían como operables.")
         min_quant_thresh = st.slider("Quant Score Mínimo para Alerta Real", 60.0, 95.0, 75.0, 5.0)
 
         if st.button("🚀 Escanear Mercado y Enviar Alertas Reales", type="primary", use_container_width=True):
@@ -1966,24 +1980,16 @@ with tab_settings:
                         scanner = MarketScanner()
                         scan_results = scanner.scan_market(timeframe=interval)
 
-                    sent_count = 0
+                    accepted_count = 0
+                    failed_count = 0
                     if "dispatched_signals_history" not in st.session_state:
                         st.session_state["dispatched_signals_history"] = []
 
                     tracker = AlertOutcomeTracker()
                     for cand in scan_results:
-                        is_wait = any(w in cand.action.upper() for w in ("WAIT", "ESPERAR", "DÉBIL", "DEBIL"))
-                        if cand.quant_score >= min_quant_thresh and not is_wait:
-                            is_cand_fx = "=X" in cand.symbol or cand.price < 10
-                            sl_val = cand.stop_loss
-                            tp_val = cand.take_profit
-                            atr_ref = cand.price * (0.003 if is_cand_fx else 0.015)
-
-                            if sl_val is None:
-                                sl_val = max(0.0, cand.price - 1.5 * atr_ref) if "LONG" in cand.direction else cand.price + 1.5 * atr_ref
-                            if tp_val is None:
-                                tp_val = cand.price + 3.0 * atr_ref if "LONG" in cand.direction else max(0.0, cand.price - 3.0 * atr_ref)
-
+                        if cand.quant_score >= min_quant_thresh and cand.is_operable():
+                            is_cand_fx = "=X" in cand.symbol
+                            cand_decimals = 5 if is_cand_fx else (6 if cand.entry_price < 1 else 2)
                             sig_ev = SignalEvent(
                                 timestamp=pd.Timestamp.now("UTC"),
                                 symbol=cand.symbol,
@@ -1994,43 +2000,93 @@ with tab_settings:
                                 predictive_score=cand.predictive_score,
                                 regime=cand.regime,
                                 reasoning=f"Quant Score {cand.quant_score:.1f}/100. Confluencia: {cand.primary_reason}.",
-                                price=cand.price,
+                                price=cand.entry_price,
                                 quant_score=cand.quant_score,
-                                stop_loss=round(sl_val, 4 if is_cand_fx else 2),
-                                take_profit=round(tp_val, 4 if is_cand_fx else 2),
+                                stop_loss=cand.stop_loss,
+                                take_profit=cand.take_profit,
                                 signal_id=f"alert-{cand.symbol}-{interval}-{int(pd.Timestamp.now('UTC').timestamp())}",
-                                metadata={"risk_reward_ratio": cand.risk_reward},
+                                metadata={
+                                    "risk_reward_ratio": cand.risk_reward,
+                                    "risk_reward_basis": "bruto_sin_costes",
+                                    "signal_status": cand.status,
+                                    "entry_confirmed": cand.entry_confirmed,
+                                },
                             )
-                            dispatcher.dispatch_signal(sig_ev, priority=NotificationPriority.HIGH)
-                            sent_count += 1
-                            tracker.record_alert(sig_ev, is_forex=is_cand_fx, risk_reward=cand.risk_reward)
+                            try:
+                                alert_record, delivery_results = dispatcher.dispatch_tracked_signal(
+                                    sig_ev,
+                                    tracker,
+                                    is_forex=is_cand_fx,
+                                    risk_reward=cand.risk_reward,
+                                    priority=NotificationPriority.HIGH,
+                                )
+                            except Exception as alert_error:
+                                st.warning(f"Alerta {cand.symbol} no enviada: registro inválido o no disponible ({alert_error}).")
+                                continue
+                            if alert_record is None:
+                                continue
+                            accepted_channels = [r.channel.value for r in delivery_results if r.success]
+                            failed_channels = [r.channel.value for r in delivery_results if not r.success]
+                            if not accepted_channels:
+                                failed_count += 1
+                                st.warning(
+                                    f"Se registró la señal {alert_record['id']} para seguimiento, "
+                                    "pero ningún canal confirmó la aceptación del envío. "
+                                    f"Fallos: {', '.join(failed_channels) or 'sin resultado de canal'}."
+                                )
+                                continue
+                            accepted_count += 1
+                            if failed_channels:
+                                st.warning(
+                                    f"Señal {alert_record['id']}: aceptación parcial. "
+                                    f"Fallaron: {', '.join(failed_channels)}."
+                                )
                             if "dispatched_signals_history" not in st.session_state:
                                 st.session_state["dispatched_signals_history"] = []
                             st.session_state["dispatched_signals_history"].append({
+                                "ID de seguimiento": alert_record["id"],
                                 "Fecha (UTC)": str(sig_ev.timestamp)[:19],
                                 "Par": cand.symbol,
+                                "Estado señal": cand.status,
+                                "Resultado inmediato de canales": (
+                                    f"{len(accepted_channels)} {'simulados' if dry_run_mode else 'aceptados'}; "
+                                    f"{len(failed_channels)} fallidos"
+                                ),
                                 "Dirección": cand.direction,
-                                "Precio Entrada": f"${cand.price:,.4f}" if is_cand_fx else f"${cand.price:,.2f}",
-                                "Stop Loss": f"${sig_ev.stop_loss:,.4f}" if is_cand_fx else f"${sig_ev.stop_loss:,.2f}",
-                                "Take Profit": f"${sig_ev.take_profit:,.4f}" if is_cand_fx else f"${sig_ev.take_profit:,.2f}",
+                                "Precio Entrada": f"${alert_record['entry_price']:,.{cand_decimals}f}",
+                                "Stop Loss": f"${alert_record['stop_loss']:,.{cand_decimals}f}",
+                                "Take Profit": f"${alert_record['take_profit']:,.{cand_decimals}f}",
                                 "Quant Score": f"{cand.quant_score:.1f}",
-                                "R:R": f"1:{cand.risk_reward:.2f}",
+                                "R bruto (sin costes)": f"1:{alert_record['risk_reward']:.2f}",
                             })
 
-                    if sent_count > 0:
-                        st.success(f"🎯 ¡Se detectaron y despacharon {sent_count} alertas reales a tu Telegram!")
+                    if accepted_count > 0:
+                        st.success(
+                            f"{accepted_count} señales registradas con aceptación de al menos un canal"
+                            f"{' (simulada)' if dry_run_mode else ''}. Esto no confirma lectura por el destinatario."
+                        )
+                    elif failed_count > 0:
+                        st.warning(
+                            f"{failed_count} señales quedaron registradas para seguimiento, "
+                            "pero ningún canal confirmó la aceptación del envío."
+                        )
                     else:
-                        st.info("ℹ️ Ningún par superó el umbral sin estado de espera en este ciclo de mercado.")
+                        candidate_count = sum(cand.status == "CANDIDATA" for cand in scan_results)
+                        st.info(f"No hubo señales activadas aceptadas por canales. Hay {candidate_count} candidatas sin entrada confirmada.")
 
     # Persistent audit log and automated TP/SL outcome tracking
     tracker = AlertOutcomeTracker()
     all_alerts = tracker.get_all_alerts()
 
     st.markdown("---")
-    st.markdown("### 📋 Historial de Alertas y Auditoría de Tasa de Éxito (Win Rate)")
-    st.caption("Auditoría cuantitativa automática: evalúa contra el mercado en tiempo real si cada señal alcanzó el Take Profit o Stop Loss.")
+    st.markdown("### 📋 Historial de señales registradas y auditoría de resultados")
+    st.caption(
+        "OPEN indica seguimiento de mercado, no envío confirmado. "
+        "El estado histórico de entrega no está disponible: no se persiste por registro."
+    )
 
     if all_alerts:
+        st.caption("Registros anteriores a P0-002 pueden contener niveles aproximados; su R histórico no se ha revalidado.")
         stats = tracker.compute_statistics()
 
         stat_c1, stat_c2, stat_c3, stat_c4, stat_c5 = st.columns(5)
@@ -2053,7 +2109,7 @@ with tab_settings:
         display_rows = []
         for a in all_alerts:
             is_fx_row = bool(a["is_forex"]) or "=X" in a["symbol"]
-            dec = 4 if is_fx_row else 2
+            dec = 5 if is_fx_row else (6 if a["entry_price"] < 1 else 2)
 
             st_val = a["status"]
             if st_val == "WIN":
@@ -2070,19 +2126,20 @@ with tab_settings:
                 "Fecha (UTC)": a["timestamp"][:16],
                 "Par": a["symbol"],
                 "Dirección": a["direction"],
-                "Estado": status_str,
+                "Estado de seguimiento": status_str,
+                "Estado de entrega": "No disponible (no persistido)",
                 "Entrada": f"${a['entry_price']:,.{dec}f}",
                 "Stop Loss": f"${a['stop_loss']:,.{dec}f}",
                 "Take Profit": f"${a['take_profit']:,.{dec}f}",
                 "Precio Actual/Salida": exit_str,
                 "PnL (%)": f"{a['pnl_percent']:+.2f}%",
                 "Quant Score": f"{a['quant_score']:.1f}",
-                "R:R": f"1:{a['risk_reward']:.2f}",
+                "R registrado (sin costes)": f"1:{a['risk_reward']:.2f}",
             })
 
         st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
     else:
-        st.info("ℹ️ Aún no hay alertas despachadas en la base de datos. Haz clic en 'Escanear Mercado y Enviar Alertas Reales' para comenzar tu historial de auditoría.")
+        st.info("ℹ️ Aún no hay señales registradas para seguimiento en la base de datos.")
 
 
 # =====================================================================
@@ -2123,11 +2180,11 @@ with tab_guide:
               *Uso táctico:* Permite definir objetivos de ganancia y límites de pérdida dinámicos que se expanden en mercados volátiles y se comprimen en mercados tranquilos.
             
             - **`R:R` (Risk-to-Reward Ratio / Ratio Riesgo-Beneficio):**  
-              *Significado:* Proporción entre el beneficio proyectado (Take Profit) y la pérdida máxima aceptada (Stop Loss).  
-              *Ejemplo:* Un R:R de `1 : 2.0` significa que por cada $1 arriesgado, se busca una ganancia de $2.
+              *Significado:* Distancia de beneficio hasta TP dividida por la distancia de riesgo hasta SL desde la entrada propuesta. Es una relación bruta; no incluye costes, deslizamiento ni ejecución garantizada.
+              *Ejemplo:* Un R bruto de `1 : 2.0` describe un objetivo a dos unidades de precio por cada unidad hasta el stop.
             
-            - **`SL` (Stop Loss):** Nivel de corte de pérdidas protector automático.
-            - **`TP` (Take Profit):** Nivel objetivo de toma de ganancias programado.
+            - **`SL` (Stop Loss):** Nivel de invalidación propuesto. La aplicación no ejecuta órdenes.
+            - **`TP` (Take Profit):** Objetivo de precio propuesto, sujeto a confirmación y costes.
             """)
 
         with g_col2:
@@ -2168,7 +2225,7 @@ with tab_guide:
         | **Barra Lateral** | **Velas Históricas** | Mueves el deslizador (250 a 1000 velas) | Amplía o reduce el historial cargado en memoria (ej. 300 velas en 1d = ~10 meses). |
         | **Barra Lateral** | **Modo de Análisis** | Alternas entre *Automático* y *Manual* | Activa el simulador *What-If* para forzar regímenes, probabilidades y multiplicadores a tu criterio. |
         | **📡 Live Monitor** | **🧠 Diagnóstico** | Pulsas la sub-pestaña | Muestra la decisión ejecutiva (LONG, SHORT o ESPERAR), justificación matemática y confluencias favorables/alertas. |
-        | **📡 Live Monitor** | **📋 Operación** | Pulsas la sub-pestaña | Muestra los precios sugeridos de entrada, Stop Loss (SL), Take Profit (TP), distancias en ATR y ratio R:R. |
+        | **📡 Live Monitor** | **📋 Plan de riesgo** | Pulsas la sub-pestaña | Muestra estado, entrada propuesta, SL, TP, distancias y R bruto cuando hay datos válidos. Una candidata no equivale a una entrada activada. |
         | **📡 Live Monitor** | **🎯 Niveles** | Pulsas la sub-pestaña | Entrega los precios clave del Área de Valor (POC, VAH, VAL) e indica si el precio está en zona de sobrecompra o descuento. |
         | **📡 Live Monitor** | **🔮 Predicción** | Pulsas la sub-pestaña | Muestra la probabilidad matemática de que la tendencia continúe y el desglose del modelo predictivo. |
         | **📡 Live Monitor** | **🛠️ Datos** | Pulsas la sub-pestaña | Expande la carga técnica en JSON para auditoría cuantitativa o conexión a sistemas externos. |
@@ -2176,5 +2233,5 @@ with tab_guide:
         | **🤖 AI Copilot** | **📋 Briefing** | Pulsas la sub-pestaña | Genera un informe diario institucional estructurado con análisis de volatilidad y señales fuertes. |
         | **🤖 AI Copilot** | **🚨 Anomalías** | Pulsas la sub-pestaña | Evalúa si existen divergencias estructurales o anomalías severas de volatilidad en el activo actual. |
         | **📈 Backtest** | **🚀 Ejecutar Backtest** | Pulsas el botón con tus parámetros elegidos | Simula vela por vela la estrategia en el pasado sin repintado y grafica la Curva de Capital, Drawdown y dispersión MAE vs MFE. |
-        | **⚙️ Configuración** | **🔔 Notificación de Prueba** | Pulsas el botón de prueba | Envía un ping de prueba simulado a tus canales de Telegram, Discord o Webhook configurados. |
+        | **⚙️ Configuración** | **🔔 Notificación de Prueba** | Pulsas el botón de prueba | Envía un ping marcado TEST, sin dirección ni niveles de operación, al canal configurado. |
         """)
