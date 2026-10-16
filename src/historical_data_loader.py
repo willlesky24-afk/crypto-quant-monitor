@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -11,6 +12,17 @@ from .candle_validator import INTERVAL_TIMEDELTAS
 
 DEFAULT_BASE_URL = "https://data-api.binance.vision/api/v3"
 MAX_CHUNK_SIZE = 1000
+
+
+@dataclass(frozen=True)
+class RawHistoricalBatch:
+    """Provider rows in arrival order, with original page boundaries."""
+
+    candles: pd.DataFrame
+    page_sizes: tuple[int, ...]
+    acquired_at_utc: str
+    requested_start_ms: int | None = None
+    requested_end_ms: int | None = None
 
 
 class HistoricalDataLoader:
@@ -95,7 +107,8 @@ class HistoricalDataLoader:
         start_time: str | datetime | pd.Timestamp | int = "2024-01-01",
         end_time: str | datetime | pd.Timestamp | int | None = None,
         include_open_candle: bool = False,
-    ) -> pd.DataFrame:
+        return_raw_batch: bool = False,
+    ) -> pd.DataFrame | RawHistoricalBatch:
         """Downloads full paginated history for given symbol, timeframe and date range."""
         start_ms = self._to_timestamp_ms(start_time)
         end_ms = self._to_timestamp_ms(end_time) if end_time is not None else int(time.time() * 1000)
@@ -105,6 +118,7 @@ class HistoricalDataLoader:
             raise ValueError(f"start_time ({start_ms}) no puede ser posterior a end_time ({end_ms})")
 
         all_candles: list[list[Any]] = []
+        page_sizes: list[int] = []
         current_start = start_ms
 
         while current_start <= end_ms:
@@ -120,6 +134,7 @@ class HistoricalDataLoader:
                 break
 
             all_candles.extend(chunk)
+            page_sizes.append(len(chunk))
 
             last_open_time = int(chunk[-1][0])
             next_start = last_open_time + interval_ms
@@ -133,7 +148,7 @@ class HistoricalDataLoader:
                 time.sleep(self.request_delay)
 
         if not all_candles:
-            return pd.DataFrame(
+            empty = pd.DataFrame(
                 columns=[
                     "timestamp",
                     "open",
@@ -148,6 +163,10 @@ class HistoricalDataLoader:
                     "taker_buy_quote",
                 ]
             )
+            return (
+                RawHistoricalBatch(empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms)
+                if return_raw_batch else empty
+            )
 
         # Discard open candle if not requested
         if not include_open_candle and len(all_candles) > 0:
@@ -155,9 +174,10 @@ class HistoricalDataLoader:
             last_close_time = int(all_candles[-1][6])
             if last_close_time > now_ms:
                 all_candles = all_candles[:-1]
+                page_sizes[-1] -= 1
 
         if not all_candles:
-            return pd.DataFrame(
+            empty = pd.DataFrame(
                 columns=[
                     "timestamp",
                     "open",
@@ -171,6 +191,10 @@ class HistoricalDataLoader:
                     "taker_buy_base",
                     "taker_buy_quote",
                 ]
+            )
+            return (
+                RawHistoricalBatch(empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms)
+                if return_raw_batch else empty
             )
 
         df = pd.DataFrame(
@@ -207,21 +231,17 @@ class HistoricalDataLoader:
         df[numeric_cols] = df[numeric_cols].astype(float)
         df["trades"] = df["trades"].astype(int)
 
-        # Drop duplicates by timestamp
+        columns = [
+            "timestamp", "open", "high", "low", "close", "volume",
+            "close_time", "quote_volume", "trades", "taker_buy_base", "taker_buy_quote",
+        ]
+        if return_raw_batch:
+            return RawHistoricalBatch(
+                df[columns], tuple(page_sizes), datetime.now(timezone.utc).isoformat(),
+                start_ms, end_ms,
+            )
+
+        # Preserve the legacy normalized result unless the raw batch was requested.
         df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
 
-        return df[
-            [
-                "timestamp",
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-                "close_time",
-                "quote_volume",
-                "trades",
-                "taker_buy_base",
-                "taker_buy_quote",
-            ]
-        ]
+        return df[columns]

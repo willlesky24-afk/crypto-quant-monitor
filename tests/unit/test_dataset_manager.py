@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
+from src.backtest_models import DatasetProvenance
 from src.candle_validator import CandleValidator
 from src.dataset_manager import HistoricalDatasetManager
+from src.historical_data_loader import HistoricalDataLoader, RawHistoricalBatch
 from src.parquet_store import ParquetStore
 
 
@@ -205,3 +207,102 @@ def test_dataset_manager_slice_empty_df():
     empty = pd.DataFrame()
     sliced = HistoricalDatasetManager._slice_df(empty, start_time="2024-01-01")
     assert sliced.empty
+
+
+def _raw_batch(candles, page_sizes):
+    return RawHistoricalBatch(candles.copy(), tuple(page_sizes), "2024-01-01T00:00:00+00:00")
+
+
+def test_raw_temporal_inspection_distinguishes_page_anomalies(make_synthetic_candles):
+    base = make_synthetic_candles(periods=4, freq="1h")
+    within = pd.concat([base.iloc[[0, 1, 1, 2]],], ignore_index=True)
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(within, [4]), "1h")
+    assert status == "UNVERIFIED"
+    assert counts["within_page_duplicates"] == 1
+    assert counts["page_overlaps"] == 0
+
+    overlap = pd.concat([base.iloc[:2], base.iloc[1:]], ignore_index=True)
+    _, status, reason, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(overlap, [2, 3]), "1h")
+    assert counts["page_overlaps"] == 1
+    assert counts["conflicting_duplicates"] == 0
+    assert status == "UNVERIFIED"
+    assert "Solapamiento" in reason
+
+    conflict = overlap.copy()
+    conflict.loc[2, "close"] += 1.0
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(conflict, [2, 3]), "1h")
+    assert status == "UNVERIFIED"
+    assert counts["conflicting_duplicates"] == 1
+
+    disorder = base.iloc[[0, 2, 1, 3]].reset_index(drop=True)
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(disorder, [4]), "1h")
+    assert status == "UNVERIFIED"
+    assert counts["within_page_disorder"] > 0
+
+    gap = base.iloc[[0, 1, 3]].reset_index(drop=True)
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(gap, [3]), "1h")
+    assert status == "UNVERIFIED"
+    assert counts["irregular_steps"] == 1
+
+    reordered_pages = base.iloc[[2, 3, 0, 1]].reset_index(drop=True)
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(reordered_pages, [2, 2]), "1h"
+    )
+    assert status == "UNVERIFIED"
+    assert counts["combined_disorder"] == 1
+    assert counts["within_page_disorder"] == 0
+
+
+def test_partial_requested_boundaries_are_not_gaps(make_synthetic_candles):
+    base = make_synthetic_candles(start="2024-01-01", periods=3, freq="1h")
+    first_ms = int(base.iloc[0]["timestamp"].value // 1_000_000)
+    batch = RawHistoricalBatch(
+        base, (3,), "2024-01-01T00:00:00+00:00",
+        requested_start_ms=first_ms + 1_000,
+        requested_end_ms=first_ms + 2 * 3_600_000 + 1_000,
+    )
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(batch, "1h")
+    assert status == "VALID"
+    assert counts["partial_start_boundary"] == 1
+    assert counts["partial_end_boundary"] == 1
+    assert counts["irregular_steps"] == 0
+
+
+def test_controlled_sync_records_provenance_and_tampering_revokes_it(tmp_path, monkeypatch):
+    store = ParquetStore(base_dir=tmp_path / "controlled")
+    loader = HistoricalDataLoader(request_delay=0.0)
+    start = int(pd.Timestamp("2024-01-01", tz="UTC").value // 1_000_000)
+    step = 3_600_000
+    chunk = [
+        [start + i * step, "100", "101", "99", "100", "1",
+         start + (i + 1) * step - 1, "100", 1, "1", "100", "0"]
+        for i in range(5)
+    ]
+    monkeypatch.setattr(loader, "_fetch_chunk_with_retry", lambda **kwargs: chunk)
+    manager = HistoricalDatasetManager(store=store, data_loader=loader)
+    manager.sync_dataset("BTCUSDT", "1h", start_time=start, end_time=start + 5 * step)
+    provenance = store.inspect_provenance("BTCUSDT", "1h")
+    assert provenance.status == "CONTROLLED_INGESTION"
+    assert provenance.provider == "BINANCE_PUBLIC_SPOT_REST"
+    assert provenance.temporal_validation == "VALID"
+    assert provenance.content_sha256
+    loaded = manager.load_dataset("BTCUSDT", "1h")
+    assert loaded.attrs["_controlled_provenance"] == provenance
+
+    path = next(store.get_dataset_dir("BTCUSDT", "1h").glob("*.parquet"))
+    changed = pd.read_parquet(path)
+    changed.loc[0, "close"] = 99.0
+    changed.to_parquet(path, index=False)
+    assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
+    assert manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"].status == "UNKNOWN"
+
+
+def test_arbitrary_loader_cannot_record_provider_provenance(tmp_path, make_synthetic_candles):
+    store = ParquetStore(base_dir=tmp_path / "arbitrary")
+    candles = make_synthetic_candles(periods=5, freq="1h")
+    manager = HistoricalDatasetManager(
+        store=store, data_loader=MockHistoricalLoader(lambda *args: candles)
+    )
+    manager.sync_dataset("BTCUSDT", "1h")
+    assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
+    assert isinstance(manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"], DatasetProvenance)

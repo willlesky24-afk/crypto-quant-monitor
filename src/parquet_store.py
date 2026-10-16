@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+
+from .backtest_models import DatasetProvenance
 
 DEFAULT_HISTORICAL_DIR = Path("data/historical")
 DATASET_SCHEMA_VERSION = "1.0"
@@ -34,6 +37,66 @@ class ParquetStore:
             return None
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    @staticmethod
+    def _file_sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for block in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    def _record_controlled_provenance(
+        self, symbol: str, interval: str, provenance: DatasetProvenance
+    ) -> None:
+        """Bind manager-recorded ingestion evidence to the saved Parquet bytes."""
+        manifest = self.read_manifest(symbol, interval)
+        if manifest is None or provenance.status != "CONTROLLED_INGESTION":
+            return
+        files = sorted(self.get_dataset_dir(symbol, interval).glob("*.parquet"))
+        file_hashes = {path.name: self._file_sha256(path) for path in files}
+        fingerprint = hashlib.sha256(
+            json.dumps(file_hashes, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        evidence = provenance.to_dict()
+        evidence["content_sha256"] = fingerprint
+        evidence["file_sha256"] = file_hashes
+        manifest["controlled_provenance"] = evidence
+        self._write_manifest(symbol, interval, manifest)
+
+    def inspect_provenance(self, symbol: str, interval: str) -> DatasetProvenance:
+        """Check saved bytes before load_dataset can sort or deduplicate rows."""
+        manifest = self.read_manifest(symbol, interval)
+        evidence = manifest.get("controlled_provenance") if manifest else None
+        if not isinstance(evidence, dict) or evidence.get("status") != "CONTROLLED_INGESTION":
+            return DatasetProvenance(reason="Dataset sin evidencia de ingestión controlada.")
+        if manifest.get("symbol") != symbol.strip().upper() or manifest.get("interval") != interval.strip().lower():
+            return DatasetProvenance(reason="Identidad del dataset no coincide con el manifiesto.")
+        files = sorted(self.get_dataset_dir(symbol, interval).glob("*.parquet"))
+        file_hashes = evidence.get("file_sha256")
+        if not isinstance(file_hashes, dict) or set(file_hashes) != {path.name for path in files}:
+            return DatasetProvenance(reason="Conjunto de particiones distinto al registrado.")
+        if set(file_hashes) != set(manifest.get("partitions", {})):
+            return DatasetProvenance(reason="Particiones del manifiesto no corresponden al contenido.")
+        if any(self._file_sha256(path) != file_hashes[path.name] for path in files):
+            return DatasetProvenance(reason="Integridad de Parquet no coincide con la referencia registrada.")
+        fingerprint = hashlib.sha256(
+            json.dumps(file_hashes, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        if fingerprint != evidence.get("content_sha256"):
+            return DatasetProvenance(reason="Huella del contenido no coincide con el manifiesto.")
+        return DatasetProvenance(
+            status="CONTROLLED_INGESTION",
+            reason=evidence.get("reason", ""),
+            provider=evidence.get("provider"),
+            instrument_type=evidence.get("instrument_type"),
+            calendar=evidence.get("calendar"),
+            interval=evidence.get("interval"),
+            acquired_at_utc=evidence.get("acquired_at_utc"),
+            content_sha256=fingerprint,
+            temporal_validation=evidence.get("temporal_validation", "UNKNOWN"),
+            normalization=evidence.get("normalization"),
+        )
 
     def _write_manifest(self, symbol: str, interval: str, manifest_data: dict):
         path = self._manifest_path(symbol, interval)
@@ -171,6 +234,9 @@ class ParquetStore:
                 "partitions": {},
                 "extra_metadata": {},
             }
+
+        # A rewrite invalidates any previous byte-level attestation until re-recorded.
+        manifest.pop("controlled_provenance", None)
 
         earliest = (
             str(df_partition["timestamp"].min())

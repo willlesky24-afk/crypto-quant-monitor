@@ -28,6 +28,25 @@ class BacktestValidationError(ValueError):
     """Unsupported backtest configuration or invalid financial input."""
 
 
+@dataclass(frozen=True)
+class DatasetProvenance:
+    """Local ingestion evidence, not an external provider authenticity certificate."""
+
+    status: str = "UNKNOWN"
+    reason: str = "Procedencia no acreditada."
+    provider: str | None = None
+    instrument_type: str | None = None
+    calendar: str | None = None
+    interval: str | None = None
+    acquired_at_utc: str | None = None
+    content_sha256: str | None = None
+    temporal_validation: str = "UNKNOWN"
+    normalization: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 class TradeDirection(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
@@ -234,6 +253,8 @@ class BacktestReport:
     calmar_ratio: float | None = None
     trades: list[TradeResult] = field(default_factory=list)
     equity_curve: list[EquityPoint] = field(default_factory=list)
+    sharpe_unavailable_reason: str | None = None
+    data_provenance: DatasetProvenance = field(default_factory=DatasetProvenance)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -257,7 +278,8 @@ class BacktestReport:
             "total_net_pnl": self.total_net_pnl,
             "total_gross_pnl": self.total_gross_pnl,
             "total_fees_paid": self.total_fees_paid,
-            "sharpe_ratio": self.sharpe_ratio or 0.0,
+            "sharpe_ratio": self.sharpe_ratio,
+            "sharpe_unavailable_reason": self.sharpe_unavailable_reason,
             "calmar_ratio": self.calmar_ratio or 0.0,
             "expectancy": self.expectancy,
             "expectancy_r": self.expectancy_r,

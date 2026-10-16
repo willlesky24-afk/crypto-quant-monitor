@@ -134,3 +134,10 @@ def test_parquet_store_lists_datasets_without_manifest(tmp_path: Path, make_synt
     assert sol_dataset["interval"] == "1d"
     assert sol_dataset["dataset_version"] == "unknown"
 
+
+def test_legacy_manifest_source_default_is_not_provenance(tmp_path: Path, make_synthetic_candles):
+    store = ParquetStore(base_dir=tmp_path)
+    store.save_dataset(make_synthetic_candles(periods=5), "BTCUSDT", "1h")
+    assert store.read_manifest("BTCUSDT", "1h")["source"] == "binance_public_rest"
+    assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
+

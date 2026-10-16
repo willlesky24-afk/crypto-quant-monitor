@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from src.historical_data_loader import HistoricalDataLoader
+from src.historical_data_loader import HistoricalDataLoader, RawHistoricalBatch
 
 
 class FakeResponse:
@@ -237,4 +237,35 @@ def test_historical_loader_with_request_delay(monkeypatch):
     df = loader.get_historical_klines("BTCUSDT", "1h", start_time=start_ms, include_open_candle=True)
     assert len(df) == 7
     assert 0.05 in sleeps
+
+
+def test_raw_batch_preserves_original_order_and_page_boundaries(monkeypatch):
+    loader = HistoricalDataLoader(chunk_size=2, request_delay=0.0)
+    start = 1_700_000_000_000
+    first = generate_raw_candle_chunk(start, 2)
+    second = generate_raw_candle_chunk(start + 3_600_000, 2)
+    calls = 0
+
+    def mock_get(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return FakeResponse(first if calls == 1 else second)
+
+    monkeypatch.setattr("src.historical_data_loader.requests.get", mock_get)
+    batch = loader.get_historical_klines(
+        "BTCUSDT", "1h", start_time=start, end_time=start + 2 * 3_600_000,
+        include_open_candle=True, return_raw_batch=True,
+    )
+    assert isinstance(batch, RawHistoricalBatch)
+    assert batch.page_sizes == (2, 2)
+    assert batch.candles["timestamp"].iloc[1] == batch.candles["timestamp"].iloc[2]
+    assert len(batch.candles) == 4
+
+    calls = 0
+    legacy = loader.get_historical_klines(
+        "BTCUSDT", "1h", start_time=start, end_time=start + 2 * 3_600_000,
+        include_open_candle=True,
+    )
+    assert len(legacy) == 3
+    assert legacy["timestamp"].is_monotonic_increasing
 

@@ -7,13 +7,21 @@ from typing import Any
 import pandas as pd
 
 from .backtest_engine import BacktestEngine
-from .backtest_metrics import BacktestMetricsCalculator
-from .backtest_models import BacktestConfig, BacktestReport, SignalEvent, TradeDirection
+from .backtest_metrics import CRYPTO_24_7_PERIODS, BacktestMetricsCalculator
+from .backtest_models import (
+    BacktestConfig,
+    BacktestReport,
+    DatasetProvenance,
+    SignalEvent,
+    TradeDirection,
+)
+from .candle_validator import INTERVAL_TIMEDELTAS
 from .dataset_manager import HistoricalDatasetManager
 from .decision_engine import DecisionEngine
 from .engine import MarketEngine
 from .indicators import TechnicalIndicators
 from .market_intelligence import MarketIntelligence
+from .parquet_store import ParquetStore
 from .quant_score import QuantScore
 from .regime_classifier import RegimeClassifier
 from .risk_engine import RiskEngine
@@ -97,6 +105,7 @@ class BacktestRunner:
         self.engine.validate_config()
         sym = symbol.strip().upper()
         inv = interval.strip().lower()
+        provenance = DatasetProvenance()
 
         # 1. Load data
         if df is not None:
@@ -108,6 +117,10 @@ class BacktestRunner:
                 start_time=start_time,
                 end_time=end_time,
             )
+            if type(self.dataset_manager) is HistoricalDatasetManager and type(self.dataset_manager.store) is ParquetStore:
+                candidate = raw_df.attrs.get("_controlled_provenance")
+                if isinstance(candidate, DatasetProvenance):
+                    provenance = candidate
 
         effective_warmup = min(warmup_bars, max(35, len(raw_df) // 4)) if len(raw_df) >= 35 else warmup_bars
 
@@ -119,7 +132,10 @@ class BacktestRunner:
                 len(raw_df),
                 effective_warmup,
             )
-            empty_metrics = BacktestMetricsCalculator.calculate_metrics([], [], self.config.initial_capital)
+            empty_metrics = BacktestMetricsCalculator.calculate_metrics(
+                [], [], self.config.initial_capital,
+                sharpe_unavailable_reason=provenance.reason,
+            )
             return self._build_report(
                 config=self.config,
                 symbol=sym,
@@ -128,6 +144,7 @@ class BacktestRunner:
                 trades=[],
                 equity_curve=[],
                 metrics=empty_metrics,
+                provenance=provenance,
             )
 
         # 2. Enrich indicators across the full causal dataset
@@ -222,10 +239,25 @@ class BacktestRunner:
         trades, equity_curve = self.engine.run(df=enriched_df, signals=signals)
 
         # 5. Compute Quantitative Metrics
+        sharpe_eligible = (
+            provenance.status == "CONTROLLED_INGESTION"
+            and provenance.provider == "BINANCE_PUBLIC_SPOT_REST"
+            and provenance.instrument_type == "CRYPTO_SPOT"
+            and provenance.calendar == "24_7"
+            and provenance.interval == inv
+            and provenance.temporal_validation == "VALID"
+            and provenance.content_sha256 is not None
+            and inv in CRYPTO_24_7_PERIODS
+        )
         metrics = BacktestMetricsCalculator.calculate_metrics(
             trades=trades,
             equity_curve=equity_curve,
             initial_capital=self.config.initial_capital,
+            periods_per_year=CRYPTO_24_7_PERIODS[inv] if sharpe_eligible else None,
+            expected_interval=INTERVAL_TIMEDELTAS[inv] if sharpe_eligible else None,
+            sharpe_unavailable_reason=None if sharpe_eligible else (
+                provenance.reason or "Procedencia o calendario no acreditado."
+            ),
         )
 
         return self._build_report(
@@ -236,6 +268,7 @@ class BacktestRunner:
             trades=trades,
             equity_curve=equity_curve,
             metrics=metrics,
+            provenance=provenance,
         )
 
     @staticmethod
@@ -247,6 +280,7 @@ class BacktestRunner:
         trades: list[Any],
         equity_curve: list[Any],
         metrics: dict[str, Any],
+        provenance: DatasetProvenance | None = None,
     ) -> BacktestReport:
         start_ts = str(candles_df["timestamp"].min()) if not candles_df.empty else ""
         end_ts = str(candles_df["timestamp"].max()) if not candles_df.empty else ""
@@ -276,7 +310,9 @@ class BacktestRunner:
             total_net_pnl=metrics["total_net_pnl"],
             return_on_capital_pct=metrics["return_on_capital_pct"],
             sharpe_ratio=metrics["sharpe_ratio"],
+            sharpe_unavailable_reason=metrics["sharpe_unavailable_reason"],
             calmar_ratio=metrics["calmar_ratio"],
+            data_provenance=provenance or DatasetProvenance(),
             trades=trades,
             equity_curve=equity_curve,
         )

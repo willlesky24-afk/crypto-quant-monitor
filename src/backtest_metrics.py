@@ -7,6 +7,11 @@ import pandas as pd
 
 from .backtest_models import BacktestValidationError, EquityPoint, TradeResult
 
+CRYPTO_24_7_PERIODS: dict[str, int] = {
+    "1m": 525_600, "5m": 105_120, "15m": 35_040,
+    "1h": 8_760, "4h": 2_190, "1d": 365,
+}
+
 
 class BacktestMetricsCalculator:
     """Pure, deterministic calculator for quantitative trade performance, risk,
@@ -82,7 +87,9 @@ class BacktestMetricsCalculator:
         trades: list[TradeResult],
         equity_curve: list[EquityPoint],
         initial_capital: float = 10_000.0,
-        periods_per_year: int = 8760,  # 8760 hours in 1 year for 1h candles
+        periods_per_year: int | None = None,
+        expected_interval: pd.Timedelta | None = None,
+        sharpe_unavailable_reason: str | None = None,
     ) -> dict[str, Any]:
         """Calculates comprehensive performance and risk metrics across completed trades."""
         total_trades = len(trades)
@@ -113,6 +120,7 @@ class BacktestMetricsCalculator:
                 "total_net_pnl": 0.0,
                 "return_on_capital_pct": 0.0,
                 "sharpe_ratio": None,
+                "sharpe_unavailable_reason": sharpe_unavailable_reason or "No hay operaciones suficientes.",
                 "calmar_ratio": None,
             }
 
@@ -168,14 +176,34 @@ class BacktestMetricsCalculator:
 
         # Sharpe & Calmar Ratios
         sharpe_ratio: float | None = None
+        sharpe_reason = sharpe_unavailable_reason
         calmar_ratio: float | None = None
 
-        if len(equity_curve) > 2:
-            eq_series = pd.Series([p.equity for p in equity_curve])
-            returns = eq_series.pct_change().dropna()
-            std = returns.std()
-            if std > 1e-12:
-                sharpe_ratio = float((returns.mean() / std) * math.sqrt(periods_per_year))
+        if (periods_per_year is None or periods_per_year <= 0
+                or expected_interval is None or expected_interval <= pd.Timedelta(0)):
+            sharpe_reason = sharpe_reason or "Procedencia, calendario o intervalo no acreditado."
+        elif len(equity_curve) < 4:
+            sharpe_reason = "Se requieren al menos tres rendimientos periódicos."
+        elif any(not math.isfinite(value) or value <= 0 for value in equity_values):
+            sharpe_reason = "Equity no positiva o no finita para calcular rendimientos."
+        else:
+            timestamps = pd.to_datetime([point.timestamp for point in equity_curve], utc=True, errors="coerce")
+            steps = timestamps.to_series().diff().iloc[1:]
+            if timestamps.isna().any() or not (steps == expected_interval).all():
+                sharpe_reason = "Timestamps duplicados, desordenados o frecuencia irregular."
+            else:
+                returns = pd.Series(equity_values).pct_change().iloc[1:]
+                std = float(returns.std(ddof=1))
+                if not math.isfinite(std) or std <= 1e-12:
+                    sharpe_reason = "Variabilidad de rendimientos insuficiente."
+                else:
+                    # 0% risk-free rate, sample standard deviation, regular bars.
+                    sharpe_ratio = float((returns.mean() / std) * math.sqrt(periods_per_year))
+                    if not math.isfinite(sharpe_ratio):
+                        sharpe_ratio = None
+                        sharpe_reason = "Resultado Sharpe no finito."
+                    else:
+                        sharpe_reason = None
 
         if max_dd_pct > 0:
             calmar_ratio = float(return_on_capital / max_dd_pct)
@@ -202,5 +230,6 @@ class BacktestMetricsCalculator:
             "total_net_pnl": round(total_net_pnl, 2),
             "return_on_capital_pct": round(return_on_capital, 2),
             "sharpe_ratio": round(sharpe_ratio, 2) if sharpe_ratio is not None else None,
+            "sharpe_unavailable_reason": sharpe_reason,
             "calmar_ratio": round(calmar_ratio, 2) if calmar_ratio is not None else None,
         }

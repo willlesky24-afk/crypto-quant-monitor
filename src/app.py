@@ -120,6 +120,11 @@ def _run_backtest_for_ui(config, candles, symbol, interval, session_state):
     return report
 
 
+def _format_sharpe_for_ui(value):
+    """Keep an unavailable Sharpe distinct from a calculated zero."""
+    return "N/A" if value is None else f"{value:.2f}"
+
+
 st.set_page_config(
     page_title="Crypto Quant Monitor",
     page_icon="📊",
@@ -1664,7 +1669,12 @@ with tab_backtest:
         with m_col4:
             st.metric("Max Drawdown %", f"{metrics.get('max_drawdown_pct', 0.0):.2f}%")
         with m_col5:
-            st.metric("Sharpe Ratio", f"{metrics.get('sharpe_ratio', 0.0):.2f}")
+            sharpe_value = metrics.get("sharpe_ratio")
+            st.metric("Sharpe Ratio", _format_sharpe_for_ui(sharpe_value))
+            if sharpe_value is None:
+                st.caption(metrics.get("sharpe_unavailable_reason") or "Datos insuficientes para Sharpe.")
+            else:
+                st.caption("Anualizado con barras regulares de cripto 24/7; tasa libre de riesgo 0 %.")
         with m_col6:
             st.metric("Retorno Neto", f"${metrics.get('net_pnl', 0.0):,.2f}")
 
@@ -2234,7 +2244,7 @@ with tab_guide:
             - **`Win Rate`:** Porcentaje de operaciones cerradas en ganancia frente al total.
             - **`Profit Factor`:** Ganancia bruta dividida entre pérdida bruta (Institucional > 1.5).
             - **`Max Drawdown %`:** Mayor caída porcentual experimentada desde el punto máximo de capital.
-            - **`Sharpe Ratio`:** Rendimiento generado por cada unidad de volatilidad asumida (> 1.0 es sólido).
+            - **`Sharpe Ratio`:** Rendimiento por unidad de volatilidad, anualizado solo con procedencia y calendario cripto 24/7 acreditados, barras regulares y tasa libre de riesgo supuesta de 0 %. N/A indica que no puede calcularse con fiabilidad.
             - **`MAE / MFE`:** Máxima excursión adversa (*peor momento en contra*) y favorable (*mejor momento a favor*) de cada trade.
             """)
 

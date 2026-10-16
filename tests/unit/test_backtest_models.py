@@ -265,6 +265,24 @@ def test_equity_point_and_backtest_report_serialization():
     assert metrics["sharpe_ratio"] == 1.95
 
 
+def test_report_preserves_unavailable_sharpe_as_none():
+    ts = pd.Timestamp("2024-01-01", tz="UTC")
+    report = BacktestReport(
+        config=BacktestConfig(), symbol="BTCUSDT", timeframe="1h",
+        start_time=str(ts), end_time=str(ts), total_candles=0,
+        total_trades=0, winning_trades=0, losing_trades=0,
+        win_rate_pct=0.0, profit_factor=0.0, expectancy=0.0, expectancy_r=0.0,
+        max_drawdown_pct=0.0, max_drawdown_usd=0.0, max_drawdown_duration_bars=0,
+        avg_mfe_pct=0.0, avg_mae_pct=0.0, avg_bars_held=0.0,
+        total_gross_pnl=0.0, total_fees_paid=0.0, total_net_pnl=0.0,
+        return_on_capital_pct=0.0, sharpe_unavailable_reason="Calendario desconocido.",
+    )
+    assert report.metrics["sharpe_ratio"] is None
+    assert report.metrics["sharpe_unavailable_reason"] == "Calendario desconocido."
+    assert report.to_dict()["sharpe_ratio"] is None
+    assert report.to_dict()["data_provenance"]["status"] == "UNKNOWN"
+
+
 def test_short_trade_result_and_funding_serialization():
     sig_ts = pd.to_datetime("2024-01-01 12:00:00", utc=True)
     entry_ts = pd.to_datetime("2024-01-01 13:00:00", utc=True)
