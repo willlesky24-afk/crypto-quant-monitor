@@ -117,6 +117,10 @@ def test_backtest_engine_take_profit_hit():
     assert trade.exit_price == pytest.approx(104.0)
     assert trade.is_win is True
     assert trade.r_multiple == pytest.approx(2.0)
+    assert trade.net_r_multiple == pytest.approx(2.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.initial_risk_per_unit == pytest.approx(2.0)
+    assert trade.initial_risk_amount == pytest.approx(trade.size_units * 2.0)
 
 
 def test_backtest_engine_stop_loss_hit():
@@ -151,6 +155,8 @@ def test_backtest_engine_stop_loss_hit():
     assert trade.exit_price == pytest.approx(98.0)
     assert trade.is_win is False
     assert trade.r_multiple == pytest.approx(-1.0)
+    assert trade.net_r_multiple == pytest.approx(-1.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
 
 
 def test_backtest_engine_worst_case_intrabar_conflict():
@@ -215,6 +221,10 @@ def test_backtest_engine_trailing_stop_break_even():
 
     assert len(trades) == 1
     assert trades[0].exit_price == pytest.approx(100.0)  # Exited at Break-Even!
+    assert trades[0].sl_price == pytest.approx(100.0)
+    assert trades[0].initial_stop_price == pytest.approx(98.0)
+    assert trades[0].initial_risk_per_unit == pytest.approx(2.0)
+    assert trades[0].r_multiple == pytest.approx(0.0)
 
 
 def test_backtest_engine_signal_filtering():
@@ -647,7 +657,7 @@ def test_backtest_engine_direction_both():
         engine.run(df, signals=[sig_long, sig_short])
 
 
-def test_backtest_engine_zero_initial_risk_handled():
+def test_backtest_engine_zero_initial_risk_rejected():
     timestamps = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
     df = pd.DataFrame(
         {
@@ -663,10 +673,8 @@ def test_backtest_engine_zero_initial_risk_handled():
     sig = make_test_signal("2024-01-01 00:00:00", price=100.0, atr=0.0)
     cfg = BacktestConfig(sl_atr_multiple=0.0, max_holding_bars=1)
     engine = BacktestEngine(config=cfg)
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    assert trades[0].r_multiple == 0.0
+    with pytest.raises(BacktestValidationError, match="Stop inicial"):
+        engine.run(df, signals=[sig])
 
 
 def _flat_spot_bars(exit_price: float = 100.0, count: int = 3) -> pd.DataFrame:
@@ -681,6 +689,128 @@ def _flat_spot_bars(exit_price: float = 100.0, count: int = 3) -> pd.DataFrame:
             "volume": [1000.0] * count,
         }
     )
+
+
+def test_effective_r_reconciles_gross_net_and_fees_at_take_profit():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.0,
+        tp_atr_multiple=2.0,
+        sl_atr_multiple=1.0,
+    )
+    trades, equity = BacktestEngine(cfg).run(
+        _flat_spot_bars(104.0), signals=[make_test_signal(atr=2.0)]
+    )
+    trade = trades[0]
+    assert trade.entry_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.size_units == pytest.approx(9.99)
+    assert trade.initial_risk_amount == pytest.approx(19.98)
+    assert trade.gross_pnl == pytest.approx(39.96)
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(1.03896)
+    assert trade.net_pnl == pytest.approx(37.92104)
+    assert trade.r_multiple == pytest.approx(2.0)
+    assert trade.net_r_multiple == pytest.approx(37.92104 / 19.98)
+    assert equity[-1].equity - cfg.initial_capital == pytest.approx(trade.net_pnl)
+
+
+def test_signal_specific_stop_sets_effective_r_not_generic_config():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.0,
+        tp_atr_multiple=2.0,
+        sl_atr_multiple=1.0,
+    )
+    signal = replace(make_test_signal(atr=2.0), sl_atr_multiple=2.0)
+    trades, _ = BacktestEngine(cfg).run(_flat_spot_bars(104.0), signals=[signal])
+    trade = trades[0]
+    assert trade.initial_stop_price == pytest.approx(96.0)
+    assert trade.initial_risk_per_unit == pytest.approx(4.0)
+    assert trade.initial_risk_amount == pytest.approx(39.96)
+    assert trade.r_multiple == pytest.approx(1.0)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / 39.96)
+
+
+def test_trailing_stop_does_not_rewrite_initial_risk_denominator():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.0,
+        slippage_pct=0.0,
+        tp_atr_multiple=2.0,
+        sl_atr_multiple=1.0,
+        enable_trailing_stop=True,
+    )
+    signal = replace(make_test_signal(atr=2.0), sl_atr_multiple=2.0)
+    trades, _ = BacktestEngine(cfg).run(_flat_spot_bars(104.0), signals=[signal])
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trade.sl_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(96.0)
+    assert trade.initial_risk_amount == pytest.approx(40.0)
+    assert trade.r_multiple == pytest.approx(1.0)
+    assert trade.net_r_multiple == pytest.approx(1.0)
+
+
+def test_atr_floor_and_entry_slippage_are_in_initial_risk():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.01,
+        tp_atr_multiple=10.0,
+        sl_atr_multiple=2.0,
+        max_holding_bars=2,
+    )
+    trades, _ = BacktestEngine(cfg).run(
+        _flat_spot_bars(), signals=[make_test_signal(atr=0.0)]
+    )
+    trade = trades[0]
+    assert trade.entry_price == pytest.approx(101.0)
+    assert trade.initial_stop_price == pytest.approx(99.99)
+    assert trade.initial_risk_per_unit == pytest.approx(1.01)
+    assert trade.initial_risk_amount == pytest.approx(trade.size_units * 1.01)
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+
+
+def test_time_exit_without_price_move_has_negative_net_r_from_fees():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.0,
+        tp_atr_multiple=10.0,
+        sl_atr_multiple=1.0,
+        max_holding_bars=2,
+    )
+    trades, equity = BacktestEngine(cfg).run(
+        _flat_spot_bars(), signals=[make_test_signal(atr=2.0)]
+    )
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.TIME_HORIZON.value
+    assert trade.r_multiple == pytest.approx(0.0)
+    assert trade.net_r_multiple == pytest.approx(-1.999 / 19.98)
+    assert trade.net_r_multiple < 0
+    assert equity[-1].equity - 1000.0 == pytest.approx(trade.net_pnl)
+
+
+@pytest.mark.parametrize("sl_multiplier", [0.0, -1.0, 50.0, 51.0])
+def test_invalid_initial_stop_rejected_before_position_open(sl_multiplier):
+    cfg = BacktestConfig(sl_atr_multiple=sl_multiplier, slippage_pct=0.0)
+    with pytest.raises(BacktestValidationError, match="Stop inicial"):
+        BacktestEngine(cfg).run(
+            _flat_spot_bars(), signals=[make_test_signal(atr=2.0)]
+        )
+
+
+@pytest.mark.parametrize("sl_multiplier", [float("nan"), float("inf"), 1e308])
+def test_nonfinite_initial_stop_or_risk_rejected(sl_multiplier):
+    cfg = BacktestConfig(sl_atr_multiple=sl_multiplier)
+    with pytest.raises(BacktestValidationError, match="no finitos"):
+        BacktestEngine(cfg).run(
+            _flat_spot_bars(), signals=[make_test_signal(atr=2.0)]
+        )
 
 
 @pytest.mark.parametrize(
@@ -726,6 +856,10 @@ def test_spot_long_cash_equity_and_pnl_reconcile(exit_price, fee_rate, fraction)
     assert trade.fee_exit == pytest.approx(fee_exit)
     assert trade.gross_pnl == pytest.approx(gross_pnl)
     assert trade.net_pnl == pytest.approx(net_pnl)
+    assert trade.initial_stop_price == pytest.approx(50.0)
+    assert trade.initial_risk_amount == pytest.approx(units * 50.0)
+    assert trade.r_multiple == pytest.approx(gross_pnl / (units * 50.0))
+    assert trade.net_r_multiple == pytest.approx(net_pnl / (units * 50.0))
     assert equity[1].cash == pytest.approx(capital - allocation)
     assert equity[1].equity == pytest.approx(capital - allocation + units * 100.0)
     assert equity[-1].cash == pytest.approx(

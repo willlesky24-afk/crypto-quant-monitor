@@ -143,6 +143,8 @@ class BacktestEngine:
                     entry_price = bar_open * (1.0 + slip)
                 else:
                     entry_price = bar_open * (1.0 - slip)
+                if not math.isfinite(entry_price) or entry_price <= 0:
+                    raise BacktestValidationError("Precio de entrada SPOT no positivo o no finito.")
 
                 # Position sizing based on available cash and leverage
                 allocated_cash = current_cash * max(0.0, min(1.0, self.config.position_size_pct))
@@ -179,6 +181,20 @@ class BacktestEngine:
                         sl_price = entry_price + (sl_mult * atr_val)
                     if not all(math.isfinite(level) for level in (tp_price, sl_price)):
                         raise BacktestValidationError("Niveles de salida no finitos.")
+                    initial_risk_per_unit = entry_price - sl_price
+                    initial_risk_amount = size_units * initial_risk_per_unit
+                    if (
+                        not math.isfinite(sl_price)
+                        or sl_price <= 0
+                        or sl_price >= entry_price
+                        or not math.isfinite(initial_risk_per_unit)
+                        or initial_risk_per_unit <= 0
+                        or not math.isfinite(initial_risk_amount)
+                        or initial_risk_amount <= 0
+                    ):
+                        raise BacktestValidationError(
+                            "Stop inicial SPOT LONG o riesgo inicial inválido."
+                        )
 
                     active_position = Position(
                         position_id=f"pos-{len(closed_trades) + 1}",
@@ -190,6 +206,9 @@ class BacktestEngine:
                         tp_price=tp_price,
                         sl_price=sl_price,
                         fee_entry=fee_entry,
+                        initial_stop_price=sl_price,
+                        initial_risk_per_unit=initial_risk_per_unit,
+                        initial_risk_amount=initial_risk_amount,
                         side=pos_side,
                         funding_fees_accumulated=0.0,
                         last_funding_time=bar_ts,
@@ -225,7 +244,9 @@ class BacktestEngine:
 
                 # B. Optional Trailing Stop / Break-Even adjustment
                 if self.config.enable_trailing_stop:
-                    initial_risk = abs(active_position.entry_price - active_position.sl_price)
+                    initial_risk = active_position.initial_risk_per_unit
+                    if initial_risk is None:
+                        raise BacktestValidationError("Riesgo inicial de posición no disponible.")
                     if not is_short_pos:
                         if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
                             active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
@@ -317,22 +338,14 @@ class BacktestEngine:
                     ):
                         raise ArithmeticError("Caja SPOT y PnL realizado no concilian.")
 
-                    # Performance ratios
-                    initial_risk = abs(
-                        active_position.entry_price
-                        - (
-                            active_position.entry_price
-                            + (-1.0 if not is_short_pos else 1.0)
-                            * (self.config.sl_atr_multiple * max(active_position.signal.atr, 1e-6))
-                        )
-                    )
-                    if initial_risk > 0:
-                        if not is_short_pos:
-                            r_multiple = (exit_price - active_position.entry_price) / initial_risk
-                        else:
-                            r_multiple = (active_position.entry_price - exit_price) / initial_risk
-                    else:
-                        r_multiple = 0.0
+                    # Both R values use the immutable, effective risk at entry.
+                    initial_risk_amount = active_position.initial_risk_amount
+                    if initial_risk_amount is None or not math.isfinite(initial_risk_amount) or initial_risk_amount <= 0:
+                        raise BacktestValidationError("Riesgo inicial de posición no disponible o inválido.")
+                    r_multiple = gross_pnl / initial_risk_amount
+                    net_r_multiple = net_pnl / initial_risk_amount
+                    if not all(math.isfinite(value) for value in (r_multiple, net_r_multiple)):
+                        raise BacktestValidationError("R de operación no finito.")
 
                     net_return_pct = (
                         (net_pnl / active_position.notional_entry * 100.0) if active_position.notional_entry > 0 else 0.0
@@ -389,6 +402,10 @@ class BacktestEngine:
                         funding_fees=funding_fee_total,
                         tp_price=active_position.tp_price,
                         sl_price=active_position.sl_price,
+                        initial_stop_price=active_position.initial_stop_price,
+                        initial_risk_per_unit=active_position.initial_risk_per_unit,
+                        initial_risk_amount=initial_risk_amount,
+                        net_r_multiple=net_r_multiple,
                     )
                     closed_trades.append(trade_result)
                     active_position = None

@@ -109,6 +109,10 @@ class Position:
     tp_price: float
     sl_price: float
     fee_entry: float
+    # Set at entry; unlike sl_price, these do not change when trailing moves the stop.
+    initial_stop_price: float | None = None
+    initial_risk_per_unit: float | None = None
+    initial_risk_amount: float | None = None
     side: str = PositionSide.LONG.value
     funding_fees_accumulated: float = 0.0
     last_funding_time: pd.Timestamp | None = None
@@ -133,7 +137,12 @@ class Position:
 
 @dataclass(frozen=True)
 class TradeResult:
-    """Immutable record of a fully closed and evaluated trade."""
+    """Immutable closed trade; optional initial-risk fields are unknown for legacy records.
+
+    r_multiple is gross PnL divided by initial price-stop risk. net_r_multiple
+    uses the same denominator and net PnL (including realized fees), without
+    estimating future commissions in that initial-risk denominator.
+    """
 
     trade_id: str
     symbol: str
@@ -162,6 +171,10 @@ class TradeResult:
     funding_fees: float = 0.0
     tp_price: float = 0.0
     sl_price: float = 0.0
+    initial_stop_price: float | None = None
+    initial_risk_per_unit: float | None = None
+    initial_risk_amount: float | None = None
+    net_r_multiple: float | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)

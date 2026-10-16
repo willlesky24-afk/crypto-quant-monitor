@@ -173,9 +173,35 @@ def test_trade_result_immutability_and_serialization():
     assert d["trade_id"] == "tr-1"
     assert d["exit_reason"] == "TAKE_PROFIT"
     assert "signal_timestamp" in d
+    assert d["initial_stop_price"] is None  # Legacy records remain unknown.
+    assert d["initial_risk_amount"] is None
+    assert d["net_r_multiple"] is None
 
     with pytest.raises(FrozenInstanceError):
         trade.net_pnl = 300.0
+
+
+def test_trade_result_serializes_effective_risk_without_reinterpreting_final_stop():
+    ts = pd.to_datetime("2024-01-01", utc=True)
+    trade = TradeResult(
+        trade_id="tr-risk", symbol="BTCUSDT", timeframe="1h", direction="LONG",
+        signal_timestamp=ts, entry_timestamp=ts, exit_timestamp=ts,
+        entry_price=100.0, exit_price=104.0, size_units=9.99,
+        notional_entry=1000.0, notional_exit=1038.96,
+        gross_pnl=39.96, fee_entry=1.0, fee_exit=1.03896,
+        net_pnl=37.92104, net_return_pct=3.792104,
+        r_multiple=2.0, net_r_multiple=37.92104 / 19.98,
+        bars_held=2, exit_reason=TradeExitReason.TAKE_PROFIT.value,
+        mfe_pct=4.0, mae_pct=0.0, is_win=True,
+        sl_price=100.0, initial_stop_price=98.0,
+        initial_risk_per_unit=2.0, initial_risk_amount=19.98,
+    )
+    data = trade.to_dict()
+    assert data["sl_price"] == 100.0
+    assert data["initial_stop_price"] == 98.0
+    assert data["initial_risk_per_unit"] == 2.0
+    assert data["initial_risk_amount"] == 19.98
+    assert data["net_r_multiple"] == pytest.approx(37.92104 / 19.98)
 
 
 def test_equity_point_and_backtest_report_serialization():
