@@ -94,6 +94,7 @@ class BacktestRunner:
         Returns:
         - BacktestReport containing trade log, performance metrics, and equity curve.
         """
+        self.engine.validate_config()
         sym = symbol.strip().upper()
         inv = interval.strip().lower()
 

@@ -8,6 +8,7 @@ import pytest
 from src.backtest_models import (
     BacktestConfig,
     BacktestReport,
+    BacktestValidationError,
     EquityPoint,
     Position,
     SignalEvent,
@@ -80,6 +81,10 @@ def test_backtest_config_defaults_and_custom():
     assert custom_cfg.max_holding_bars == 48
     assert "initial_capital" in custom_cfg.to_dict()
     assert custom_cfg.to_dict()["market_type"] == "PERP"
+
+
+def test_backtest_validation_error_is_specific_value_error():
+    assert issubclass(BacktestValidationError, ValueError)
 
 
 def test_position_tracking_and_excursions():

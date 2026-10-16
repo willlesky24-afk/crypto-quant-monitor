@@ -27,7 +27,7 @@ try:
     from src.ai_agent.context_builder import ContextBuilder
     from src.ai_providers.factory import ProviderFactory
     from src.anomaly_detection.detector import MarketAnomalyDetector
-    from src.backtest_models import BacktestConfig
+    from src.backtest_models import BacktestConfig, BacktestValidationError
     from src.backtest_presets import (
         PROVEN_STRATEGIES,
         build_strategy_config,
@@ -68,7 +68,7 @@ except ImportError:
     from ai_agent.context_builder import ContextBuilder
     from ai_providers.factory import ProviderFactory
     from anomaly_detection.detector import MarketAnomalyDetector
-    from backtest_models import BacktestConfig
+    from backtest_models import BacktestConfig, BacktestValidationError
     from backtest_presets import (
         PROVEN_STRATEGIES,
         build_strategy_config,
@@ -106,6 +106,18 @@ except ImportError:
     from signal_engine import SignalEngine
     from volume_profile import VolumeProfile
 
+
+def _run_backtest_for_ui(config, candles, symbol, interval, session_state):
+    """Replace the displayed report only after a successful validated run."""
+    session_state.pop("backtest_report", None)
+    report = BacktestRunner(config=config).run_backtest(
+        df=candles,
+        symbol=symbol,
+        interval=interval,
+        predictive_mode=True,
+    )
+    session_state["backtest_report"] = report
+    return report
 
 
 st.set_page_config(
@@ -1462,8 +1474,8 @@ with tab_backtest:
                 st.info("🛡️ **Apalancamiento 1x (Recomendado Novatos)**: Operas exclusivamente con tu capital real. Sin riesgo de liquidación forzada.")
             else:
                 st.warning(
-                    f"⚠️ **Apalancamiento {int(selected_leverage)}x Activo**: Tu posición será de "
-                    f"**${selected_cap * selected_leverage:,.2f}**. Tus ganancias y pérdidas se multiplicarán por {int(selected_leverage)}."
+                    f"⚠️ **Apalancamiento {int(selected_leverage)}x no disponible** en "
+                    "backtests SPOT. La simulación rechazará esta selección; solo SPOT LONG 1x está validado."
                 )
 
         st.markdown("##### 2️⃣ Elige una Estrategia Estándar Probada de la Industria")
@@ -1537,9 +1549,11 @@ with tab_backtest:
         with b_col4:
             direction_choice = st.selectbox(
                 "Dirección de Operación",
-                ["BOTH", "LONG", "SHORT"],
+                ["LONG", "BOTH", "SHORT"],
                 index=0,
             )
+            if direction_choice != "LONG":
+                st.warning("SPOT SHORT/BOTH están temporalmente deshabilitados para backtesting.")
 
         run_sim = st.button("🚀 Ejecutar Backtest Personalizado", type="primary", use_container_width=True)
 
@@ -1549,19 +1563,29 @@ with tab_backtest:
                 taker_fee_pct=taker_fee_pct,
                 slippage_pct=slippage_pct,
                 direction=direction_choice,
+                market_type="SPOT",
+                leverage=1.0,
             )
 
     if run_sim or "backtest_report" in st.session_state:
         if run_sim and b_cfg is not None:
             source_label = "Forex Global" if is_forex else "Binance"
             with st.spinner(f"Ejecutando simulación cuantitativa vela por vela sobre datos reales de {source_label}..."):
-                runner = BacktestRunner(config=b_cfg)
-                st.session_state["backtest_report"] = runner.run_backtest(
-                    df=df,
-                    symbol=symbol,
-                    interval=interval,
-                    predictive_mode=True,
-                )
+                try:
+                    _run_backtest_for_ui(
+                        config=b_cfg,
+                        candles=df,
+                        symbol=symbol,
+                        interval=interval,
+                        session_state=st.session_state,
+                    )
+                except BacktestValidationError as exc:
+                    st.error(
+                        f"Backtest rechazado ({b_cfg.market_type}, {b_cfg.direction}, "
+                        f"{b_cfg.leverage}x): {exc} "
+                        "Configuración disponible: SPOT LONG 1x sin apalancamiento."
+                    )
+                    st.stop()
 
         report = st.session_state.get("backtest_report")
         if report is None:

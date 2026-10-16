@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from src.backtest_models import BacktestConfig
+from src.backtest_models import BacktestConfig, BacktestValidationError
 from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
 from src.parquet_store import ParquetStore
@@ -75,3 +77,58 @@ def test_backtest_runner_loads_from_dataset_manager(tmp_path: Path, make_synthet
     assert report.symbol == "ETHUSDT"
     assert report.timeframe == "1h"
     assert len(report.equity_curve) == 250
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        (BacktestConfig(direction="SHORT"), "SHORT"),
+        (BacktestConfig(direction="BOTH"), "BOTH"),
+        (BacktestConfig(leverage=2.0), "leverage"),
+        (BacktestConfig(market_type="PERP"), "PERP"),
+        (BacktestConfig(market_type="PERP", leverage=3.0), "PERP"),
+    ],
+)
+def test_runner_rejects_unsupported_config_before_empty_dataset(config, message):
+    runner = BacktestRunner(config=config)
+    with pytest.raises(BacktestValidationError, match=message):
+        runner.run_backtest("BTCUSDT", "1h", df=pd.DataFrame())
+
+
+def _load_ui_backtest_helper():
+    # app.py executes Streamlit on import; compile only its actual backtest helper.
+    app_path = Path(__file__).parents[2] / "src" / "app.py"
+    module = ast.parse(app_path.read_text(encoding="utf-8"), filename=str(app_path))
+    helper = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_backtest_for_ui"
+    )
+    namespace = {"BacktestRunner": BacktestRunner}
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), str(app_path), "exec"), namespace)
+    return namespace[helper.name]
+
+
+def test_ui_backtest_helper_runs_supported_spot_and_replaces_report(make_synthetic_candles):
+    helper = _load_ui_backtest_helper()
+    state = {"backtest_report": object()}
+    candles = make_synthetic_candles(periods=250, freq="1h", base_price=100.0)
+    report = helper(BacktestConfig(), candles, "BTCUSDT", "1h", state)
+    assert report.total_candles == 250
+    assert state["backtest_report"] is report
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        (BacktestConfig(direction="BOTH"), "BOTH"),
+        (BacktestConfig(leverage=2.0), "leverage"),
+        (BacktestConfig(market_type="PERP"), "PERP"),
+    ],
+)
+def test_ui_backtest_helper_rejection_discards_previous_metrics(config, message):
+    helper = _load_ui_backtest_helper()
+    state = {"backtest_report": object()}
+    with pytest.raises(BacktestValidationError, match=message):
+        helper(config, pd.DataFrame(), "BTCUSDT", "1h", state)
+    assert "backtest_report" not in state

@@ -71,7 +71,9 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
         position_size_pct=1.0,
         min_quant_score=40.0,
         require_favorable_decision=False,
-        direction=TradeDirection.BOTH.value,
+        direction=TradeDirection.LONG.value,
+        market_type="SPOT",
+        leverage=1.0,
     )
     baseline_runner = BacktestRunner(config=baseline_cfg, dataset_manager=manager)
     train_report = baseline_runner.run_backtest(
@@ -151,6 +153,12 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     # Verify both reports executed cleanly
     assert metrics_comparison["legacy"]["total_trades"] >= 0
     assert metrics_comparison["enhanced"]["total_trades"] >= 0
+    candle_times = list(full_df["timestamp"])
+    next_candle = dict(zip(candle_times[:-1], candle_times[1:]))
+    for report in (legacy_report, enhanced_report):
+        assert all(trade.side == "LONG" for trade in report.trades)
+        for trade in report.trades:
+            assert trade.entry_timestamp == next_candle[trade.signal_timestamp]
 
     # -------------------------------------------------------------------------
     # 5. Determinism Validation
@@ -191,6 +199,34 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
         assert reg_full.confidence == pytest.approx(reg_trunc.confidence)
         assert pred_full.predictive_score == pytest.approx(pred_trunc.predictive_score)
         assert pred_full.direction_bias == pred_trunc.direction_bias
+
+        def decision_at(known_candles, regime, prediction):
+            profile = runner.volume_profile.calculate(known_candles)
+            analysis = runner.market_engine.analyze(known_candles, profile)
+            signal = runner.signal_engine.evaluate(analysis, profile)
+            risk = runner.risk_engine.evaluate(analysis, profile)
+            intelligence = runner.intelligence.evaluate(analysis)
+            score = runner.quant_score.calculate(analysis, signal, risk)
+            decision = runner.decision_engine.evaluate(
+                signal,
+                risk,
+                intelligence,
+                predictive=prediction,
+                regime=regime.regime,
+                technical_score=score["score"],
+                predictive_mode=True,
+            )
+            return analysis, signal, decision
+
+        full_analysis, full_signal, full_decision = decision_at(
+            sub_k, reg_full, pred_full
+        )
+        trunc_analysis, trunc_signal, trunc_decision = decision_at(
+            enriched_trunc, reg_trunc, pred_trunc
+        )
+        assert full_analysis == trunc_analysis
+        assert full_signal == trunc_signal
+        assert full_decision.to_dict() == trunc_decision.to_dict()
 
     # -------------------------------------------------------------------------
     # 7. Report Serialization Roundtrip

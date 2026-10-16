@@ -24,6 +24,10 @@ class MarketType(str, Enum):
     PERP = "PERP"
 
 
+class BacktestValidationError(ValueError):
+    """Unsupported backtest configuration or invalid financial input."""
+
+
 class TradeDirection(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
@@ -90,7 +94,11 @@ class BacktestConfig:
 
 @dataclass
 class Position:
-    """Represents an open active trade during simulation."""
+    """Open trade. ``notional_entry`` is the gross cash allocation, including entry fee.
+
+    For supported SPOT LONG 1x, ``size_units`` is the asset bought with the
+    allocation after paying ``fee_entry`` in the quote currency.
+    """
 
     position_id: str
     signal: SignalEvent
@@ -165,7 +173,7 @@ class TradeResult:
 
 @dataclass(frozen=True)
 class EquityPoint:
-    """Point in time recording capital balance and drawdown."""
+    """Cash and equity; open SPOT equity is free cash plus units at mark price."""
 
     timestamp: pd.Timestamp
     equity: float

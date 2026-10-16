@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pandas as pd
 import pytest
 
 from src.backtest_engine import BacktestEngine
-from src.backtest_models import BacktestConfig, SignalEvent, TradeExitReason
+from src.backtest_models import (
+    BacktestConfig,
+    BacktestValidationError,
+    SignalEvent,
+    TradeExitReason,
+)
 
 
 def make_test_signal(
@@ -293,17 +300,9 @@ def test_backtest_engine_short_take_profit_hit():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    trade = trades[0]
-    assert trade.direction == "SHORT"
-    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
-    assert trade.exit_price == pytest.approx(96.0)
-    assert trade.is_win is True
-    assert trade.gross_pnl > 0
-    assert trade.r_multiple == pytest.approx(2.0)
-    assert trade.mfe_pct == pytest.approx(5.0)  # (100 - 95) / 100 * 100%
+    # Former SPOT SHORT execution assertion: now explicitly unsupported.
+    with pytest.raises(BacktestValidationError, match="SHORT"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_short_stop_loss_hit():
@@ -347,17 +346,9 @@ def test_backtest_engine_short_stop_loss_hit():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    trade = trades[0]
-    assert trade.direction == "SHORT"
-    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
-    assert trade.exit_price == pytest.approx(102.0)
-    assert trade.is_win is False
-    assert trade.gross_pnl < 0
-    assert trade.r_multiple == pytest.approx(-1.0)
-    assert trade.mae_pct == pytest.approx(3.5)  # (103.5 - 100) / 100 * 100%
+    # Former SPOT SHORT execution assertion: now explicitly unsupported.
+    with pytest.raises(BacktestValidationError, match="SHORT"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_short_worst_case_intrabar_conflict():
@@ -401,11 +392,9 @@ def test_backtest_engine_short_worst_case_intrabar_conflict():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    assert trades[0].exit_reason == TradeExitReason.STOP_LOSS.value
-    assert trades[0].is_win is False
+    # SHORT intrabar execution is deferred until its instrument ledger is validated.
+    with pytest.raises(BacktestValidationError, match="SHORT"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_perp_funding_fees_applied_every_8h():
@@ -437,15 +426,9 @@ def test_backtest_engine_perp_funding_fees_applied_every_8h():
     engine = BacktestEngine(config=cfg_perp)
     sig = make_test_signal("2024-01-01 00:00:00", price=100.0, atr=1.0)
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    trade = trades[0]
-    # Entered at 01:00, crossed 08:00 and 16:00 (2 cycles)
-    # Notional = 10,000. Each cycle = 10,000 * 0.001 = $10. Total funding fee = $20.
-    assert trade.funding_fees == pytest.approx(20.0, rel=1e-2)
-    assert trade.net_pnl == pytest.approx(-20.0, rel=1e-2)
-    assert eq[-1].equity == pytest.approx(9980.0, rel=1e-2)
+    # Former simplified PERP funding assertion: execution is now blocked.
+    with pytest.raises(BacktestValidationError, match="PERP"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_spot_market_ignores_funding():
@@ -527,10 +510,9 @@ def test_backtest_engine_short_trailing_stop():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    assert trades[0].exit_price == pytest.approx(100.0)  # Exited at Break-Even!
+    # Former SPOT SHORT trailing assertion: execution is now blocked.
+    with pytest.raises(BacktestValidationError, match="SHORT"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_short_time_horizon_exit():
@@ -573,11 +555,9 @@ def test_backtest_engine_short_time_horizon_exit():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    assert trades[0].exit_reason == TradeExitReason.TIME_HORIZON.value
-    assert trades[0].bars_held == 2
+    # Former SPOT SHORT time-horizon assertion: execution is now blocked.
+    with pytest.raises(BacktestValidationError, match="SHORT"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_short_perp_funding_fee():
@@ -623,14 +603,9 @@ def test_backtest_engine_short_perp_funding_fee():
         direction="SHORT",
     )
 
-    trades, eq = engine.run(df, signals=[sig])
-
-    assert len(trades) == 1
-    trade = trades[0]
-    # For SHORT, longs pay shorts when funding_rate > 0: funding_fees is negative cost (positive income = $20)
-    assert trade.funding_fees == pytest.approx(-20.0, rel=1e-2)
-    assert trade.net_pnl == pytest.approx(20.0, rel=1e-2)
-    assert eq[-1].equity == pytest.approx(10020.0, rel=1e-2)
+    # Former simplified PERP funding assertion: execution is now blocked.
+    with pytest.raises(BacktestValidationError, match="PERP"):
+        engine.run(df, signals=[sig])
 
 
 def test_backtest_engine_direction_both():
@@ -667,11 +642,9 @@ def test_backtest_engine_direction_both():
 
     cfg = BacktestConfig(direction="BOTH", tp_atr_multiple=2.0, sl_atr_multiple=1.0)
     engine = BacktestEngine(config=cfg)
-    trades, eq = engine.run(df, signals=[sig_long, sig_short])
-
-    assert len(trades) == 2
-    assert trades[0].direction == "LONG"
-    assert trades[1].direction == "SHORT"
+    # BOTH can create unsupported SHORT fills on SPOT.
+    with pytest.raises(BacktestValidationError, match="BOTH"):
+        engine.run(df, signals=[sig_long, sig_short])
 
 
 def test_backtest_engine_zero_initial_risk_handled():
@@ -694,6 +667,157 @@ def test_backtest_engine_zero_initial_risk_handled():
 
     assert len(trades) == 1
     assert trades[0].r_multiple == 0.0
+
+
+def _flat_spot_bars(exit_price: float = 100.0, count: int = 3) -> pd.DataFrame:
+    prices = [100.0] * (count - 1) + [exit_price]
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2024-01-01", periods=count, freq="1h", tz="UTC"),
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": [1000.0] * count,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("exit_price", "fee_rate", "fraction"),
+    [
+        (100.0, 0.0, 1.0),
+        (100.0, 0.001, 1.0),
+        (110.0, 0.001, 1.0),
+        (90.0, 0.001, 1.0),
+        (100.0, 0.001, 0.25),
+        (100.0, 0.001, 0.50),
+    ],
+)
+def test_spot_long_cash_equity_and_pnl_reconcile(exit_price, fee_rate, fraction):
+    capital = 1000.0
+    allocation = capital * fraction
+    cfg = BacktestConfig(
+        initial_capital=capital,
+        position_size_pct=fraction,
+        taker_fee_pct=fee_rate,
+        slippage_pct=0.0,
+        max_holding_bars=2,
+        tp_atr_multiple=50.0,
+        sl_atr_multiple=50.0,
+    )
+    signal = make_test_signal(atr=1.0)
+    trades, equity = BacktestEngine(cfg).run(
+        _flat_spot_bars(exit_price), signals=[signal]
+    )
+
+    assert len(trades) == 1
+    trade = trades[0]
+    fee_entry = allocation * fee_rate
+    units = (allocation - fee_entry) / 100.0
+    gross_pnl = units * (exit_price - 100.0)
+    fee_exit = units * exit_price * fee_rate
+    net_pnl = gross_pnl - fee_entry - fee_exit
+    assert trade.entry_price == pytest.approx(100.0)
+    assert trade.exit_price == pytest.approx(exit_price)
+    assert trade.notional_entry == pytest.approx(allocation)
+    assert trade.size_units == pytest.approx(units)
+    assert trade.fee_entry == pytest.approx(fee_entry)
+    assert trade.fee_exit == pytest.approx(fee_exit)
+    assert trade.gross_pnl == pytest.approx(gross_pnl)
+    assert trade.net_pnl == pytest.approx(net_pnl)
+    assert equity[1].cash == pytest.approx(capital - allocation)
+    assert equity[1].equity == pytest.approx(capital - allocation + units * 100.0)
+    assert equity[-1].cash == pytest.approx(
+        capital - allocation + units * exit_price - fee_exit
+    )
+    assert equity[-1].equity == pytest.approx(equity[-1].cash)
+    assert equity[-1].equity - capital == pytest.approx(trade.net_pnl, abs=1e-8)
+    assert all(point.cash >= 0 for point in equity)
+
+
+def test_spot_long_entry_slippage_and_fees_are_each_charged_once():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.01,
+        max_holding_bars=2,
+        tp_atr_multiple=50.0,
+        sl_atr_multiple=50.0,
+    )
+    trades, equity = BacktestEngine(cfg).run(
+        _flat_spot_bars(), signals=[make_test_signal(atr=1.0)]
+    )
+    trade = trades[0]
+    assert trade.entry_price == pytest.approx(101.0)
+    assert trade.exit_price == pytest.approx(99.0)
+    assert trade.size_units == pytest.approx(999.0 / 101.0)
+    assert equity[1].equity == pytest.approx(trade.size_units * 100.0)
+    assert equity[-1].equity - 1000.0 == pytest.approx(trade.net_pnl, abs=1e-8)
+
+
+def test_two_spot_round_trips_do_not_create_capital():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.0,
+        max_holding_bars=2,
+        tp_atr_multiple=50.0,
+        sl_atr_multiple=50.0,
+    )
+    bars = _flat_spot_bars(count=6)
+    signals = [
+        make_test_signal("2024-01-01 00:00:00", atr=1.0),
+        make_test_signal("2024-01-01 03:00:00", atr=1.0),
+    ]
+    trades, equity = BacktestEngine(cfg).run(bars, signals=signals)
+    assert len(trades) == 2
+    assert equity[-1].equity == pytest.approx(1000.0 * (1 - 0.001) ** 4)
+    assert equity[-1].equity - 1000.0 == pytest.approx(
+        sum(trade.net_pnl for trade in trades), abs=1e-8
+    )
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"direction": "SHORT"}, "SHORT"),
+        ({"direction": "BOTH"}, "BOTH"),
+        ({"leverage": 2.0}, "leverage"),
+        ({"market_type": "PERP"}, "PERP"),
+        ({"market_type": "PERP", "leverage": 3.0}, "PERP"),
+        ({"initial_capital": float("nan")}, "initial_capital"),
+        ({"position_size_pct": float("inf")}, "position_size_pct"),
+        ({"taker_fee_pct": float("nan")}, "taker_fee_pct"),
+        ({"slippage_pct": float("inf")}, "slippage_pct"),
+    ],
+)
+def test_unsupported_or_nonfinite_backtest_config_rejected(changes, message):
+    cfg = BacktestConfig(**changes)
+    with pytest.raises(BacktestValidationError, match=message):
+        BacktestEngine(cfg).run(_flat_spot_bars(), signals=[make_test_signal()])
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -1.0])
+def test_nonfinite_or_negative_market_price_rejected(bad_value):
+    bars = _flat_spot_bars()
+    bars.loc[1, "open"] = bad_value
+    with pytest.raises(BacktestValidationError, match="open"):
+        BacktestEngine().run(bars, signals=[make_test_signal()])
+
+
+def test_nonfinite_signal_atr_rejected_before_entry():
+    signal = replace(make_test_signal(), atr=float("nan"))
+    with pytest.raises(BacktestValidationError, match="ATR"):
+        BacktestEngine().run(_flat_spot_bars(), signals=[signal])
+
+
+def test_extreme_finite_price_cannot_create_infinite_units():
+    bars = _flat_spot_bars()
+    for column in ("open", "high", "low", "close"):
+        bars.loc[1, column] = 5e-324
+    with pytest.raises(BacktestValidationError, match="Unidades SPOT"):
+        BacktestEngine().run(bars, signals=[make_test_signal()])
 
 
 
