@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import BacktestConfig
 from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
@@ -70,6 +71,16 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
     # Verify initial equity point
     assert report.equity_curve[0].equity == 10_000.0
     assert report.equity_curve[0].drawdown_pct == 0.0
+    expected_dd, expected_max_pct, expected_max_usd, expected_duration = (
+        BacktestMetricsCalculator.calculate_drawdown_series(
+            [point.equity for point in report.equity_curve],
+            initial_equity=cfg.initial_capital,
+        )
+    )
+    assert [point.drawdown_pct for point in report.equity_curve] == pytest.approx(expected_dd)
+    assert report.max_drawdown_pct == round(expected_max_pct, 2)
+    assert report.max_drawdown_usd == round(expected_max_usd, 2)
+    assert report.max_drawdown_duration_bars == expected_duration
 
     # Verify trades and strict execution rules
     assert report.total_trades > 0
@@ -83,6 +94,8 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
         assert trade.fee_entry > 0
         assert trade.fee_exit > 0
         assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
+        assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+        assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
         assert trade.mfe_pct >= 0.0
         assert trade.mae_pct >= 0.0
 

@@ -175,6 +175,86 @@ def test_drawdown_series_empty():
     assert max_dur == 0
 
 
+@pytest.mark.parametrize(
+    ("equity", "expected_series", "max_pct", "max_amount", "duration"),
+    [
+        ([950.0], [5.0], 5.0, 50.0, 1),
+        ([1000.0, 950.0, 1100.0, 990.0], [0.0, 5.0, 0.0, 10.0], 10.0, 110.0, 1),
+        ([1000.0, 1050.0, 1100.0], [0.0, 0.0, 0.0], 0.0, 0.0, 0),
+        ([1000.0, 1000.0, 1000.0], [0.0, 0.0, 0.0], 0.0, 0.0, 0),
+        ([1000.0, 0.0], [0.0, 100.0], 100.0, 1000.0, 1),
+        ([1050.0, 1029.0], [0.0, 2.0], 2.0, 21.0, 1),
+        ([1000.0, 950.0, 900.0, 1000.0], [0.0, 5.0, 10.0, 0.0], 10.0, 100.0, 2),
+        ([1000.0, 800.0, 2000.0, 1700.0], [0.0, 20.0, 0.0, 15.0], 20.0, 300.0, 1),
+    ],
+)
+def test_drawdown_uses_initial_capital_and_separate_maxima(
+    equity, expected_series, max_pct, max_amount, duration
+):
+    actual = BacktestMetricsCalculator.calculate_drawdown_series(
+        equity, initial_equity=1000.0
+    )
+    assert actual[0] == pytest.approx(expected_series)
+    assert actual[1:] == pytest.approx((max_pct, max_amount, duration))
+
+
+def test_drawdown_legacy_reference_and_empty_series_contract():
+    assert BacktestMetricsCalculator.calculate_drawdown_series([950.0, 1000.0])[0] == [0.0, 0.0]
+    assert BacktestMetricsCalculator.calculate_drawdown_series(
+        [950.0, 1000.0], initial_equity=1000.0
+    )[0] == [5.0, 0.0]
+    assert BacktestMetricsCalculator.calculate_drawdown_series(
+        [], initial_equity=1000.0
+    ) == ([], 0.0, 0.0, 0)
+
+
+@pytest.mark.parametrize("initial_equity", [0.0, -1.0, float("nan"), float("inf")])
+def test_drawdown_rejects_invalid_initial_equity_even_for_empty_series(initial_equity):
+    with pytest.raises(ValueError, match="capital inicial"):
+        BacktestMetricsCalculator.calculate_drawdown_series([], initial_equity)
+
+
+@pytest.mark.parametrize("bad_equity", [float("nan"), float("inf"), -1.0])
+def test_drawdown_rejects_invalid_equity_instead_of_masking_it(bad_equity):
+    with pytest.raises(ValueError, match="equity"):
+        BacktestMetricsCalculator.calculate_drawdown_series(
+            [1000.0, bad_equity], initial_equity=1000.0
+        )
+
+
+def test_zero_first_equity_requires_explicit_positive_reference():
+    with pytest.raises(ValueError, match="capital inicial"):
+        BacktestMetricsCalculator.calculate_drawdown_series([0.0])
+    assert BacktestMetricsCalculator.calculate_drawdown_series(
+        [0.0], initial_equity=1000.0
+    )[0] == [100.0]
+
+
+def test_metrics_without_trades_still_reports_nonflat_curve_drawdown():
+    ts = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
+    equity = [950.0, 1100.0, 990.0]
+    points = [EquityPoint(time, amount, amount, 0.0) for time, amount in zip(ts, equity)]
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        [], points, initial_capital=1000.0
+    )
+    assert metrics["total_trades"] == 0
+    assert metrics["max_drawdown_pct"] == 10.0
+    assert metrics["max_drawdown_usd"] == 110.0
+    assert metrics["max_drawdown_duration_bars"] == 1
+    assert metrics["total_net_pnl"] == 0.0
+    assert metrics["sharpe_ratio"] is None
+
+
+def test_metrics_without_trades_and_constant_equity_has_zero_drawdown():
+    ts = pd.date_range("2024-01-01", periods=2, freq="1h", tz="UTC")
+    points = [EquityPoint(time, 1000.0, 1000.0, 0.0) for time in ts]
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        [], points, initial_capital=1000.0
+    )
+    assert metrics["max_drawdown_pct"] == 0.0
+    assert metrics["max_drawdown_usd"] == 0.0
+
+
 def test_metrics_breakeven_trades():
     trades = [
         create_sample_trade("t1", 0.0, r_multiple=0.0, mfe_pct=0.5, mae_pct=0.5),

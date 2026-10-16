@@ -5,7 +5,7 @@ from typing import Any
 
 import pandas as pd
 
-from .backtest_models import EquityPoint, TradeResult
+from .backtest_models import BacktestValidationError, EquityPoint, TradeResult
 
 
 class BacktestMetricsCalculator:
@@ -15,15 +15,39 @@ class BacktestMetricsCalculator:
     """
 
     @staticmethod
-    def calculate_drawdown_series(equity_values: list[float]) -> tuple[list[float], float, float, int]:
-        """Calculates running drawdown percentage, max drawdown %, max drawdown $ USD,
+    def calculate_drawdown_series(
+        equity_values: list[float], initial_equity: float | None = None
+    ) -> tuple[list[float], float, float, int]:
+        """Return per-bar DD %, maximum DD % and amount, and underwater duration.
 
-        and max drawdown duration in steps/bars.
+        Backtests pass initial_equity explicitly. For legacy callers without it,
+        the first observation remains the reference peak; an empty legacy series
+        returns zero *observed* drawdown, not evidence of a loss-free period.
+        Callers can distinguish no data by the empty series. No synthetic equity
+        point is inserted.
         """
+        if initial_equity is not None:
+            try:
+                valid_initial = math.isfinite(initial_equity) and initial_equity > 0
+            except (TypeError, ValueError):
+                valid_initial = False
+            if not valid_initial:
+                raise BacktestValidationError("El capital inicial debe ser positivo y finito.")
+        for eq in equity_values:
+            try:
+                valid_equity = math.isfinite(eq) and eq >= 0
+            except (TypeError, ValueError):
+                valid_equity = False
+            if not valid_equity:
+                raise BacktestValidationError("La equity debe ser no negativa y finita.")
         if not equity_values:
             return [], 0.0, 0.0, 0
 
-        peak = equity_values[0]
+        peak = initial_equity if initial_equity is not None else equity_values[0]
+        if peak <= 0:
+            raise BacktestValidationError(
+                "Se requiere capital inicial positivo si la primera equity es cero."
+            )
         dd_pct_series: list[float] = []
         max_dd_pct = 0.0
         max_dd_usd = 0.0
@@ -41,7 +65,7 @@ class BacktestMetricsCalculator:
                     max_duration = current_duration
 
             dd_usd = peak - eq
-            dd_pct = (dd_usd / peak * 100.0) if peak > 0 else 0.0
+            dd_pct = dd_usd / peak * 100.0
 
             dd_pct_series.append(dd_pct)
 
@@ -63,6 +87,11 @@ class BacktestMetricsCalculator:
         """Calculates comprehensive performance and risk metrics across completed trades."""
         total_trades = len(trades)
 
+        equity_values = [point.equity for point in equity_curve]
+        _, max_dd_pct, max_dd_usd, max_dd_duration = cls.calculate_drawdown_series(
+            equity_values, initial_equity=initial_capital
+        )
+
         if total_trades == 0:
             return {
                 "total_trades": 0,
@@ -73,9 +102,9 @@ class BacktestMetricsCalculator:
                 "expectancy": 0.0,
                 "expectancy_r": 0.0,
                 "payoff_ratio": 0.0,
-                "max_drawdown_pct": 0.0,
-                "max_drawdown_usd": 0.0,
-                "max_drawdown_duration_bars": 0,
+                "max_drawdown_pct": round(max_dd_pct, 2),
+                "max_drawdown_usd": round(max_dd_usd, 2),
+                "max_drawdown_duration_bars": max_dd_duration,
                 "avg_mfe_pct": 0.0,
                 "avg_mae_pct": 0.0,
                 "avg_bars_held": 0.0,
@@ -136,13 +165,6 @@ class BacktestMetricsCalculator:
         total_fees = sum(t.fee_entry + t.fee_exit + t.funding_fees for t in trades)
         total_net_pnl = sum(t.net_pnl for t in trades)
         return_on_capital = (total_net_pnl / initial_capital * 100.0) if initial_capital > 0 else 0.0
-
-        # Drawdown calculations from equity curve
-        if equity_curve:
-            equity_values = [p.equity for p in equity_curve]
-            _, max_dd_pct, max_dd_usd, max_dd_duration = cls.calculate_drawdown_series(equity_values)
-        else:
-            max_dd_pct, max_dd_usd, max_dd_duration = 0.0, 0.0, 0
 
         # Sharpe & Calmar Ratios
         sharpe_ratio: float | None = None

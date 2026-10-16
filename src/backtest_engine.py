@@ -440,7 +440,9 @@ class BacktestEngine:
 
         # Build equity curve with accurate running drawdown percentages
         equity_values = [p["equity"] for p in raw_equity_curve]
-        dd_series, _, _, _ = BacktestMetricsCalculator.calculate_drawdown_series(equity_values)
+        dd_series, _, _, _ = BacktestMetricsCalculator.calculate_drawdown_series(
+            equity_values, initial_equity=self.config.initial_capital
+        )
 
         equity_curve = [
             EquityPoint(

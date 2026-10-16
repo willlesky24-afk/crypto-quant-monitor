@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from src.backtest_engine import BacktestEngine
+from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
     BacktestConfig,
     BacktestValidationError,
@@ -868,6 +869,32 @@ def test_spot_long_cash_equity_and_pnl_reconcile(exit_price, fee_rate, fraction)
     assert equity[-1].equity == pytest.approx(equity[-1].cash)
     assert equity[-1].equity - capital == pytest.approx(trade.net_pnl, abs=1e-8)
     assert all(point.cash >= 0 for point in equity)
+
+
+def test_engine_equity_drawdown_matches_metrics_and_preserves_r_accounting():
+    cfg = BacktestConfig(
+        initial_capital=1000.0,
+        taker_fee_pct=0.0,
+        slippage_pct=0.0,
+        tp_atr_multiple=50.0,
+        sl_atr_multiple=50.0,
+        max_holding_bars=2,
+    )
+    trades, equity = BacktestEngine(cfg).run(
+        _flat_spot_bars(90.0), signals=[make_test_signal(atr=1.0)]
+    )
+    trade = trades[0]
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        trades, equity, initial_capital=cfg.initial_capital
+    )
+    assert [point.drawdown_pct for point in equity] == pytest.approx([0.0, 0.0, 10.0])
+    assert metrics["max_drawdown_pct"] == 10.0
+    assert metrics["max_drawdown_usd"] == 100.0
+    assert trade.initial_risk_amount == pytest.approx(500.0)
+    assert trade.r_multiple == pytest.approx(-0.2)
+    assert trade.net_r_multiple == pytest.approx(-0.2)
+    assert equity[-1].cash == pytest.approx(900.0)
+    assert equity[-1].equity - cfg.initial_capital == pytest.approx(trade.net_pnl)
 
 
 def test_spot_long_entry_slippage_and_fees_are_each_charged_once():
