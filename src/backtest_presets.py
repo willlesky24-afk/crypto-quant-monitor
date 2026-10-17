@@ -6,9 +6,9 @@ from src.backtest_models import BacktestConfig, TradeDirection
 
 PROVEN_STRATEGIES: dict[str, dict[str, Any]] = {
     "capital_preservation": {
-        "name": "🛡️ Preservación de Capital (Principiante Seguro)",
-        "short_name": "Preservación de Capital",
-        "description": "Filtro estricto que prioriza cuidar tu dinero. Solo entra cuando hay alta confluencia técnica a favor (Quant Score >= 75), exclusivamente en compras (LONG) y con Stop Loss ceñido.",
+        "name": "🛡️ Spot 1x — Sin apalancamiento (filtro estricto)",
+        "short_name": "Spot 1x — Sin apalancamiento",
+        "description": "Preset con filtro de confluencia técnica (Quant Score >= 75), dirección LONG y stop configurado. No impide pérdidas.",
         "direction": TradeDirection.LONG.value,
         "min_quant_score": 75.0,
         "tp_atr_multiple": 2.2,
@@ -18,7 +18,7 @@ PROVEN_STRATEGIES: dict[str, dict[str, Any]] = {
     "trend_following": {
         "name": "🏛️ Seguimiento de Tendencia Institucional (Trend Following)",
         "short_name": "Trend Following",
-        "description": "El estándar de Wall Street: solo opera a favor de la tendencia mayor (sobre EMA 200 y POC), buscando grandes corridas alcistas con relación Riesgo:Beneficio superior a 1:2.",
+        "description": "Preset que simula compras a favor de la tendencia mayor (sobre EMA 200 y POC) con niveles derivados de sus parámetros configurados.",
         "direction": TradeDirection.LONG.value,
         "min_quant_score": 68.0,
         "tp_atr_multiple": 3.0,
@@ -28,7 +28,7 @@ PROVEN_STRATEGIES: dict[str, dict[str, Any]] = {
     "mean_reversion": {
         "name": "🔄 Reversión a la Media en Rangos (Mean Reversion)",
         "short_name": "Reversión a la Media",
-        "description": "Ideal para mercados laterales: compra en zonas de descuento institucional (VAL) y vende en el precio justo (POC) o resistencia (VAH).",
+        "description": "Preset de investigación para rangos que utiliza referencias VAL, POC y VAH. Su dirección BOTH no está disponible en la contabilidad SPOT actual.",
         "direction": TradeDirection.BOTH.value,
         "min_quant_score": 60.0,
         "tp_atr_multiple": 1.8,
@@ -38,7 +38,7 @@ PROVEN_STRATEGIES: dict[str, dict[str, Any]] = {
     "volatility_breakout": {
         "name": "🚀 Ruptura de Volatilidad (Volatility Breakout)",
         "short_name": "Ruptura de Volatilidad",
-        "description": "Espera compresiones de volatilidad y se monta en la ola del impulso con Stop Loss dinámico (Trailing Stop) para capturar movimientos explosivos rápidos.",
+        "description": "Preset de investigación para rupturas de volatilidad con trailing stop. Su dirección BOTH no está disponible en la contabilidad SPOT actual.",
         "direction": TradeDirection.BOTH.value,
         "min_quant_score": 65.0,
         "tp_atr_multiple": 3.5,
@@ -48,7 +48,7 @@ PROVEN_STRATEGIES: dict[str, dict[str, Any]] = {
     "dynamic_hybrid": {
         "name": "🧠 Modelo Cuantitativo Híbrido (Nativo de Antigravity)",
         "short_name": "Cuantitativo Híbrido",
-        "description": "El sistema inteligente nativo: clasifica el régimen en tiempo real y cambia dinámicamente entre tendencia y rango según probabilidades predictivas.",
+        "description": "Preset que combina clasificación de régimen y señales predictivas. Su dirección BOTH no está disponible en la contabilidad SPOT actual.",
         "direction": TradeDirection.BOTH.value,
         "min_quant_score": 60.0,
         "tp_atr_multiple": 2.5,
@@ -66,7 +66,7 @@ def build_strategy_config(
     leverage: float = 1.0,
     **kwargs: Any,
 ) -> BacktestConfig:
-    """Build a deterministic BacktestConfig from a battle-tested strategy preset."""
+    """Build a deterministic BacktestConfig from a configured strategy preset."""
     preset = PROVEN_STRATEGIES.get(strategy_key, PROVEN_STRATEGIES["capital_preservation"])
     return BacktestConfig(
         initial_capital=max(5.0, float(initial_capital)),
@@ -83,7 +83,7 @@ def build_strategy_config(
 
 
 def evaluate_backtest_verdict(metrics: dict[str, Any]) -> dict[str, str]:
-    """Evaluates backtest metrics and produces a pedagogical traffic light verdict."""
+    """Classify simulated metrics with the existing pedagogical thresholds."""
     total_trades = int(metrics.get("total_trades", 0))
     win_rate = float(metrics.get("win_rate", 0.0))
     profit_factor = float(metrics.get("profit_factor", 0.0))
@@ -94,7 +94,7 @@ def evaluate_backtest_verdict(metrics: dict[str, Any]) -> dict[str, str]:
         return {
             "status": "NEUTRAL",
             "badge": "⚪ MUESTRA INSUFICIENTE",
-            "title": "Pocas operaciones para emitir un veredicto definitivo",
+            "title": "Pocas operaciones para evaluar los criterios de esta simulación",
             "description": f"Se registraron solo {total_trades} operaciones en este periodo histórico. Intenta aumentar la cantidad de velas en la barra lateral para evaluar una muestra estadística más amplia.",
             "color": "#00E5FF",
         }
@@ -102,35 +102,35 @@ def evaluate_backtest_verdict(metrics: dict[str, Any]) -> dict[str, str]:
     if net_pnl > 0 and profit_factor >= 1.45 and max_dd <= 20.0:
         return {
             "status": "APPROVED",
-            "badge": "🟢 ESTRATEGIA APROBADA / SALUDABLE",
-            "title": "Excelente solidez cuantitativa y riesgo bajo control",
+            "badge": "🟢 CUMPLE CRITERIOS DE ESTA SIMULACIÓN",
+            "title": "Resultado histórico dentro de los umbrales configurados",
             "description": (
-                f"Esta estrategia superó la prueba con éxito. De cada 10 operaciones ganó aproximadamente "
-                f"{int(win_rate * 10)}, y por cada dólar que perdió generó ${profit_factor:.2f} de beneficio. "
-                f"La caída máxima fue controlada ({max_dd:.1f}%), por lo que tu capital estuvo protegido en todo momento."
+                f"En esta simulación, la tasa de acierto fue {win_rate * 100:.1f}% y el factor de beneficio "
+                f"fue {profit_factor:.2f}. El drawdown máximo observado fue {max_dd:.1f}%. "
+                "Estos resultados no acreditan desempeño prospectivo ni protección del capital."
             ),
             "color": "#00FF88",
         }
     elif net_pnl > 0 and (profit_factor >= 1.05 or max_dd > 20.0):
         return {
             "status": "WARNING",
-            "badge": "🟡 ESTRATEGIA MODERADA / PRECAUCIÓN",
-            "title": "Genera ganancias, pero presenta altibajos o caídas considerables",
+            "badge": "🟡 RESULTADO MIXTO EN ESTA SIMULACIÓN",
+            "title": "Resultado positivo con riesgo observado",
             "description": (
-                f"La estrategia terminó en positivo (+${net_pnl:,.2f}), pero sufrió una caída máxima temporal de "
-                f"{max_dd:.1f}% y su factor de beneficio es de {profit_factor:.2f}. "
-                f"Podrías pasar sustos psicológicos en las malas rachas. Se recomienda usar corte de pérdida más estricto o perfil conservador."
+                f"El PnL neto simulado fue +${net_pnl:,.2f}; el drawdown máximo observado fue "
+                f"{max_dd:.1f}% y el factor de beneficio fue {profit_factor:.2f}. "
+                "La muestra histórica no permite inferir resultados futuros."
             ),
             "color": "#FFD600",
         }
     else:
         return {
             "status": "REJECTED",
-            "badge": "🔴 ESTRATEGIA NO RECOMENDADA / DE RIESGO",
-            "title": "Rendimiento deficiente o riesgo excesivo en este par",
+            "badge": "🔴 NO CUMPLE CRITERIOS DE ESTA SIMULACIÓN",
+            "title": "Resultado fuera de los umbrales configurados",
             "description": (
-                f"La estrategia finalizó con saldo negativo (${net_pnl:,.2f}) o un factor de beneficio por debajo de 1.05 ({profit_factor:.2f}). "
-                f"No se recomienda arriesgar capital real bajo estos parámetros en las condiciones actuales de mercado."
+                f"El PnL neto simulado fue ${net_pnl:,.2f} y el factor de beneficio fue {profit_factor:.2f}. "
+                "La clasificación describe esta muestra histórica; no es una recomendación operativa."
             ),
             "color": "#FF2E63",
         }

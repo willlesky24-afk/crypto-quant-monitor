@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ try:
     from src.ai_agent.context_builder import ContextBuilder
     from src.ai_providers.factory import ProviderFactory
     from src.anomaly_detection.detector import MarketAnomalyDetector
+    from src.backtest_metrics import BacktestMetricsCalculator
     from src.backtest_models import BacktestConfig, BacktestValidationError
     from src.backtest_presets import (
         PROVEN_STRATEGIES,
@@ -68,6 +70,7 @@ except ImportError:
     from ai_agent.context_builder import ContextBuilder
     from ai_providers.factory import ProviderFactory
     from anomaly_detection.detector import MarketAnomalyDetector
+    from backtest_metrics import BacktestMetricsCalculator
     from backtest_models import BacktestConfig, BacktestValidationError
     from backtest_presets import (
         PROVEN_STRATEGIES,
@@ -123,6 +126,115 @@ def _run_backtest_for_ui(config, candles, symbol, interval, session_state):
 def _format_sharpe_for_ui(value):
     """Keep an unavailable Sharpe distinct from a calculated zero."""
     return "N/A" if value is None else f"{value:.2f}"
+
+
+def _format_verified_expectancy_for_ui(metrics, field):
+    """Never fall back to the legacy hybrid expectancy_r."""
+    if metrics.get("r_coverage_status") not in {"COMPLETE", "PARTIAL"}:
+        return "N/A"
+    value = metrics.get(field)
+    try:
+        return f"{value:.2f}" if value is not None and math.isfinite(value) else "N/A"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def _r_coverage_for_ui(metrics):
+    status = metrics.get("r_coverage_status", "UNKNOWN")
+    if status == "NO_TRADES":
+        return "Cobertura R: NO_TRADES — No existen operaciones; expectativas N/A."
+    if status == "NONE_VERIFIED":
+        return "Cobertura R: NONE_VERIFIED — Ninguna operación tiene R verificable; expectativas N/A."
+    if status in {"PARTIAL", "COMPLETE"}:
+        verified = metrics.get("r_verified_trades", 0)
+        excluded = metrics.get("r_excluded_trades", 0)
+        total = metrics.get("total_trades", verified + excluded)
+        coverage = f"{verified} verificables, {excluded} excluidas, {total} en total"
+        if status == "PARTIAL":
+            return (f"Cobertura R: PARTIAL — {coverage}. "
+                    "Expectativa calculada únicamente sobre operaciones verificables.")
+        return f"Cobertura R: COMPLETE — {coverage}."
+    return "Cobertura R: UNKNOWN — No hay evidencia suficiente para presentar expectativa R verificada."
+
+
+def _trade_field_for_ui(trade, field):
+    return trade.get(field) if isinstance(trade, dict) else getattr(trade, field, None)
+
+
+def _positive_finite_for_ui(value):
+    try:
+        return value is not None and math.isfinite(value) and value > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _supported_spot_long_for_ui(config):
+    return (config is not None
+            and _trade_field_for_ui(config, "market_type") == "SPOT"
+            and _trade_field_for_ui(config, "direction") == "LONG"
+            and _trade_field_for_ui(config, "leverage") == 1.0)
+
+
+def _planned_rr_for_ui(trade, config):
+    """Gross planned TP/initial-stop distance for a coherent SPOT LONG trade."""
+    entry = _trade_field_for_ui(trade, "entry_price")
+    stop = _trade_field_for_ui(trade, "initial_stop_price")
+    target = _trade_field_for_ui(trade, "tp_price")
+    units = _trade_field_for_ui(trade, "size_units")
+    risk = _trade_field_for_ui(trade, "initial_risk_amount")
+    per_unit = _trade_field_for_ui(trade, "initial_risk_per_unit")
+    if (not _supported_spot_long_for_ui(config)
+            or _trade_field_for_ui(trade, "direction") != "LONG"
+            or _trade_field_for_ui(trade, "side") != "LONG"
+            or not all(_positive_finite_for_ui(x) for x in (entry, stop, target, units, risk, per_unit))
+            or not stop < entry < target):
+        return None
+    if (not math.isclose(per_unit, entry - stop, rel_tol=1e-9, abs_tol=1e-10)
+            or not math.isclose(risk, units * per_unit, rel_tol=1e-9, abs_tol=1e-10)):
+        return None
+    ratio = (target - entry) / (entry - stop)
+    return ratio if math.isfinite(ratio) and ratio > 0 else None
+
+
+def _planned_rr_summary_for_ui(trades, config):
+    ratios = [ratio for trade in trades
+              if (ratio := _planned_rr_for_ui(trade, config)) is not None]
+    return (sum(ratios) / len(ratios) if ratios else None, len(ratios))
+
+
+def _verified_trade_r_for_ui(trade, config):
+    if not _supported_spot_long_for_ui(config):
+        return None
+    try:
+        return BacktestMetricsCalculator._verified_spot_long_r(trade)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _backtest_trade_table_for_ui(trades, config):
+    """Keep historical missing levels/R explicit; never infer the initial stop."""
+    def price(value):
+        return f"{value:,.2f}" if _positive_finite_for_ui(value) else "N/A"
+
+    rows = []
+    for trade in trades:
+        verified_r = _verified_trade_r_for_ui(trade, config)
+        rows.append({
+            "ID": _trade_field_for_ui(trade, "trade_id"),
+            "Dirección": _trade_field_for_ui(trade, "side") or _trade_field_for_ui(trade, "direction"),
+            "Entrada": _trade_field_for_ui(trade, "entry_timestamp"),
+            "P. entrada ejecutada": price(_trade_field_for_ui(trade, "entry_price")),
+            "SL inicial": price(_trade_field_for_ui(trade, "initial_stop_price")),
+            "SL final": price(_trade_field_for_ui(trade, "sl_price")),
+            "TP planificado": price(_trade_field_for_ui(trade, "tp_price")),
+            "Salida": _trade_field_for_ui(trade, "exit_timestamp"),
+            "P. salida": price(_trade_field_for_ui(trade, "exit_price")),
+            "R bruto simulado": f"{verified_r[0]:.2f}" if verified_r else "N/A",
+            "R neto simulado": f"{verified_r[1]:.2f}" if verified_r else "N/A",
+            "PnL neto ($)": _trade_field_for_ui(trade, "net_pnl"),
+            "Causa cierre": _trade_field_for_ui(trade, "exit_reason"),
+        })
+    return pd.DataFrame(rows)
 
 
 st.set_page_config(
@@ -1401,12 +1513,12 @@ with tab_copilot:
 with tab_backtest:
     market_name_cap = "Divisas Forex" if is_forex else "Criptomonedas"
     st.subheader(f"📈 Simulación Histórica & Backtest Analytics ({market_name_cap})")
-    st.caption("Prueba de estrategias cuantitativas con datos reales de mercado • Sin riesgo de capital real")
+    st.caption("Simulación sobre datos históricos cargados • No ejecuta operaciones ni acredita resultados futuros")
 
     market_advice = (
-        "💡 **Consejo Cuantitativo para Forex:** En el mercado de divisas, las mejores rentabilidades con menor drawdown suelen obtenerse con **Reversión a la Media (RSI + Value Area VAL/VAH)** aprovechando que los bancos devuelven los precios a su equilibrio, o con **Seguimiento de Tendencia Macro**."
+        "💡 **Forex:** Los enfoques de reversión a la media y seguimiento de tendencia son hipótesis de simulación; sus resultados dependen de la muestra, los costes y la calidad de los datos."
         if is_forex
-        else "💡 **Consejo Cuantitativo para Cripto:** Las criptomonedas tienen expansiones explosivas 24/7. Las estrategias de **Ruptura de Volatilidad (Breakout)** y el **Modelo Híbrido Cuantitativo** están optimizadas para capturar esos movimientos direccionales rápidos."
+        else "💡 **Cripto:** Los presets de ruptura de volatilidad y modelo híbrido permiten explorar hipótesis históricas; no acreditan desempeño futuro."
     )
     st.markdown(
         f"""
@@ -1421,7 +1533,7 @@ with tab_backtest:
     exp_level = st.radio(
         "Nivel de Experiencia",
         [
-            "👶 Modo Guiado (Estrategias Probadas & Capital Flexible)",
+            "👶 Modo Guiado (Presets de Simulación & Capital Flexible)",
             "👨‍💻 Modo Personalizado (Control Total para Expertos)",
         ],
         horizontal=True,
@@ -1465,7 +1577,7 @@ with tab_backtest:
                 "⚡ Nivel de Apalancamiento:",
                 options=[1.0, 2.0, 3.0, 5.0],
                 format_func=lambda x: (
-                    f"{int(x)}x (Spot • Sin Deuda • Seguro Novato)" if x == 1.0 else (
+                    f"{int(x)}x (Spot • Sin apalancamiento)" if x == 1.0 else (
                         f"{int(x)}x (Moderado • Doble Retorno / Doble Riesgo)" if x == 2.0 else (
                             f"{int(x)}x (Avanzado • Triple Exposición)" if x == 3.0 else f"{int(x)}x (Agresivo • Alto Riesgo)"
                         )
@@ -1476,14 +1588,14 @@ with tab_backtest:
             )
         with lev_c2:
             if selected_leverage == 1.0:
-                st.info("🛡️ **Apalancamiento 1x (Recomendado Novatos)**: Operas exclusivamente con tu capital real. Sin riesgo de liquidación forzada.")
+                st.info("**SPOT LONG 1x disponible**: la simulación no utiliza apalancamiento; el capital sigue expuesto a pérdidas de mercado.")
             else:
                 st.warning(
                     f"⚠️ **Apalancamiento {int(selected_leverage)}x no disponible** en "
                     "backtests SPOT. La simulación rechazará esta selección; solo SPOT LONG 1x está validado."
                 )
 
-        st.markdown("##### 2️⃣ Elige una Estrategia Estándar Probada de la Industria")
+        st.markdown("##### 2️⃣ Elige un preset de estrategia para la simulación")
         strategy_keys = list(PROVEN_STRATEGIES.keys())
         strategy_labels = [PROVEN_STRATEGIES[k]["name"] for k in strategy_keys]
         selected_strategy_label = st.selectbox(
@@ -1504,7 +1616,7 @@ with tab_backtest:
             unsafe_allow_html=True,
         )
 
-        run_sim = st.button("🚀 Simular Estrategia con Datos Reales", type="primary", use_container_width=True)
+        run_sim = st.button("🚀 Simular Estrategia con Datos Históricos", type="primary", use_container_width=True)
 
         if run_sim:
             try:
@@ -1575,7 +1687,7 @@ with tab_backtest:
     if run_sim or "backtest_report" in st.session_state:
         if run_sim and b_cfg is not None:
             source_label = "Forex Global" if is_forex else "Binance"
-            with st.spinner(f"Ejecutando simulación cuantitativa vela por vela sobre datos reales de {source_label}..."):
+            with st.spinner(f"Ejecutando simulación vela por vela sobre datos cargados de {source_label}..."):
                 try:
                     _run_backtest_for_ui(
                         config=b_cfg,
@@ -1621,6 +1733,14 @@ with tab_backtest:
             """,
             unsafe_allow_html=True,
         )
+        st.caption("Clasificación por umbrales configurados en esta simulación; no es validación prospectiva ni garantía de resultados.")
+        provenance = getattr(report, "data_provenance", None)
+        provenance_status = (
+            provenance.get("status") if isinstance(provenance, dict)
+            else getattr(provenance, "status", "UNKNOWN")
+        )
+        if provenance_status == "UNKNOWN":
+            st.warning("Procedencia del dataset: UNKNOWN. La coherencia matemática del R no acredita el origen de los datos históricos.")
 
         # AI Copilot Integration Button
         c_consult_btn, _ = st.columns([1.5, 2.0])
@@ -1634,7 +1754,7 @@ with tab_backtest:
                     f"- Caída Máxima (Max Drawdown): {metrics.get('max_drawdown_pct', 0.0):.2f}%\n"
                     f"- Retorno Neto: ${metrics.get('net_pnl', 0.0):,.2f}\n"
                     f"- Veredicto: {verdict['badge']} - {verdict['title']}\n\n"
-                    f"Explícame en lenguaje cotidiano qué significan estos resultados para mí, si me conviene o no operar este par con esta estrategia, y qué consejos me das para cuidar mi dinero."
+                    "Explica en lenguaje cotidiano qué describen estos resultados de simulación, sus límites de procedencia y cobertura, sin recomendar una operación ni inferir rentabilidad futura."
                 )
                 if "copilot_chat_history" not in st.session_state:
                     st.session_state["copilot_chat_history"] = []
@@ -1678,18 +1798,28 @@ with tab_backtest:
         with m_col6:
             st.metric("Retorno Neto", f"${metrics.get('net_pnl', 0.0):,.2f}")
 
+        exp_c1, exp_c2 = st.columns(2)
+        with exp_c1:
+            st.metric("Expectativa bruta (R) — Simulación", _format_verified_expectancy_for_ui(metrics, "gross_expectancy_r"))
+        with exp_c2:
+            st.metric("Expectativa neta (R) — Simulación", _format_verified_expectancy_for_ui(metrics, "net_expectancy_r"))
+        st.caption(_r_coverage_for_ui(metrics))
+        if metrics.get("r_unavailable_reason"):
+            st.caption(metrics["r_unavailable_reason"])
+        st.caption("R bruto/neto: media por operación con riesgo inicial matemáticamente verificable. No certifica la fuente histórica ni predice resultados futuros.")
+
         # 1.1 Breakdown: LONG vs SHORT
-        long_trades = [t for t in report.trades if str(getattr(t, "side", getattr(t, "direction", ""))).upper() == "LONG"]
-        short_trades = [t for t in report.trades if str(getattr(t, "side", getattr(t, "direction", ""))).upper() == "SHORT"]
+        long_trades = [t for t in report.trades if str(_trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")).upper() == "LONG"]
+        short_trades = [t for t in report.trades if str(_trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")).upper() == "SHORT"]
 
         long_count = len(long_trades)
         short_count = len(short_trades)
-        long_wins = sum(1 for t in long_trades if t.net_pnl > 0)
-        short_wins = sum(1 for t in short_trades if t.net_pnl > 0)
+        long_wins = sum(1 for t in long_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0)
+        short_wins = sum(1 for t in short_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0)
         long_wr = (long_wins / long_count * 100) if long_count > 0 else 0.0
         short_wr = (short_wins / short_count * 100) if short_count > 0 else 0.0
-        long_pnl = sum(t.net_pnl for t in long_trades)
-        short_pnl = sum(t.net_pnl for t in short_trades)
+        long_pnl = sum(_trade_field_for_ui(t, "net_pnl") or 0 for t in long_trades)
+        short_pnl = sum(_trade_field_for_ui(t, "net_pnl") or 0 for t in short_trades)
 
         st.markdown("##### ⚖️ ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)")
         dir_c1, dir_c2 = st.columns(2)
@@ -1730,47 +1860,34 @@ with tab_backtest:
             else:
                 st.caption("⚖️ **Conclusión Cuantitativa**: Compras y Ventas tuvieron rendimientos equivalentes en esta muestra histórica.")
         elif long_count > 0 and short_count == 0:
-            st.caption(f"🛡️ **Estrategia Unidireccional**: Esta configuración operó exclusivamente **COMPRAS (LONG)** para protegerte de la volatilidad corta ({long_count} compras, {long_wr:.1f}% acierto).")
+            st.caption(f"**Estrategia Unidireccional**: Esta simulación registró exclusivamente **COMPRAS (LONG)** ({long_count} compras, {long_wr:.1f}% acierto observado).")
         elif short_count > 0 and long_count == 0:
             st.caption(f"📉 **Estrategia en Corto**: Esta configuración operó exclusivamente **VENTAS (SHORT)** ({short_count} ventas, {short_wr:.1f}% acierto).")
 
-        # 1.2 Risk Management Metrics (Stop Loss, Take Profit, Risk/Reward)
-        sl_pct_list = []
-        tp_pct_list = []
-        for t in report.trades:
-            e_p = getattr(t, "entry_price", 0.0)
-            if e_p > 0:
-                s_p = getattr(t, "sl_price", 0.0)
-                if s_p > 0:
-                    sl_pct_list.append(abs(e_p - s_p) / e_p * 100.0)
-                t_p = getattr(t, "tp_price", 0.0)
-                if t_p > 0:
-                    tp_pct_list.append(abs(t_p - e_p) / e_p * 100.0)
+        # Mean of individual verified plans, not a ratio of average distances.
+        avg_planned_rr, planned_count = _planned_rr_summary_for_ui(
+            report.trades, getattr(report, "config", None)
+        )
 
-        avg_sl_pct = (sum(sl_pct_list) / len(sl_pct_list)) if sl_pct_list else 0.0
-        avg_tp_pct = (sum(tp_pct_list) / len(tp_pct_list)) if tp_pct_list else 0.0
-        default_rr = (b_cfg.tp_atr_multiple / max(b_cfg.sl_atr_multiple, 0.01)) if b_cfg else 2.0
-        avg_rr = (avg_tp_pct / avg_sl_pct) if avg_sl_pct > 0 else default_rr
-
-        winning_pnls = [t.net_pnl for t in report.trades if t.net_pnl > 0]
-        losing_pnls = [abs(t.net_pnl) for t in report.trades if t.net_pnl < 0]
+        winning_pnls = [_trade_field_for_ui(t, "net_pnl") for t in report.trades
+                        if (_trade_field_for_ui(t, "net_pnl") or 0) > 0]
+        losing_pnls = [abs(_trade_field_for_ui(t, "net_pnl")) for t in report.trades
+                       if (_trade_field_for_ui(t, "net_pnl") or 0) < 0]
         avg_win_usd = (sum(winning_pnls) / len(winning_pnls)) if winning_pnls else 0.0
         avg_loss_usd = (sum(losing_pnls) / len(losing_pnls)) if losing_pnls else 0.0
 
-        st.markdown("##### 🛡️ Parámetros de Riesgo Promedio Aplicados a Cada Orden")
-        r_col1, r_col2, r_col3, r_col4 = st.columns(4)
+        st.markdown("##### Planes de riesgo y resultados de la simulación")
+        r_col1, r_col2 = st.columns(2)
         with r_col1:
-            st.metric("Stop Loss Promedio", f"-{avg_sl_pct:.2f}%", help="Distancia porcentual media a la que se colocó la orden de corte de pérdidas.")
+            st.metric("R:R planificado medio — Simulación", f"1 : {avg_planned_rr:.2f}" if avg_planned_rr is not None else "N/A", help="Media de los ratios individuales TP–entrada / entrada–SL inicial; no es R realizado ni incluye costes.")
         with r_col2:
-            st.metric("Take Profit Promedio", f"+{avg_tp_pct:.2f}%", help="Distancia porcentual media a la que se colocó la orden de recogida de beneficios.")
-        with r_col3:
-            st.metric("Ratio Riesgo : Beneficio", f"1 : {avg_rr:.2f}", help="Por cada dólar que arriesgó la estrategia, buscó ganar esta proporción.")
-        with r_col4:
-            st.metric("Ganancia Media / Pérdida Media", f"${avg_win_usd:,.2f} / -${avg_loss_usd:,.2f}", help="Promedio ganado en trades positivos vs promedio perdido en fallos.")
+            st.metric("Ganancia Media / Pérdida Media", f"${avg_win_usd:,.2f} / -${avg_loss_usd:,.2f}", help="Promedio de PnL neto positivo y negativo en operaciones cerradas.")
+        st.caption(f"Planes R:R verificables: {planned_count} de {len(report.trades)} operaciones. Los planes incompletos no se estiman.")
 
         # 2. Equity Curve & Underwater Drawdown Plot
         if report.equity_curve:
-            eq_df = pd.DataFrame([pt.to_dict() for pt in report.equity_curve])
+            eq_df = pd.DataFrame([pt.to_dict() if hasattr(pt, "to_dict") else dict(pt)
+                                  for pt in report.equity_curve])
             eq_df["timestamp"] = pd.to_datetime(eq_df["timestamp"])
 
             fig_eq = make_subplots(
@@ -1820,7 +1937,8 @@ with tab_backtest:
         with t_left:
             st.subheader("🎯 Distribución MFE vs MAE")
             if report.trades:
-                trade_rows = [t.to_dict() for t in report.trades]
+                trade_rows = [t.to_dict() if hasattr(t, "to_dict") else dict(t)
+                              for t in report.trades]
                 trades_df = pd.DataFrame(trade_rows)
 
                 mae_col = trades_df["mae_pct"] if "mae_pct" in trades_df.columns else trades_df.get("mae", 0.0)
@@ -1863,21 +1981,7 @@ with tab_backtest:
         with t_right:
             st.subheader("📋 Registro de Transacciones")
             if report.trades:
-                display_cols = {
-                    "trade_id": "ID",
-                    "side": "Dirección",
-                    "entry_timestamp": "Entrada",
-                    "entry_price": "P. Entrada",
-                    "sl_price": "P. Stop Loss",
-                    "tp_price": "P. Take Profit",
-                    "exit_timestamp": "Salida",
-                    "exit_price": "P. Salida",
-                    "net_pnl": "PnL Neto ($)",
-                    "exit_reason": "Causa Cierre",
-                }
-                valid_cols = [c for c in display_cols if c in trades_df.columns]
-                trades_display = trades_df[valid_cols].rename(columns=display_cols)
-                st.dataframe(trades_display, height=350, use_container_width=True)
+                st.dataframe(_backtest_trade_table_for_ui(report.trades, getattr(report, "config", None)), height=350, use_container_width=True)
             else:
                 st.info("Sin transacciones.")
 
@@ -2214,8 +2318,8 @@ with tab_guide:
               *Uso táctico:* Permite definir objetivos de ganancia y límites de pérdida dinámicos que se expanden en mercados volátiles y se comprimen en mercados tranquilos.
             
             - **`R:R` (Risk-to-Reward Ratio / Ratio Riesgo-Beneficio):**  
-              *Significado:* Distancia de beneficio hasta TP dividida por la distancia de riesgo hasta SL desde la entrada propuesta. Es una relación bruta; no incluye costes, deslizamiento ni ejecución garantizada.
-              *Ejemplo:* Un R bruto de `1 : 2.0` describe un objetivo a dos unidades de precio por cada unidad hasta el stop.
+              *Significado:* Plan bruto: distancia desde la entrada ejecutada al TP dividida por la distancia al SL inicial. No equivale al R realizado y no incluye costes ni ejecución garantizada.
+              *Ejemplo:* Un plan `1 : 2.0` describe un objetivo a dos unidades de precio por cada unidad hasta el stop inicial.
             
             - **`SL` (Stop Loss):** Nivel de invalidación propuesto. La aplicación no ejecuta órdenes.
             - **`TP` (Take Profit):** Objetivo de precio propuesto, sujeto a confirmación y costes.
@@ -2242,7 +2346,8 @@ with tab_guide:
 
             #### 📈 Métricas de Backtest y Rendimiento
             - **`Win Rate`:** Porcentaje de operaciones cerradas en ganancia frente al total.
-            - **`Profit Factor`:** Ganancia bruta dividida entre pérdida bruta (Institucional > 1.5).
+            - **`Profit Factor`:** Ganancia bruta dividida entre pérdida bruta de la muestra simulada; no predice el desempeño futuro.
+            - **`Expectativa bruta/neta (R)`:** Media de R por operación matemáticamente verificable; la neta incorpora los costes simulados. N/A indica que no hay riesgo inicial verificable. La cobertura indica cuántas operaciones se excluyeron.
             - **`Max Drawdown %`:** Mayor caída porcentual experimentada desde el punto máximo de capital.
             - **`Sharpe Ratio`:** Rendimiento por unidad de volatilidad, anualizado solo con procedencia y calendario cripto 24/7 acreditados, barras regulares y tasa libre de riesgo supuesta de 0 %. N/A indica que no puede calcularse con fiabilidad.
             - **`MAE / MFE`:** Máxima excursión adversa (*peor momento en contra*) y favorable (*mejor momento a favor*) de cada trade.

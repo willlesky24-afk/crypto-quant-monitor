@@ -41,7 +41,9 @@ def test_evaluate_backtest_verdict():
         "net_pnl": 150.0,
     })
     assert v_approved["status"] == "APPROVED"
-    assert "APROBADA" in v_approved["badge"]
+    assert "CUMPLE CRITERIOS DE ESTA SIMULACIÓN" in v_approved["badge"]
+    assert "capital estuvo protegido" not in v_approved["description"]
+    assert "8.5%" in v_approved["description"]
 
     # Losing strategy
     v_rejected = evaluate_backtest_verdict({
@@ -52,7 +54,7 @@ def test_evaluate_backtest_verdict():
         "net_pnl": -80.0,
     })
     assert v_rejected["status"] == "REJECTED"
-    assert "NO RECOMENDADA" in v_rejected["badge"]
+    assert "NO CUMPLE CRITERIOS" in v_rejected["badge"]
 
 
 def test_evaluate_backtest_verdict_with_backtest_report_metrics():
@@ -86,4 +88,27 @@ def test_evaluate_backtest_verdict_with_backtest_report_metrics():
 
     verdict = evaluate_backtest_verdict(report.metrics)
     assert verdict["status"] == "APPROVED"
-    assert "APROBADA" in verdict["badge"]
+    assert "CUMPLE CRITERIOS DE ESTA SIMULACIÓN" in verdict["badge"]
+
+
+def test_preset_keys_parameters_and_verdict_thresholds_remain_unchanged():
+    assert list(PROVEN_STRATEGIES) == [
+        "capital_preservation", "trend_following", "mean_reversion",
+        "volatility_breakout", "dynamic_hybrid",
+    ]
+    assert [PROVEN_STRATEGIES[key]["direction"] for key in PROVEN_STRATEGIES] == [
+        "LONG", "LONG", "BOTH", "BOTH", "BOTH",
+    ]
+    assert [(PROVEN_STRATEGIES[key]["tp_atr_multiple"],
+             PROVEN_STRATEGIES[key]["sl_atr_multiple"])
+            for key in PROVEN_STRATEGIES] == [
+                (2.2, 1.0), (3.0, 1.5), (1.8, 1.0), (3.5, 1.2), (2.5, 1.25),
+            ]
+    base = {"total_trades": 5, "win_rate": 0.6, "net_pnl": 100.0}
+    assert evaluate_backtest_verdict({**base, "profit_factor": 1.45,
+                                      "max_drawdown_pct": 20.0})["status"] == "APPROVED"
+    assert evaluate_backtest_verdict({**base, "profit_factor": 1.44,
+                                      "max_drawdown_pct": 20.0})["status"] == "WARNING"
+    assert evaluate_backtest_verdict({**base, "profit_factor": 1.0,
+                                      "max_drawdown_pct": 20.0})["status"] == "REJECTED"
+    assert evaluate_backtest_verdict({**base, "total_trades": 4})["status"] == "NEUTRAL"
