@@ -309,3 +309,45 @@ def test_extending_horizon_can_change_only_forced_final_liquidation():
     assert before.exit_timestamp == timestamps[399]
     assert after.exit_timestamp == timestamps[799]
     assert before.net_pnl < after.net_pnl
+
+
+def test_causal_trailing_execution_reconciles_report_metrics_and_equity():
+    timestamps = pd.date_range("2024-01-01", periods=4, freq="1h", tz="UTC")
+    candles = pd.DataFrame({
+        "timestamp": timestamps,
+        "open": [100.0, 100.0, 100.0, 101.0],
+        "high": [101.0, 101.0, 103.0, 101.5],
+        "low": [99.0, 99.0, 99.0, 99.0],
+        "close": [100.0, 100.0, 101.0, 100.0],
+    })
+    signal = SignalEvent(
+        signal_id="trailing-causal", symbol="BTCUSDT", timeframe="1h",
+        candle_timestamp=timestamps[0], price_at_signal=100.0,
+        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
+        quant_score=100.0, risk_level="BAJO", atr=2.0,
+        poc=100.0, vah=101.0, val=99.0,
+    )
+    config = BacktestConfig(
+        initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0,
+        tp_atr_multiple=5.0, sl_atr_multiple=1.0,
+        enable_trailing_stop=True, trailing_stop_activation_r=1.0,
+    )
+
+    trades, equity = BacktestEngine(config).run(candles, [signal])
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        trades, equity, initial_capital=config.initial_capital
+    )
+
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_timestamp == timestamps[3]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.sl_price == trade.exit_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.r_multiple == pytest.approx(0.0)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(1000.0 + trade.net_pnl)
+    assert metrics["total_net_pnl"] == pytest.approx(trade.net_pnl, abs=0.01)
+    assert metrics["gross_expectancy_r"] == pytest.approx(trade.r_multiple)
+    assert metrics["net_expectancy_r"] == pytest.approx(trade.net_r_multiple)
+    assert metrics["sharpe_ratio"] is None

@@ -10,6 +10,7 @@ from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
     BacktestConfig,
     BacktestValidationError,
+    Position,
     SignalEvent,
     TradeExitReason,
 )
@@ -748,11 +749,130 @@ def test_trailing_stop_does_not_rewrite_initial_risk_denominator():
     trades, _ = BacktestEngine(cfg).run(_flat_spot_bars(104.0), signals=[signal])
     trade = trades[0]
     assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
-    assert trade.sl_price == pytest.approx(100.0)
+    # TP closed the trade on its activation candle; no later stop update occurs.
+    assert trade.sl_price == pytest.approx(96.0)
     assert trade.initial_stop_price == pytest.approx(96.0)
     assert trade.initial_risk_amount == pytest.approx(40.0)
     assert trade.r_multiple == pytest.approx(1.0)
     assert trade.net_r_multiple == pytest.approx(1.0)
+
+
+def _trailing_spot_bars(*subsequent_bars: tuple[float, float, float, float]) -> pd.DataFrame:
+    candles = [(100.0, 101.0, 99.0, 100.0), (100.0, 101.0, 99.0, 100.0)]
+    candles.extend(subsequent_bars)
+    return pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=len(candles), freq="1h", tz="UTC"),
+        "open": [bar[0] for bar in candles],
+        "high": [bar[1] for bar in candles],
+        "low": [bar[2] for bar in candles],
+        "close": [bar[3] for bar in candles],
+    })
+
+
+def _trailing_spot_config(**changes) -> BacktestConfig:
+    params = dict(
+        initial_capital=1000.0, taker_fee_pct=0.0, slippage_pct=0.0,
+        sl_atr_multiple=1.0, tp_atr_multiple=5.0,
+        enable_trailing_stop=True, trailing_stop_activation_r=1.0,
+    )
+    params.update(changes)
+    return BacktestConfig(**params)
+
+
+def test_trailing_high_cannot_retroactively_replace_stop_touched_same_bar():
+    # T opens above the old stop (98), reaches activation (103), but also touches 97.
+    bars = _trailing_spot_bars((99.0, 103.0, 97.0, 101.0))
+    trades, equity = BacktestEngine(_trailing_spot_config()).run(
+        bars, [make_test_signal(atr=2.0)]
+    )
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_timestamp == bars.iloc[2]["timestamp"]
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.sl_price == trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.r_multiple == trade.net_r_multiple == pytest.approx(-1.0)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(980.0)
+
+
+def test_surviving_trailing_activates_after_t_and_executes_from_t_plus_one(monkeypatch):
+    bars = _trailing_spot_bars(
+        (100.0, 103.0, 99.0, 101.0),
+        (101.0, 101.5, 99.0, 100.0),
+    )
+    stops_at_bar_start = []
+    original_update = Position.update_excursions
+
+    def record_stop_before_exit(self, high, low):
+        stops_at_bar_start.append(self.sl_price)
+        return original_update(self, high, low)
+
+    monkeypatch.setattr(Position, "update_excursions", record_stop_before_exit)
+    cfg = _trailing_spot_config(taker_fee_pct=0.001)
+    trades, equity = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+
+    assert stops_at_bar_start == pytest.approx([98.0, 98.0, 100.0])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_timestamp == bars.iloc[3]["timestamp"]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_price == trade.sl_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.initial_risk_amount == pytest.approx(19.98)
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(0.999)
+    assert trade.r_multiple == pytest.approx(0.0)
+    assert trade.net_r_multiple == pytest.approx(-1.999 / 19.98)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(998.001)
+    assert equity[-1].equity - cfg.initial_capital == pytest.approx(trade.net_pnl)
+
+
+@pytest.mark.parametrize(
+    ("bar", "reason", "exit_price"),
+    [
+        ((100.0, 101.0, 99.0, 100.0), TradeExitReason.TIME_HORIZON.value, 100.0),
+        ((100.0, 110.0, 99.0, 109.0), TradeExitReason.TAKE_PROFIT.value, 110.0),
+        ((100.0, 110.0, 97.0, 101.0), TradeExitReason.STOP_LOSS.value, 98.0),
+    ],
+)
+def test_trailing_does_not_change_stop_after_no_activation_or_same_bar_exit(
+    bar, reason, exit_price
+):
+    trades, _ = BacktestEngine(_trailing_spot_config()).run(
+        _trailing_spot_bars(bar), [make_test_signal(atr=2.0)]
+    )
+    assert len(trades) == 1
+    assert trades[0].exit_reason == reason
+    assert trades[0].exit_price == pytest.approx(exit_price)
+    assert trades[0].sl_price == trades[0].initial_stop_price == pytest.approx(98.0)
+
+
+def test_signal_specific_risk_controls_trailing_activation_without_changing_r():
+    signal = replace(make_test_signal(atr=2.0), sl_atr_multiple=2.0)
+    bars = _trailing_spot_bars(
+        (100.0, 103.0, 99.0, 102.0),  # Below the signal-specific +1R = 104.
+        (102.0, 105.0, 99.0, 103.0),  # Activation occurs after this bar.
+        (102.0, 103.0, 99.0, 100.0),
+    )
+    trades, equity = BacktestEngine(_trailing_spot_config()).run(bars, [signal])
+    trade = trades[0]
+    assert trade.exit_timestamp == bars.iloc[4]["timestamp"]
+    assert trade.sl_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(96.0)
+    assert trade.initial_risk_amount == pytest.approx(40.0)
+    assert trade.r_multiple == trade.net_r_multiple == pytest.approx(0.0)
+    assert equity[-1].equity == pytest.approx(1000.0)
+
+
+def test_final_candle_time_exit_does_not_apply_trailing_after_close():
+    bars = _trailing_spot_bars((100.0, 103.0, 99.0, 101.0))
+    trades, equity = BacktestEngine(_trailing_spot_config()).run(
+        bars, [make_test_signal(atr=2.0)]
+    )
+    assert trades[0].exit_reason == TradeExitReason.TIME_HORIZON.value
+    assert trades[0].sl_price == pytest.approx(98.0)
+    assert trades[0].initial_stop_price == pytest.approx(98.0)
+    assert equity[-1].equity == pytest.approx(1010.0)
 
 
 def test_atr_floor_and_entry_slippage_are_in_initial_risk():

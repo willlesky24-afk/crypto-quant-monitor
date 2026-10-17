@@ -284,18 +284,7 @@ class BacktestEngine:
                             active_position.funding_fees_accumulated += funding_fee
                             active_position.last_funding_time = bar_ts
 
-                # B. Optional Trailing Stop / Break-Even adjustment
-                if self.config.enable_trailing_stop:
-                    initial_risk = active_position.initial_risk_per_unit
-                    if initial_risk is None:
-                        raise BacktestValidationError("Riesgo inicial de posición no disponible.")
-                    if not is_short_pos:
-                        if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
-                            active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
-                    else:
-                        if bar_low <= active_position.entry_price - (self.config.trailing_stop_activation_r * initial_risk):
-                            active_position.sl_price = min(active_position.sl_price, active_position.entry_price)
-
+                # B. Resolve exits against the stop already effective for this bar.
                 exit_triggered = False
                 exit_price = bar_close
                 exit_reason = TradeExitReason.TIME_HORIZON.value
@@ -451,6 +440,19 @@ class BacktestEngine:
                     )
                     closed_trades.append(trade_result)
                     active_position = None
+
+                # A surviving position may move to break-even at Close(T), based on
+                # this completed candle; the new stop can only execute from T+1.
+                if active_position is not None and self.config.enable_trailing_stop:
+                    initial_risk = active_position.initial_risk_per_unit
+                    if initial_risk is None:
+                        raise BacktestValidationError("Riesgo inicial de posición no disponible.")
+                    if not is_short_pos:
+                        if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
+                            active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
+                    else:
+                        if bar_low <= active_position.entry_price - (self.config.trailing_stop_activation_r * initial_risk):
+                            active_position.sl_price = min(active_position.sl_price, active_position.entry_price)
 
             # -----------------------------------------------------------------
             # 3. Record Mark-to-Market Equity Point
