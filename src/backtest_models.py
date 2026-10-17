@@ -237,7 +237,7 @@ class BacktestReport:
     win_rate_pct: float
     profit_factor: float
     expectancy: float
-    expectancy_r: float
+    expectancy_r: float  # Legacy hybrid metric; not verified gross or net expectancy.
     max_drawdown_pct: float
     max_drawdown_usd: float
     max_drawdown_duration_bars: int
@@ -255,6 +255,13 @@ class BacktestReport:
     equity_curve: list[EquityPoint] = field(default_factory=list)
     sharpe_unavailable_reason: str | None = None
     data_provenance: DatasetProvenance = field(default_factory=DatasetProvenance)
+    # Appended to preserve the existing positional constructor contract.
+    gross_expectancy_r: float | None = None
+    net_expectancy_r: float | None = None
+    r_verified_trades: int = 0
+    r_excluded_trades: int = 0
+    r_coverage_status: str = "UNKNOWN"
+    r_unavailable_reason: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -283,5 +290,11 @@ class BacktestReport:
             "calmar_ratio": self.calmar_ratio or 0.0,
             "expectancy": self.expectancy,
             "expectancy_r": self.expectancy_r,
+            "gross_expectancy_r": self.gross_expectancy_r,
+            "net_expectancy_r": self.net_expectancy_r,
+            "r_verified_trades": self.r_verified_trades,
+            "r_excluded_trades": self.r_excluded_trades,
+            "r_coverage_status": self.r_coverage_status,
+            "r_unavailable_reason": self.r_unavailable_reason,
             "return_on_capital_pct": self.return_on_capital_pct,
         }

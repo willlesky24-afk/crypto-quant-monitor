@@ -12,12 +12,101 @@ CRYPTO_24_7_PERIODS: dict[str, int] = {
     "1h": 8_760, "4h": 2_190, "1d": 365,
 }
 
+# Numeric comparisons of stored quote-currency values and dimensionless R.
+# These tolerances check internal arithmetic, not historical authenticity.
+R_VERIFY_REL_TOL = 1e-9
+R_VERIFY_ABS_TOL = 1e-10
+
 
 class BacktestMetricsCalculator:
     """Pure, deterministic calculator for quantitative trade performance, risk,
 
     drawdown dynamics, and trade excursion profiles (MFE/MAE).
     """
+
+    @staticmethod
+    def _verified_spot_long_r(trade: TradeResult) -> tuple[float, float] | None:
+        """Return gross/net R only for coherent SPOT LONG 1x trade records.
+
+        The runner validates the instrument configuration. A trade alone cannot
+        authenticate its external origin, but its direction and cash arithmetic
+        can be checked without guessing an absent initial stop or risk.
+        """
+        if trade.direction != "LONG" or trade.side != "LONG":
+            return None
+        fields = (
+            trade.entry_price, trade.exit_price, trade.size_units,
+            trade.initial_stop_price, trade.initial_risk_amount,
+            trade.gross_pnl, trade.net_pnl, trade.r_multiple, trade.net_r_multiple,
+            trade.fee_entry, trade.fee_exit, trade.funding_fees,
+            trade.notional_entry, trade.notional_exit,
+        )
+        try:
+            if any(value is None or not math.isfinite(value) for value in fields):
+                return None
+        except (TypeError, ValueError):
+            return None
+        entry = trade.entry_price
+        stop = trade.initial_stop_price
+        units = trade.size_units
+        risk = trade.initial_risk_amount
+        if (entry <= 0 or trade.exit_price <= 0 or units <= 0 or stop <= 0
+                or stop >= entry or risk <= 0 or trade.fee_entry < 0
+                or trade.fee_exit < 0 or trade.funding_fees != 0):
+            return None
+        risk_per_unit = entry - stop
+        def close(actual: float, expected: float) -> bool:
+            return math.isclose(
+                actual, expected, rel_tol=R_VERIFY_REL_TOL, abs_tol=R_VERIFY_ABS_TOL
+            )
+        if not close(risk, units * risk_per_unit):
+            return None
+        if trade.initial_risk_per_unit is not None:
+            try:
+                if not math.isfinite(trade.initial_risk_per_unit) or not close(
+                    trade.initial_risk_per_unit, risk_per_unit
+                ):
+                    return None
+            except (TypeError, ValueError):
+                return None
+        if not all((
+            close(trade.notional_entry, units * entry + trade.fee_entry),
+            close(trade.notional_exit, units * trade.exit_price),
+            close(trade.gross_pnl, units * (trade.exit_price - entry)),
+            close(trade.net_pnl, trade.gross_pnl - trade.fee_entry - trade.fee_exit),
+        )):
+            return None
+        gross_r = trade.gross_pnl / risk
+        net_r = trade.net_pnl / risk
+        if not all(map(math.isfinite, (gross_r, net_r))):
+            return None
+        if not close(trade.r_multiple, gross_r) or not close(trade.net_r_multiple, net_r):
+            return None
+        return gross_r, net_r
+
+    @classmethod
+    def _verified_r_summary(cls, trades: list[TradeResult]) -> dict[str, Any]:
+        """Equal-weight mean R per valid trade, never a capital-weighted return."""
+        total = len(trades)
+        verified = [pair for trade in trades if (pair := cls._verified_spot_long_r(trade)) is not None]
+        count = len(verified)
+        if total == 0:
+            status, reason = "NO_TRADES", "No se ejecutaron operaciones."
+        elif count == 0:
+            status, reason = "NONE_VERIFIED", "Ninguna operación tiene riesgo inicial verificable."
+        elif count < total:
+            status = "PARTIAL"
+            reason = f"Promedio solo del subconjunto verificable ({count} de {total} operaciones)."
+        else:
+            status, reason = "COMPLETE", None
+        return {
+            "gross_expectancy_r": sum(pair[0] for pair in verified) / count if count else None,
+            "net_expectancy_r": sum(pair[1] for pair in verified) / count if count else None,
+            "r_verified_trades": count,
+            "r_excluded_trades": total - count,
+            "r_coverage_status": status,
+            "r_unavailable_reason": reason,
+        }
 
     @staticmethod
     def calculate_drawdown_series(
@@ -93,6 +182,7 @@ class BacktestMetricsCalculator:
     ) -> dict[str, Any]:
         """Calculates comprehensive performance and risk metrics across completed trades."""
         total_trades = len(trades)
+        verified_r = cls._verified_r_summary(trades)
 
         equity_values = [point.equity for point in equity_curve]
         _, max_dd_pct, max_dd_usd, max_dd_duration = cls.calculate_drawdown_series(
@@ -108,6 +198,7 @@ class BacktestMetricsCalculator:
                 "profit_factor": 0.0,
                 "expectancy": 0.0,
                 "expectancy_r": 0.0,
+                **verified_r,
                 "payoff_ratio": 0.0,
                 "max_drawdown_pct": round(max_dd_pct, 2),
                 "max_drawdown_usd": round(max_dd_usd, 2),
@@ -155,7 +246,8 @@ class BacktestMetricsCalculator:
         loss_prob = n_losses / total_trades
         expectancy_usd = (win_prob * avg_win_usd) - (loss_prob * avg_loss_usd)
 
-        # Expectancy R-multiple
+        # Legacy hybrid R: grouped by net PnL, but using gross r_multiple.
+        # Preserve its historical numeric contract; it is not a verified metric.
         r_wins = [t.r_multiple for t in winning_trades]
         r_losses = [abs(t.r_multiple) for t in losing_trades]
         avg_r_win = (sum(r_wins) / len(r_wins)) if r_wins else 0.0
@@ -217,6 +309,7 @@ class BacktestMetricsCalculator:
             "profit_factor": round(profit_factor, 2) if profit_factor != math.inf else math.inf,
             "expectancy": round(expectancy_usd, 2),
             "expectancy_r": round(expectancy_r, 2),
+            **verified_r,
             "payoff_ratio": round(payoff_ratio, 2) if payoff_ratio != math.inf else math.inf,
             "max_drawdown_pct": round(max_dd_pct, 2),
             "max_drawdown_usd": round(max_dd_usd, 2),

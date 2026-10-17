@@ -28,6 +28,10 @@ def test_backtest_runner_empty_and_insufficient_warmup(tmp_path: Path):
     assert rep_empty.total_candles == 0
     assert rep_empty.total_trades == 0
     assert rep_empty.win_rate_pct == 0.0
+    assert rep_empty.gross_expectancy_r is None
+    assert rep_empty.net_expectancy_r is None
+    assert rep_empty.r_coverage_status == "NO_TRADES"
+    assert rep_empty.metrics["r_verified_trades"] == 0
 
     # Insufficient warmup (< 200 bars)
     df_short = pd.DataFrame(
@@ -43,6 +47,7 @@ def test_backtest_runner_empty_and_insufficient_warmup(tmp_path: Path):
     rep_short = runner.run_backtest("BTCUSDT", "1h", df=df_short, warmup_bars=200)
     assert rep_short.total_candles == 50
     assert rep_short.total_trades == 0
+    assert rep_short.r_coverage_status == "NO_TRADES"
 
 
 def test_backtest_runner_with_synthetic_dataset(make_synthetic_candles):
@@ -67,6 +72,9 @@ def test_backtest_runner_with_synthetic_dataset(make_synthetic_candles):
     assert report.config.initial_capital == 10_000.0
     assert len(report.equity_curve) > 0
     assert report.to_dict()["symbol"] == "BTCUSDT"
+    assert report.r_verified_trades + report.r_excluded_trades == report.total_trades
+    assert report.metrics["gross_expectancy_r"] == report.gross_expectancy_r
+    assert report.to_dict()["net_expectancy_r"] == report.net_expectancy_r
 
 
 def test_backtest_runner_loads_from_dataset_manager(tmp_path: Path, make_synthetic_candles):

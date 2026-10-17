@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import pandas as pd
 import pytest
@@ -263,6 +263,25 @@ def test_equity_point_and_backtest_report_serialization():
     assert metrics["max_drawdown_pct"] == 4.2
     assert metrics["net_pnl"] == 1200.0
     assert metrics["sharpe_ratio"] == 1.95
+    assert metrics["gross_expectancy_r"] is None
+    assert metrics["net_expectancy_r"] is None
+    assert metrics["r_coverage_status"] == "UNKNOWN"
+
+    verified = replace(
+        report, gross_expectancy_r=2 / 3, net_expectancy_r=1 / 3,
+        r_verified_trades=8, r_excluded_trades=2, r_coverage_status="PARTIAL",
+        r_unavailable_reason="Promedio solo del subconjunto verificable (8 de 10 operaciones).",
+    )
+    assert verified.metrics["expectancy_r"] == report.expectancy_r == 0.65
+    assert verified.metrics["gross_expectancy_r"] == 2 / 3
+    assert verified.metrics["net_expectancy_r"] == 1 / 3
+    assert verified.metrics["r_verified_trades"] == 8
+    assert verified.metrics["r_excluded_trades"] == 2
+    assert verified.to_dict()["r_coverage_status"] == "PARTIAL"
+    assert verified.to_dict()["gross_expectancy_r"] == 2 / 3
+    assert list(BacktestReport.__dataclass_fields__).index("gross_expectancy_r") > (
+        list(BacktestReport.__dataclass_fields__).index("equity_curve")
+    )
 
 
 def test_report_preserves_unavailable_sharpe_as_none():

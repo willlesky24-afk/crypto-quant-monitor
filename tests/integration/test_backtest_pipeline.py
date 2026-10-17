@@ -99,6 +99,19 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
         assert trade.mfe_pct >= 0.0
         assert trade.mae_pct >= 0.0
 
+    assert report.r_coverage_status == "COMPLETE"
+    assert report.r_verified_trades == report.total_trades
+    assert report.r_excluded_trades == 0
+    assert report.gross_expectancy_r == pytest.approx(
+        sum(t.gross_pnl / t.initial_risk_amount for t in report.trades) / report.total_trades
+    )
+    assert report.net_expectancy_r == pytest.approx(
+        sum(t.net_pnl / t.initial_risk_amount for t in report.trades) / report.total_trades
+    )
+    assert report.total_net_pnl == pytest.approx(sum(t.net_pnl for t in report.trades), abs=0.01)
+    assert report.data_provenance.status == "UNKNOWN"
+    assert report.sharpe_ratio is None
+
     # 6. JSON Serialization Roundtrip
     report_dict = report.to_dict()
     serialized_json = json.dumps(report_dict, indent=2)
@@ -109,6 +122,9 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
     assert deserialized["config"]["initial_capital"] == 10_000.0
     assert len(deserialized["trades"]) == report.total_trades
     assert len(deserialized["equity_curve"]) == 600
+    assert deserialized["r_coverage_status"] == "COMPLETE"
+    assert deserialized["gross_expectancy_r"] == pytest.approx(report.gross_expectancy_r)
+    assert deserialized["net_expectancy_r"] == pytest.approx(report.net_expectancy_r)
 
 
 def test_backtest_pipeline_determinism_and_no_lookahead_bias(tmp_path: Path, make_synthetic_candles):

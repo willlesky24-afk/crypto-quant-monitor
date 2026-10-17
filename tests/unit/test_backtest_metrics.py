@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pandas as pd
 import pytest
@@ -48,6 +49,37 @@ def create_sample_trade(
         mfe_pct=mfe_pct,
         mae_pct=mae_pct,
         is_win=net_pnl > 0,
+    )
+
+
+def make_verified_spot_trade(
+    trade_id: str, gross_pnl: float, net_pnl: float, risk: float,
+    *, final_stop: float | None = None,
+) -> TradeResult:
+    """Coherent SPOT LONG 1x fixture; price and cash fields reconcile."""
+    entry, units = 100.0, 10.0
+    stop = entry - risk / units
+    exit_price = entry + gross_pnl / units
+    total_fees = gross_pnl - net_pnl
+    assert total_fees >= 0
+    fee_entry = total_fees / 2
+    fee_exit = total_fees - fee_entry
+    ts = pd.Timestamp("2024-01-01", tz="UTC")
+    return TradeResult(
+        trade_id=trade_id, symbol="BTCUSDT", timeframe="1h", direction="LONG",
+        signal_timestamp=ts, entry_timestamp=ts + pd.Timedelta(hours=1),
+        exit_timestamp=ts + pd.Timedelta(hours=2),
+        entry_price=entry, exit_price=exit_price, size_units=units,
+        notional_entry=units * entry + fee_entry,
+        notional_exit=units * exit_price,
+        gross_pnl=gross_pnl, fee_entry=fee_entry, fee_exit=fee_exit,
+        net_pnl=net_pnl, net_return_pct=net_pnl / (units * entry + fee_entry) * 100,
+        r_multiple=gross_pnl / risk, net_r_multiple=net_pnl / risk,
+        bars_held=1, exit_reason="TIME_HORIZON", mfe_pct=0.0, mae_pct=0.0,
+        is_win=net_pnl > 0, side="LONG", tp_price=entry + 20.0,
+        sl_price=final_stop if final_stop is not None else stop,
+        initial_stop_price=stop, initial_risk_per_unit=risk / units,
+        initial_risk_amount=risk,
     )
 
 
@@ -335,3 +367,102 @@ def test_sharpe_unknown_short_zero_variance_and_zero_equity_are_na():
     assert BacktestMetricsCalculator.calculate_metrics(
         [trade], zero, 1000, 8760, pd.Timedelta(hours=1)
     )["sharpe_ratio"] is None
+
+
+def test_verified_gross_and_net_expectancy_use_same_three_trades_without_sign_reclassification():
+    trades = [
+        make_verified_spot_trade("A", 200.0, 190.0, 100.0),
+        make_verified_spot_trade("B", 20.0, -10.0, 50.0),
+        make_verified_spot_trade("C", -100.0, -110.0, 200.0),
+    ]
+    result = BacktestMetricsCalculator.calculate_metrics(trades, [], initial_capital=1000.0)
+    assert result["gross_expectancy_r"] == pytest.approx((2.0 + 0.4 - 0.5) / 3)
+    assert result["net_expectancy_r"] == pytest.approx((1.9 - 0.2 - 0.55) / 3)
+    assert result["expectancy_r"] == 0.37  # Frozen legacy hybrid calculation.
+    assert result["r_verified_trades"] == 3
+    assert result["r_excluded_trades"] == 0
+    assert result["r_coverage_status"] == "COMPLETE"
+    assert result["r_unavailable_reason"] is None
+
+
+def test_verified_r_preserves_real_zero_and_counts_fee_only_loss():
+    zero_gross = make_verified_spot_trade("flat-gross", 0.0, -10.0, 100.0)
+    zero_net = make_verified_spot_trade("flat-net", 10.0, 0.0, 100.0)
+    gross_only = BacktestMetricsCalculator.calculate_metrics([zero_gross], [], 1000.0)
+    net_only = BacktestMetricsCalculator.calculate_metrics([zero_net], [], 1000.0)
+    assert gross_only["gross_expectancy_r"] == 0.0
+    assert gross_only["net_expectancy_r"] == pytest.approx(-0.1)
+    assert gross_only["expectancy_r"] == 0.0  # Legacy formula hides fee-only loss.
+    assert net_only["gross_expectancy_r"] == pytest.approx(0.1)
+    assert net_only["net_expectancy_r"] == 0.0
+    assert gross_only["r_coverage_status"] == net_only["r_coverage_status"] == "COMPLETE"
+
+
+def test_verified_r_uses_immutable_stop_after_trailing_and_signal_specific_risk():
+    trailing = make_verified_spot_trade("trailing", 40.0, 38.0, 40.0, final_stop=100.0)
+    assert trailing.initial_stop_price == 96.0
+    assert trailing.sl_price == 100.0
+    result = BacktestMetricsCalculator.calculate_metrics([trailing], [], 1000.0)
+    assert result["gross_expectancy_r"] == pytest.approx(1.0)
+    assert result["net_expectancy_r"] == pytest.approx(0.95)
+    assert result["r_coverage_status"] == "COMPLETE"
+
+
+def test_verified_r_coverage_distinguishes_no_trades_legacy_and_partial():
+    valid = make_verified_spot_trade("valid", 40.0, 38.0, 40.0)
+    legacy = replace(valid, trade_id="legacy", initial_stop_price=None,
+                     initial_risk_per_unit=None, initial_risk_amount=None,
+                     net_r_multiple=None)
+    empty = BacktestMetricsCalculator.calculate_metrics([], [], 1000.0)
+    none = BacktestMetricsCalculator.calculate_metrics([legacy], [], 1000.0)
+    partial = BacktestMetricsCalculator.calculate_metrics([valid, legacy], [], 1000.0)
+    assert empty["gross_expectancy_r"] is empty["net_expectancy_r"] is None
+    assert empty["r_coverage_status"] == "NO_TRADES"
+    assert empty["r_verified_trades"] == empty["r_excluded_trades"] == 0
+    assert empty["expectancy_r"] == 0.0
+    assert none["gross_expectancy_r"] is none["net_expectancy_r"] is None
+    assert none["r_coverage_status"] == "NONE_VERIFIED"
+    assert none["r_verified_trades"] == 0 and none["r_excluded_trades"] == 1
+    assert partial["gross_expectancy_r"] == pytest.approx(1.0)
+    assert partial["net_expectancy_r"] == pytest.approx(0.95)
+    assert partial["r_verified_trades"] == partial["r_excluded_trades"] == 1
+    assert partial["r_coverage_status"] == "PARTIAL"
+    assert "subconjunto" in partial["r_unavailable_reason"]
+    assert partial["expectancy_r"] == 1.0  # Existing legacy value is preserved.
+
+
+@pytest.mark.parametrize(
+    ("changes",), [
+        ({"initial_stop_price": None},),
+        ({"initial_risk_amount": None},),
+        ({"net_r_multiple": None},),
+        ({"initial_risk_amount": 0.0},),
+        ({"initial_risk_amount": -1.0},),
+        ({"initial_risk_amount": math.nan},),
+        ({"initial_risk_amount": math.inf},),
+        ({"entry_price": math.nan},),
+        ({"size_units": 0.0},),
+        ({"size_units": math.inf},),
+        ({"initial_stop_price": 100.0},),
+        ({"initial_stop_price": 101.0},),
+        ({"initial_risk_amount": 41.0},),
+        ({"initial_risk_per_unit": 5.0},),
+        ({"gross_pnl": math.inf},),
+        ({"net_pnl": math.nan},),
+        ({"r_multiple": 2.0},),
+        ({"net_r_multiple": 2.0},),
+        ({"gross_pnl": 41.0},),
+        ({"net_pnl": 39.0},),
+        ({"direction": "SHORT"},),
+        ({"side": "SHORT"},),
+        ({"funding_fees": 1.0},),
+    ],
+)
+def test_unverifiable_trade_is_excluded_without_removing_record(changes):
+    trade = replace(make_verified_spot_trade("base", 40.0, 38.0, 40.0), **changes)
+    result = BacktestMetricsCalculator.calculate_metrics([trade], [], 1000.0)
+    assert result["total_trades"] == 1
+    assert result["r_verified_trades"] == 0
+    assert result["r_excluded_trades"] == 1
+    assert result["gross_expectancy_r"] is result["net_expectancy_r"] is None
+    assert result["r_coverage_status"] == "NONE_VERIFIED"
