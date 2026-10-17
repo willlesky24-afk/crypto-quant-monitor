@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from numbers import Integral
 from typing import Any
 
 import pandas as pd
@@ -11,6 +12,7 @@ from .backtest_metrics import CRYPTO_24_7_PERIODS, BacktestMetricsCalculator
 from .backtest_models import (
     BacktestConfig,
     BacktestReport,
+    BacktestValidationError,
     DatasetProvenance,
     SignalEvent,
     TradeDirection,
@@ -94,7 +96,8 @@ class BacktestRunner:
         - interval: Temporal timeframe (e.g. '1h').
         - start_time: Optional start timestamp slice.
         - end_time: Optional end timestamp slice.
-        - warmup_bars: Minimum closed candles before generating trade signals (ensures EMA 200 convergence).
+        - warmup_bars: Requested closed candles before signals; the default observes
+          200 EMA samples. Component minimums still apply to smaller requests.
         - df: Optional in-memory DataFrame (if provided, bypasses disk dataset loading).
         - predictive_mode: Optional flag to enable predictive-enhanced decision flow (overrides instance default).
         - calibrated_params: Optional dictionary of OptimizedParameters by regime.
@@ -103,9 +106,26 @@ class BacktestRunner:
         - BacktestReport containing trade log, performance metrics, and equity curve.
         """
         self.engine.validate_config()
+        if isinstance(warmup_bars, bool) or not isinstance(warmup_bars, Integral) or warmup_bars < 1:
+            raise BacktestValidationError("warmup_bars debe ser un entero positivo.")
         sym = symbol.strip().upper()
         inv = interval.strip().lower()
         provenance = DatasetProvenance()
+        use_predictive = (
+            predictive_mode if predictive_mode is not None else self.predictive_mode
+        )
+
+        # The rolling volume mean needs 20 bars. Predictive mode also needs its
+        # declared history and the regime classifier's minimum, regardless of
+        # how many candles will eventually be added to the dataset.
+        minimum_history = 20
+        if use_predictive:
+            minimum_history = max(
+                minimum_history,
+                self.regime_classifier.min_bars,
+                self.predictive_engine.min_history_bars,
+            )
+        effective_warmup = max(int(warmup_bars), minimum_history)
 
         # 1. Load data
         if df is not None:
@@ -124,8 +144,6 @@ class BacktestRunner:
 
         if len(raw_df) > 0:
             raw_df["timestamp"] = self.engine.validate_chronology(raw_df)
-
-        effective_warmup = min(warmup_bars, max(35, len(raw_df) // 4)) if len(raw_df) >= 35 else warmup_bars
 
         if len(raw_df) == 0 or len(raw_df) < effective_warmup:
             logger.warning(
@@ -157,10 +175,6 @@ class BacktestRunner:
         # 3. Generate Signals Step-by-Step with Strict Look-Ahead Bias Prevention
         signals: list[SignalEvent] = []
         total_bars = len(enriched_df)
-        use_predictive = (
-            predictive_mode if predictive_mode is not None else self.predictive_mode
-        )
-
         all_regimes = []
         if use_predictive and total_bars >= 25:
             all_regimes = self.regime_classifier.classify_series(enriched_df, warmup_bars=25)

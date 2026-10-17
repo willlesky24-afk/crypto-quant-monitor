@@ -260,9 +260,32 @@ def test_predictive_signals_before_last_candle_ignore_its_future_change(
         return [], []
 
     monkeypatch.setattr(runner.engine, "run", capture_signals)
-    runner.run_backtest("BTCUSDT", "1h", df=candles, predictive_mode=True)
-    runner.run_backtest("BTCUSDT", "1h", df=revised, predictive_mode=True)
+    runner.run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=35, predictive_mode=True)
+    runner.run_backtest("BTCUSDT", "1h", df=revised, warmup_bars=35, predictive_mode=True)
 
     assert len(seen) == 2
     assert len(seen[0]) > 0
     assert seen[0][:-1] == seen[1][:-1]
+
+
+def test_predictive_signal_eligibility_is_stable_when_future_is_appended(
+    tmp_path: Path, make_synthetic_candles, monkeypatch
+):
+    full = make_synthetic_candles(periods=300)
+    prefix = full.iloc[:240].copy()
+    store = ParquetStore(base_dir=tmp_path / "predictive_extension")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    captured = []
+
+    def capture_signals(df, signals):
+        captured.append([event.to_dict() for event in signals])
+        return [], []
+
+    monkeypatch.setattr(runner.engine, "run", capture_signals)
+    runner.run_backtest("BTCUSDT", "1h", df=prefix, predictive_mode=True)
+    runner.run_backtest("BTCUSDT", "1h", df=full, predictive_mode=True)
+
+    assert len(captured[0]) == 41
+    assert len(captured[1]) == 101
+    assert captured[0][0]["candle_timestamp"] == str(prefix.iloc[199]["timestamp"])
+    assert captured[0] == captured[1][:len(captured[0])]

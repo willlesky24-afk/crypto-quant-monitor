@@ -6,8 +6,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.backtest_engine import BacktestEngine
 from src.backtest_metrics import BacktestMetricsCalculator
-from src.backtest_models import BacktestConfig
+from src.backtest_models import BacktestConfig, SignalEvent, TradeExitReason
 from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
 from src.parquet_store import ParquetStore
@@ -226,3 +227,85 @@ def test_ordered_direct_and_stored_candles_keep_the_same_execution(
     assert direct.total_net_pnl == pytest.approx(stored.total_net_pnl)
     assert direct.data_provenance.status == "UNKNOWN"
     assert stored.data_provenance.status == "UNKNOWN"
+
+
+def test_400_candle_prefix_keeps_indicators_signals_and_initial_risk_at_800(
+    tmp_path: Path, make_synthetic_candles, monkeypatch
+):
+    full = make_synthetic_candles(periods=800, base_price=100.0)
+    prefix = full.iloc[:400].copy()
+    store = ParquetStore(base_dir=tmp_path / "warmup_extension")
+    runner = BacktestRunner(
+        config=BacktestConfig(min_quant_score=0.0),
+        dataset_manager=HistoricalDatasetManager(store=store),
+    )
+    captured = []
+    execute = runner.engine.run
+
+    def capture_execution(df, signals):
+        trades, equity = execute(df, signals)
+        captured.append((df.copy(), list(signals), trades))
+        return trades, equity
+
+    monkeypatch.setattr(runner.engine, "run", capture_execution)
+    runner.run_backtest("BTCUSDT", "1h", df=prefix)
+    runner.run_backtest("BTCUSDT", "1h", df=full)
+
+    short_df, short_signals, short_trades = captured[0]
+    long_df, long_signals, long_trades = captured[1]
+    assert len(short_signals) == 201
+    assert len(long_signals) == 601
+    assert short_signals[0].candle_timestamp == prefix.iloc[199]["timestamp"]
+    assert [signal.to_dict() for signal in short_signals] == [
+        signal.to_dict() for signal in long_signals[:len(short_signals)]
+    ]
+    columns = ["rsi", "atr", "volume_average", "ema_50", "ema_200"]
+    pd.testing.assert_frame_equal(
+        short_df[columns], long_df.iloc[:400][columns].reset_index(drop=True)
+    )
+    previous_risk = {trade.signal_timestamp: trade for trade in short_trades}
+    extended_risk = {trade.signal_timestamp: trade for trade in long_trades}
+    shared = previous_risk.keys() & extended_risk.keys()
+    assert shared
+    for timestamp in shared:
+        before, after = previous_risk[timestamp], extended_risk[timestamp]
+        assert before.entry_price == pytest.approx(after.entry_price)
+        assert before.initial_stop_price == pytest.approx(after.initial_stop_price)
+        assert before.tp_price == pytest.approx(after.tp_price)
+        assert before.initial_risk_amount == pytest.approx(after.initial_risk_amount)
+
+
+def test_extending_horizon_can_change_only_forced_final_liquidation():
+    timestamps = pd.date_range("2024-01-01", periods=800, freq="1h", tz="UTC")
+    prices = [100.0] * 400 + [105.0] * 400
+    candles = pd.DataFrame({
+        "timestamp": timestamps,
+        "open": prices,
+        "high": prices,
+        "low": prices,
+        "close": prices,
+        "volume": [1000.0] * 800,
+    })
+    signal = SignalEvent(
+        signal_id="warmup-end", symbol="BTCUSDT", timeframe="1h",
+        candle_timestamp=timestamps[199], price_at_signal=100.0,
+        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
+        quant_score=100.0, risk_level="BAJO", atr=2.0,
+        poc=100.0, vah=101.0, val=99.0,
+    )
+    engine = BacktestEngine(BacktestConfig(
+        taker_fee_pct=0.0, slippage_pct=0.0, max_holding_bars=1000,
+        tp_atr_multiple=10.0,
+    ))
+
+    short_trades, _ = engine.run(candles.iloc[:400], [signal])
+    long_trades, _ = engine.run(candles, [signal])
+
+    assert len(short_trades) == len(long_trades) == 1
+    before, after = short_trades[0], long_trades[0]
+    assert before.entry_timestamp == after.entry_timestamp == timestamps[200]
+    assert before.initial_stop_price == after.initial_stop_price
+    assert before.exit_reason == after.exit_reason == TradeExitReason.TIME_HORIZON.value
+    assert before.exit_timestamp == timestamps[399]
+    assert after.exit_timestamp == timestamps[799]
+    assert before.net_pnl < after.net_pnl

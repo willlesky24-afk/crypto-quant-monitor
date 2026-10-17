@@ -273,3 +273,77 @@ def test_runner_does_not_report_rows_without_columns_as_zero_trades(tmp_path):
     runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
     with pytest.raises(BacktestValidationError, match="timestamp"):
         runner.run_backtest("BTCUSDT", "1h", df=pd.DataFrame(index=range(3)))
+
+
+@pytest.mark.parametrize(
+    ("count", "expected_signals"),
+    [(1, 0), (199, 0), (200, 1), (201, 2)],
+)
+def test_default_warmup_is_fixed_at_200_closed_candles(
+    tmp_path, make_synthetic_candles, count, expected_signals
+):
+    candles = make_synthetic_candles(periods=201).iloc[:count].copy()
+    store = ParquetStore(base_dir=tmp_path / "warmup_boundary")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    original_indicators = runner.indicators.calculate_all
+    runner.indicators.calculate_all = Mock(wraps=original_indicators)
+    runner.engine.run = Mock(return_value=([], []))
+
+    report = runner.run_backtest("BTCUSDT", "1h", df=candles)
+
+    assert report.total_candles == count
+    assert report.total_trades == 0
+    if count < 200:
+        runner.indicators.calculate_all.assert_not_called()
+        runner.engine.run.assert_not_called()
+        assert report.equity_curve == []
+    else:
+        runner.indicators.calculate_all.assert_called_once()
+        runner.engine.run.assert_called_once()
+        signals = runner.engine.run.call_args.kwargs["signals"]
+        assert len(signals) == expected_signals
+        assert signals[0].candle_timestamp == candles.iloc[199]["timestamp"]
+
+
+@pytest.mark.parametrize(
+    ("predictive_mode", "expected_first_index"),
+    [(False, 19), (True, 34)],
+)
+def test_requested_short_warmup_respects_component_history(
+    tmp_path, make_synthetic_candles, predictive_mode, expected_first_index
+):
+    candles = make_synthetic_candles(periods=40)
+    store = ParquetStore(base_dir=tmp_path / "component_minimum")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    runner.engine.run = Mock(return_value=([], []))
+
+    runner.run_backtest(
+        "BTCUSDT", "1h", df=candles, warmup_bars=1,
+        predictive_mode=predictive_mode,
+    )
+
+    signals = runner.engine.run.call_args.kwargs["signals"]
+    assert signals[0].candle_timestamp == candles.iloc[expected_first_index]["timestamp"]
+    assert len(signals) == len(candles) - expected_first_index
+
+
+def test_injected_predictive_history_requirement_is_respected(
+    tmp_path, make_synthetic_candles
+):
+    candles = make_synthetic_candles(periods=46)
+    store = ParquetStore(base_dir=tmp_path / "predictive_minimum")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    runner.predictive_engine.min_history_bars = 45
+    runner.engine.run = Mock(return_value=([], []))
+
+    runner.run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=1, predictive_mode=True)
+
+    signals = runner.engine.run.call_args.kwargs["signals"]
+    assert len(signals) == 2
+    assert signals[0].candle_timestamp == candles.iloc[44]["timestamp"]
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5, "20"])
+def test_invalid_requested_warmup_is_rejected(value):
+    with pytest.raises(BacktestValidationError, match="warmup_bars"):
+        BacktestRunner().run_backtest("BTCUSDT", "1h", df=pd.DataFrame(), warmup_bars=value)
