@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from unittest.mock import Mock
 
 import pandas as pd
 import pytest
@@ -206,3 +207,69 @@ def test_runner_uses_verified_persisted_calendar_for_annualization(
     assert report.data_provenance.temporal_validation == "VALID"
     assert observed_periods == [8760]
     assert report.total_candles == 250
+
+
+@pytest.mark.parametrize("mutation", ["reversed", "swapped", "duplicate", "missing"])
+def test_runner_rejects_invalid_timestamps_before_indicators_and_signals(
+    tmp_path, make_synthetic_candles, mutation
+):
+    bars = make_synthetic_candles(periods=50, freq="1h")
+    if mutation == "reversed":
+        bars = bars.iloc[::-1].reset_index(drop=True)
+    elif mutation == "swapped":
+        bars = bars.iloc[[0, 2, 1, *range(3, 50)]].reset_index(drop=True)
+    elif mutation == "duplicate":
+        bars.loc[2, "timestamp"] = bars.loc[1, "timestamp"]
+    else:
+        bars.loc[2, "timestamp"] = pd.NaT
+
+    source = bars.copy(deep=True)
+    store = ParquetStore(base_dir=tmp_path / "invalid_chronology")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    runner.indicators.calculate_all = Mock(side_effect=AssertionError("Indicadores ejecutados"))
+    runner.signal_engine.evaluate = Mock(side_effect=AssertionError("Señal generada"))
+    runner.engine.run = Mock(side_effect=AssertionError("Operaciones ejecutadas"))
+
+    with pytest.raises(BacktestValidationError, match="timestamp"):
+        runner.run_backtest("BTCUSDT", "1h", df=bars, warmup_bars=200)
+    runner.indicators.calculate_all.assert_not_called()
+    runner.signal_engine.evaluate.assert_not_called()
+    runner.engine.run.assert_not_called()
+    pd.testing.assert_frame_equal(bars, source)
+
+
+def test_runner_rejects_future_row_before_ema_can_be_contaminated(
+    tmp_path, make_synthetic_candles
+):
+    chronological = make_synthetic_candles(periods=80, freq="1h")
+    future_first = chronological.iloc[[79, *range(79)]].reset_index(drop=True)
+    store = ParquetStore(base_dir=tmp_path / "future_first")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    valid_ema = runner.indicators.calculate_all(chronological.copy()).iloc[40]["ema_50"]
+    contaminated_ema = runner.indicators.calculate_all(future_first.copy()).sort_values(
+        "timestamp"
+    ).iloc[40]["ema_50"]
+    assert valid_ema != pytest.approx(contaminated_ema)
+    runner.indicators.calculate_all = Mock(side_effect=AssertionError("EMA calculada"))
+
+    with pytest.raises(BacktestValidationError, match="desordenado"):
+        runner.run_backtest("BTCUSDT", "1h", df=future_first)
+    runner.indicators.calculate_all.assert_not_called()
+
+
+def test_ui_backtest_helper_clears_old_report_for_invalid_chronology(
+    make_synthetic_candles
+):
+    helper = _load_ui_backtest_helper()
+    state = {"backtest_report": object()}
+    candles = make_synthetic_candles(periods=50, freq="1h").iloc[::-1]
+    with pytest.raises(BacktestValidationError, match="desordenado"):
+        helper(BacktestConfig(), candles, "BTCUSDT", "1h", state)
+    assert "backtest_report" not in state
+
+
+def test_runner_does_not_report_rows_without_columns_as_zero_trades(tmp_path):
+    store = ParquetStore(base_dir=tmp_path / "missing_timestamp")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    with pytest.raises(BacktestValidationError, match="timestamp"):
+        runner.run_backtest("BTCUSDT", "1h", df=pd.DataFrame(index=range(3)))

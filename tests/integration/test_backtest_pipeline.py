@@ -205,3 +205,24 @@ def test_backtest_pipeline_date_slicing(tmp_path: Path, make_synthetic_candles):
     assert sliced_report.total_candles == 250
     assert sliced_report.symbol == "SOLUSDT"
     assert len(sliced_report.equity_curve) == 250
+
+
+def test_ordered_direct_and_stored_candles_keep_the_same_execution(
+    tmp_path: Path, make_synthetic_candles
+):
+    candles = make_synthetic_candles(periods=250, freq="1h", base_price=100.0)
+    store = ParquetStore(base_dir=tmp_path / "ordered_parity")
+    store.write_dataset(candles, "BTCUSDT", "1h")
+    manager = HistoricalDatasetManager(store=store)
+    cfg = BacktestConfig(min_quant_score=40.0)
+    runner = BacktestRunner(config=cfg, dataset_manager=manager)
+
+    direct = runner.run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=200)
+    stored = runner.run_backtest("BTCUSDT", "1h", warmup_bars=200)
+
+    assert direct.total_candles == stored.total_candles == 250
+    assert direct.trades == stored.trades
+    assert direct.equity_curve == stored.equity_curve
+    assert direct.total_net_pnl == pytest.approx(stored.total_net_pnl)
+    assert direct.data_provenance.status == "UNKNOWN"
+    assert stored.data_provenance.status == "UNKNOWN"

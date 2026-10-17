@@ -241,3 +241,28 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     reloaded_dict = json.loads(json_str)
     assert reloaded_dict["symbol"] == "BTCUSDT"
     assert reloaded_dict["total_trades"] == enhanced_report.total_trades
+
+
+def test_predictive_signals_before_last_candle_ignore_its_future_change(
+    tmp_path: Path, make_synthetic_candles, monkeypatch
+):
+    candles = make_synthetic_candles(periods=80, freq="1h", base_price=100.0)
+    revised = candles.copy(deep=True)
+    for column in ("open", "high", "low", "close"):
+        revised.loc[79, column] *= 10
+
+    store = ParquetStore(base_dir=tmp_path / "predictive_causality")
+    runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
+    seen = []
+
+    def capture_signals(df, signals):
+        seen.append([event.to_dict() for event in signals])
+        return [], []
+
+    monkeypatch.setattr(runner.engine, "run", capture_signals)
+    runner.run_backtest("BTCUSDT", "1h", df=candles, predictive_mode=True)
+    runner.run_backtest("BTCUSDT", "1h", df=revised, predictive_mode=True)
+
+    assert len(seen) == 2
+    assert len(seen[0]) > 0
+    assert seen[0][:-1] == seen[1][:-1]

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 import math
+import re
+from datetime import date, datetime
+from numbers import Number
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .backtest_metrics import BacktestMetricsCalculator
@@ -37,6 +41,44 @@ class BacktestEngine:
 
     def __init__(self, config: BacktestConfig | None = None):
         self.config = config or BacktestConfig()
+
+    @staticmethod
+    def validate_chronology(df: pd.DataFrame) -> pd.Series:
+        """Return UTC timestamps only when candle order is strict and unambiguous."""
+        if "timestamp" not in df.columns:
+            raise BacktestValidationError("Falta la columna temporal timestamp.")
+
+        values = df["timestamp"]
+        if values.isna().any():
+            raise BacktestValidationError("timestamp contiene valores nulos o NaT.")
+        for row, value in enumerate(values):
+            if isinstance(value, Number):
+                raise BacktestValidationError(
+                    f"timestamp ambiguo en fila {row}: indicar fecha y zona horaria, "
+                    "no un número sin unidad."
+                )
+            if isinstance(value, str):
+                if not re.match(r"^\d{4}[-/]\d{2}[-/]\d{2}(?:[T\s].*)?$", value):
+                    raise BacktestValidationError(
+                        f"timestamp ambiguo en fila {row}: usar fecha con año primero."
+                    )
+            elif not isinstance(value, (date, datetime, pd.Timestamp, np.datetime64)):
+                raise BacktestValidationError(
+                    f"timestamp inválido en fila {row}: {type(value).__name__}."
+                )
+
+        try:
+            timestamps = pd.to_datetime(values, utc=True, format="mixed", errors="raise")
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise BacktestValidationError(f"timestamp inválido: {exc}") from exc
+        if timestamps.isna().any():
+            raise BacktestValidationError("timestamp contiene valores nulos o NaT.")
+        deltas = timestamps.diff().iloc[1:]
+        if (deltas == pd.Timedelta(0)).any():
+            raise BacktestValidationError("timestamp duplicado: cada vela requiere un instante distinto.")
+        if (deltas < pd.Timedelta(0)).any():
+            raise BacktestValidationError("timestamp desordenado: se requiere orden estrictamente creciente.")
+        return timestamps
 
     def validate_config(self) -> None:
         """Only the SPOT LONG 1x cash ledger is supported in this phase."""
@@ -86,7 +128,7 @@ class BacktestEngine:
         - Tuple of (closed_trades, equity_curve).
         """
         self.validate_config()
-        if df.empty:
+        if len(df) == 0:
             return [], []
 
         required_cols = {"timestamp", "open", "high", "low", "close"}
@@ -94,8 +136,8 @@ class BacktestEngine:
             raise ValueError(f"El DataFrame debe contener las columnas: {required_cols}")
 
         candles = df.copy()
-        candles["timestamp"] = pd.to_datetime(candles["timestamp"], utc=True)
-        candles = candles.sort_values("timestamp").reset_index(drop=True)
+        candles["timestamp"] = self.validate_chronology(candles)
+        candles = candles.reset_index(drop=True)
         for column in ("open", "high", "low", "close"):
             numeric = pd.to_numeric(candles[column], errors="coerce")
             if not numeric.map(math.isfinite).all() or (numeric <= 0).any():

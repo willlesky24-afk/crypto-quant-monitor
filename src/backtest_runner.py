@@ -122,9 +122,12 @@ class BacktestRunner:
                 if isinstance(candidate, DatasetProvenance):
                     provenance = candidate
 
+        if len(raw_df) > 0:
+            raw_df["timestamp"] = self.engine.validate_chronology(raw_df)
+
         effective_warmup = min(warmup_bars, max(35, len(raw_df) // 4)) if len(raw_df) >= 35 else warmup_bars
 
-        if raw_df.empty or len(raw_df) < effective_warmup:
+        if len(raw_df) == 0 or len(raw_df) < effective_warmup:
             logger.warning(
                 "Dataset para %s %s tiene solo %d velas (mínimo requerido: %d para warm-up).",
                 sym,
@@ -149,8 +152,7 @@ class BacktestRunner:
 
         # 2. Enrich indicators across the full causal dataset
         enriched_df = self.indicators.calculate_all(raw_df.copy())
-        enriched_df["timestamp"] = pd.to_datetime(enriched_df["timestamp"], utc=True)
-        enriched_df = enriched_df.sort_values("timestamp").reset_index(drop=True)
+        enriched_df = enriched_df.reset_index(drop=True)
 
         # 3. Generate Signals Step-by-Step with Strict Look-Ahead Bias Prevention
         signals: list[SignalEvent] = []

@@ -981,4 +981,56 @@ def test_extreme_finite_price_cannot_create_infinite_units():
         BacktestEngine().run(bars, signals=[make_test_signal()])
 
 
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda bars: bars.iloc[::-1].reset_index(drop=True), "desordenado"),
+        (lambda bars: bars.iloc[[0, 2, 1, 3]].reset_index(drop=True), "desordenado"),
+        (lambda bars: bars.assign(timestamp=lambda frame: frame["timestamp"].where(
+            frame.index != 2, frame.loc[1, "timestamp"]
+        )), "duplicado"),
+        (lambda bars: bars.assign(timestamp=lambda frame: frame["timestamp"].where(
+            frame.index != 2, pd.NaT
+        )), "nulos"),
+        (lambda bars: bars.assign(timestamp=[0, 1, 2, 3]), "ambiguo"),
+        (lambda bars: bars.assign(timestamp=["01/02/2024"] * 4), "ambiguo"),
+    ],
+)
+def test_engine_rejects_invalid_chronology_before_financial_execution(
+    change, message, monkeypatch
+):
+    bars = change(_flat_spot_bars(count=4))
+    original = bars.copy(deep=True)
+    engine = BacktestEngine()
+
+    def execution_must_not_start(*_args, **_kwargs):
+        pytest.fail("El motor comenzó a filtrar señales antes del rechazo temporal")
+
+    monkeypatch.setattr(engine, "_passes_signal_filters", execution_must_not_start)
+    with pytest.raises(BacktestValidationError, match=message):
+        engine.run(bars, signals=[make_test_signal()])
+    pd.testing.assert_frame_equal(bars, original)
+
+
+def test_engine_accepts_utc_normalization_and_keeps_next_bar_entry():
+    bars = _flat_spot_bars(count=4)
+    bars["timestamp"] = [
+        "2024-01-01T01:00:00+01:00",
+        "2024-01-01T00:00:00-01:00",
+        "2024-01-01 02:00:00",
+        "2024-01-01T03:00:00Z",
+    ]
+    trades, equity = BacktestEngine().run(bars, signals=[make_test_signal()])
+    assert len(trades) == 1
+    assert trades[0].entry_timestamp > trades[0].signal_timestamp
+    assert [point.timestamp for point in equity] == list(
+        pd.date_range("2024-01-01", periods=4, freq="1h", tz="UTC")
+    )
+
+
+def test_engine_does_not_treat_rows_without_columns_as_empty():
+    with pytest.raises(ValueError, match="columnas"):
+        BacktestEngine().run(pd.DataFrame(index=range(3)))
+
+
 
