@@ -15,6 +15,7 @@ from .backtest_models import (
     BacktestConfig,
     BacktestValidationError,
     EquityPoint,
+    ExecutionPolicyVersion,
     ExecutionTraceStatus,
     MarketType,
     Position,
@@ -293,28 +294,42 @@ class BacktestEngine:
                 exit_reason = TradeExitReason.TIME_HORIZON.value
 
                 if not is_short_pos:
-                    # LONG Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
-                    if bar_low <= active_position.sl_price and bar_high >= active_position.tp_price:
+                    is_preexisting = bar_ts > active_position.entry_timestamp
+
+                    # 1. Opening priority for pre-existing positions (Gaps at Open of T)
+                    if is_preexisting and bar_open <= active_stop:
+                        # Adverse gap down: stop-market exit filled at Open with adverse slippage
                         exit_triggered = True
-                        exit_price = active_position.sl_price * (1.0 - self.config.slippage_pct)
+                        exit_price = bar_open * (1.0 - self.config.slippage_pct)
                         exit_reason = TradeExitReason.STOP_LOSS.value
 
-                    # LONG Case B: Stop Loss touched
-                    elif bar_low <= active_position.sl_price:
+                    elif is_preexisting and bar_open >= active_target:
+                        # Favorable gap up: limit TP filled at target price (no gap improvement, no adverse slippage below limit)
                         exit_triggered = True
-                        effective_sl = min(bar_open, active_position.sl_price)
-                        exit_price = effective_sl * (1.0 - self.config.slippage_pct)
-                        exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    # LONG Case C: Take Profit touched
-                    elif bar_high >= active_position.tp_price:
-                        exit_triggered = True
-                        effective_tp = max(bar_open, active_position.tp_price)
-                        exit_price = effective_tp * (1.0 - self.config.slippage_pct)
+                        exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
 
-                    # LONG Case D: Time Horizon expired (Max holding bars reached or end of series)
+                    # 2. Intrabar monitoring (Opening strictly between levels, or position newly opened on bar T)
+                    elif bar_low <= active_stop and bar_high >= active_target:
+                        # Intrabar conflict: both levels touched, conservative SL first convention
+                        exit_triggered = True
+                        exit_price = active_stop * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
+
+                    elif bar_low <= active_stop:
+                        # Stop Loss touched intrabar
+                        exit_triggered = True
+                        exit_price = active_stop * (1.0 - self.config.slippage_pct)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
+
+                    elif bar_high >= active_target:
+                        # Take Profit touched intrabar: limit fill at target price (no adverse slippage below limit)
+                        exit_triggered = True
+                        exit_price = active_target
+                        exit_reason = TradeExitReason.TAKE_PROFIT.value
+
                     elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
+                        # Time Horizon expired
                         exit_triggered = True
                         exit_price = bar_close * (1.0 - self.config.slippage_pct)
                         exit_reason = TradeExitReason.TIME_HORIZON.value
@@ -348,8 +363,8 @@ class BacktestEngine:
 
                 if exit_triggered:
                     # Describe only what the exit candle can establish. A pre-existing
-                    # position opening at/beyond a level is an opening/fill question,
-                    # even if both extremes also cross SL and TP. Do not change fills.
+                    # position opening at/beyond a level is resolved immediately at Open;
+                    # subsequent intrabar extremes do not override the opening exit.
                     if (is_short_pos or not all(math.isfinite(level) for level in
                                                 (active_stop, active_target))
                             or not 0 < active_stop <= active_position.entry_price < active_target):
@@ -459,6 +474,10 @@ class BacktestEngine:
                         initial_risk_amount=initial_risk_amount,
                         net_r_multiple=net_r_multiple,
                         execution_trace_status=trace_status,
+                        execution_policy_version=(
+                            ExecutionPolicyVersion.SPOT_LONG_C1.value
+                            if not is_short_pos else None
+                        ),
                     )
                     closed_trades.append(trade_result)
                     active_position = None

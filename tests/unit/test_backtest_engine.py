@@ -880,10 +880,10 @@ def test_final_candle_time_exit_does_not_apply_trailing_after_close():
     ("exit_bar", "status", "reason", "fill"),
     [
         ((100.0, 105.0, 97.0, 101.0), "INTRABAR_SL_FIRST", "STOP_LOSS", 98.0),
-        ((97.0, 105.0, 96.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
-        ((105.0, 106.0, 97.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
+        ((97.0, 105.0, 96.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 97.0),
+        ((105.0, 106.0, 97.0, 101.0), "OPENING_LEVEL_REVIEW", "TAKE_PROFIT", 104.0),
         ((97.0, 101.0, 96.0, 100.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 97.0),
-        ((105.0, 106.0, 99.0, 105.0), "OPENING_LEVEL_REVIEW", "TAKE_PROFIT", 105.0),
+        ((105.0, 106.0, 99.0, 105.0), "OPENING_LEVEL_REVIEW", "TAKE_PROFIT", 104.0),
         ((98.0, 105.0, 97.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
         ((100.0, 101.0, 97.0, 100.0), "NO_IDENTIFIED_CONFLICT", "STOP_LOSS", 98.0),
         ((100.0, 105.0, 99.0, 104.0), "NO_IDENTIFIED_CONFLICT", "TAKE_PROFIT", 104.0),
@@ -1234,4 +1234,252 @@ def test_engine_does_not_treat_rows_without_columns_as_empty():
         BacktestEngine().run(pd.DataFrame(index=range(3)))
 
 
+# -----------------------------------------------------------------------------
+# P0-003C-C1: Casos Numéricos Obligatorios (Casos A a L)
+# -----------------------------------------------------------------------------
 
+def _make_c1_bars(exit_bar: tuple[float, float, float, float]) -> pd.DataFrame:
+    """Prepara 3 velas: señal (C=100, ATR=2), entrada (O=100) y vela de salida."""
+    candles = [
+        (100.0, 101.0, 99.0, 100.0),
+        (100.0, 101.0, 99.0, 100.0),
+        exit_bar,
+    ]
+    return pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=len(candles), freq="1h", tz="UTC"),
+        "open": [b[0] for b in candles],
+        "high": [b[1] for b in candles],
+        "low": [b[2] for b in candles],
+        "close": [b[3] for b in candles],
+        "volume": [1000.0] * len(candles),
+    })
+
+
+def _c1_config(**kwargs) -> BacktestConfig:
+    params = dict(
+        initial_capital=1000.0,
+        position_size_pct=1.0,
+        taker_fee_pct=0.0,
+        slippage_pct=0.0,
+        tp_atr_multiple=2.0,
+        sl_atr_multiple=1.0,
+        max_holding_bars=10,
+    )
+    params.update(kwargs)
+    return BacktestConfig(**params)
+
+
+def test_p0_003c_c1_case_a_adverse_gap():
+    """CASO A — Gap desfavorable: Open=95 <= SL=98. High posterior (105) no afecta."""
+    bars = _make_c1_bars((95.0, 105.0, 94.0, 101.0))
+    trades, equity = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(95.0)
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.gross_pnl == pytest.approx(-50.0)
+    assert trade.r_multiple == pytest.approx(-2.5)
+    assert trade.execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+    assert equity[-1].equity == pytest.approx(950.0)
+
+
+def test_p0_003c_c1_case_b_favorable_gap():
+    """CASO B — Gap favorable: Open=106 >= TP=104. Low posterior (97) no convierte a SL."""
+    bars = _make_c1_bars((106.0, 107.0, 97.0, 100.0))
+    trades, equity = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(104.0)  # TP limit fill sin gap improvement
+    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trade.gross_pnl == pytest.approx(40.0)
+    assert trade.r_multiple == pytest.approx(2.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+    assert equity[-1].equity == pytest.approx(1040.0)
+
+
+def test_p0_003c_c1_case_c_opening_between_levels_intrabar_conflict():
+    """CASO C — Apertura entre niveles: Open=100. High=105 y Low=95. SL primero."""
+    bars = _make_c1_bars((100.0, 105.0, 95.0, 101.0))
+    trades, equity = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.gross_pnl == pytest.approx(-20.0)
+    assert trade.r_multiple == pytest.approx(-1.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+
+
+def test_p0_003c_c1_case_d_only_sl_intrabar():
+    """CASO D — Solo SL: Open=100. Low=97 <= 98, High=101 < 104."""
+    bars = _make_c1_bars((100.0, 101.0, 97.0, 100.0))
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.gross_pnl == pytest.approx(-20.0)
+    assert trade.r_multiple == pytest.approx(-1.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value
+
+
+def test_p0_003c_c1_case_e_only_tp_intrabar():
+    """CASO E — Solo TP: Open=100. High=105 >= 104, Low=99 > 98."""
+    bars = _make_c1_bars((100.0, 105.0, 99.0, 104.0))
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(104.0)
+    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trade.gross_pnl == pytest.approx(40.0)
+    assert trade.r_multiple == pytest.approx(2.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value
+
+
+def test_p0_003c_c1_ordinary_tp_limit_ignores_adverse_exit_slippage():
+    """A touched SPOT LONG TP limit cannot fill below its own limit price."""
+    bars = pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC"),
+        "open": [100.0, 100.0, 102.0],
+        "high": [101.0, 102.0, 106.0],
+        "low": [99.0, 100.0, 101.0],
+        "close": [100.0, 101.0, 105.0],
+    })
+    cfg = _c1_config(slippage_pct=0.01, taker_fee_pct=0.001)
+    trades, equity = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+    trade = trades[0]
+    assert trade.entry_price == pytest.approx(101.0)
+    assert trade.tp_price == pytest.approx(105.0)
+    assert trade.exit_price == pytest.approx(trade.tp_price)
+    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(trade.size_units * trade.tp_price * 0.001)
+    assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert trade.execution_policy_version == "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(1000.0 + trade.net_pnl)
+
+
+def test_p0_003c_c1_case_f_opening_exactly_at_sl():
+    """CASO F — Apertura exactamente en SL: Open=98 == SL."""
+    bars = _make_c1_bars((98.0, 105.0, 97.0, 101.0))
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+
+
+def test_p0_003c_c1_case_g_opening_exactly_at_tp():
+    """CASO G — Apertura exactamente en TP: Open=104 == TP."""
+    bars = _make_c1_bars((104.0, 105.0, 97.0, 101.0))
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_price == pytest.approx(104.0)
+    assert trade.exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trade.execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+
+
+def test_p0_003c_c1_case_h_stop_moved_to_break_even():
+    """CASO H — Stop movido a break-even en T, ejecutado en T+1."""
+    # Bar 0: Señal. Bar 1: Entrada 100, High=103 (+1.5R >= 1.0R) -> activa break-even (100).
+    # Bar 2 (T+1): Gap down en apertura a 99.0 <= 100.0.
+    bars_gap = pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC"),
+        "open": [100.0, 100.0, 99.0],
+        "high": [101.0, 103.0, 102.0],
+        "low": [99.0, 99.5, 98.0],
+        "close": [100.0, 102.0, 100.0],
+        "volume": [1000.0] * 3,
+    })
+    cfg = _c1_config(enable_trailing_stop=True, trailing_stop_activation_r=1.0)
+    trades_gap, _ = BacktestEngine(cfg).run(bars_gap, [make_test_signal(atr=2.0)])
+    assert trades_gap[0].exit_price == pytest.approx(99.0)
+    assert trades_gap[0].exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trades_gap[0].sl_price == pytest.approx(100.0)
+    assert trades_gap[0].initial_stop_price == pytest.approx(98.0)
+    assert trades_gap[0].execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+
+    # Sub-caso H2: Apertura en 101 > 100, luego intrabar toca 100.0.
+    bars_intrabar = pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC"),
+        "open": [100.0, 100.0, 101.0],
+        "high": [101.0, 103.0, 102.0],
+        "low": [99.0, 99.5, 99.0],  # Low cruza 100.0
+        "close": [100.0, 102.0, 101.0],
+        "volume": [1000.0] * 3,
+    })
+    trades_intra, _ = BacktestEngine(cfg).run(bars_intrabar, [make_test_signal(atr=2.0)])
+    assert trades_intra[0].exit_price == pytest.approx(100.0)
+    assert trades_intra[0].exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trades_intra[0].execution_trace_status == ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value
+
+
+def test_p0_003c_c1_case_i_new_entry_on_current_bar_ignores_gap():
+    """CASO I — Nueva entrada en apertura actual: no existe orden previa ni gap de salida."""
+    bars = pd.DataFrame({
+        "timestamp": pd.date_range("2024-01-01", periods=2, freq="1h", tz="UTC"),
+        "open": [100.0, 100.0],
+        "high": [101.0, 105.0],
+        "low": [99.0, 95.0],
+        "close": [100.0, 101.0],
+        "volume": [1000.0, 1000.0],
+    })
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.entry_timestamp == trade.exit_timestamp
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+
+
+def test_p0_003c_c1_case_j_slippage_effects_on_stop_and_limit():
+    """CASO J — Gap y slippage distinto de cero: stop-market sufre slippage, TP limit no."""
+    cfg = _c1_config(slippage_pct=0.001)  # 0.1%
+
+    # Sub-caso J1: Gap desfavorable (Open=95). Exit = 95 * (1 - 0.001) = 94.905
+    bars_sl = _make_c1_bars((95.0, 105.0, 94.0, 101.0))
+    trades_sl, _ = BacktestEngine(cfg).run(bars_sl, [make_test_signal(atr=2.0)])
+    assert trades_sl[0].exit_price == pytest.approx(94.905)
+    assert trades_sl[0].exit_reason == TradeExitReason.STOP_LOSS.value
+
+    # Sub-caso J2: Gap favorable (Open=106). Exit = TP (104.1 debido a entry slippage), sin slippage adverso por debajo del límite
+    bars_tp = _make_c1_bars((106.0, 107.0, 97.0, 100.0))
+    trades_tp, _ = BacktestEngine(cfg).run(bars_tp, [make_test_signal(atr=2.0)])
+    assert trades_tp[0].entry_price == pytest.approx(100.1)
+    assert trades_tp[0].tp_price == pytest.approx(104.1)
+    assert trades_tp[0].exit_price == pytest.approx(104.1)
+    assert trades_tp[0].exit_reason == TradeExitReason.TAKE_PROFIT.value
+
+
+def test_p0_003c_c1_case_k_exit_fee_reconciliation():
+    """CASO K — Comisión de salida distinta de cero con conciliación contable exacta."""
+    cfg = _c1_config(taker_fee_pct=0.001)
+    bars = _make_c1_bars((95.0, 105.0, 94.0, 101.0))
+    trades, equity = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+    trade = trades[0]
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(trade.notional_exit * 0.001)
+    assert equity[-1].equity - cfg.initial_capital == pytest.approx(trade.net_pnl, abs=1e-8)
+    assert equity[-1].cash == pytest.approx(equity[-1].equity)
+
+
+def test_p0_003c_c1_case_l_gap_followed_by_both_extremes():
+    """CASO L — Gap en apertura seguido por ambos extremos intrabar posteriores."""
+    # L1: Gap desfavorable a 95, seguido de High=105 (cruza TP) y Low=94.
+    bars_down = _make_c1_bars((95.0, 105.0, 94.0, 101.0))
+    trades_down, _ = BacktestEngine(_c1_config()).run(bars_down, [make_test_signal(atr=2.0)])
+    assert trades_down[0].exit_price == pytest.approx(95.0)
+    assert trades_down[0].exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trades_down[0].execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+
+    # L2: Gap favorable a 106, seguido de Low=97 (cruza SL) y High=107.
+    bars_up = _make_c1_bars((106.0, 107.0, 97.0, 100.0))
+    trades_up, _ = BacktestEngine(_c1_config()).run(bars_up, [make_test_signal(atr=2.0)])
+    assert trades_up[0].exit_price == pytest.approx(104.0)
+    assert trades_up[0].exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert trades_up[0].execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value

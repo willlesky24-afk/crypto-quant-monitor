@@ -100,6 +100,7 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
         assert trade.mfe_pct >= 0.0
         assert trade.mae_pct >= 0.0
         assert trade.execution_trace_status is not None
+        assert trade.execution_policy_version == "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
 
     assert report.r_coverage_status == "COMPLETE"
     assert report.r_verified_trades == report.total_trades
@@ -124,6 +125,8 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
     assert deserialized["config"]["initial_capital"] == 10_000.0
     assert len(deserialized["trades"]) == report.total_trades
     assert all(row["execution_trace_status"] is not None for row in deserialized["trades"])
+    assert all(row["execution_policy_version"] == "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
+               for row in deserialized["trades"])
     assert len(deserialized["equity_curve"]) == 600
     assert deserialized["r_coverage_status"] == "COMPLETE"
     assert deserialized["gross_expectancy_r"] == pytest.approx(report.gross_expectancy_r)

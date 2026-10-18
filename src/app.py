@@ -32,6 +32,7 @@ try:
     from src.backtest_models import (
         BacktestConfig,
         BacktestValidationError,
+        ExecutionPolicyVersion,
         ExecutionTraceStatus,
     )
     from src.backtest_presets import (
@@ -78,6 +79,7 @@ except ImportError:
     from backtest_models import (
         BacktestConfig,
         BacktestValidationError,
+        ExecutionPolicyVersion,
         ExecutionTraceStatus,
     )
     from backtest_presets import (
@@ -222,13 +224,22 @@ def _verified_trade_r_for_ui(trade, config):
 def _execution_trace_for_ui(trade):
     """An absent/unknown status never proves that an old fill was unambiguous."""
     status = _trade_field_for_ui(trade, "execution_trace_status")
+    if status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value:
+        if _trade_field_for_ui(trade, "execution_policy_version") == ExecutionPolicyVersion.SPOT_LONG_C1.value:
+            return "Apertura/gap: fill simulado C1 (no verificado)"
+        return "Apertura/gap: fill pendiente de revisión (política anterior o desconocida)"
     labels = {
         ExecutionTraceStatus.INTRABAR_SL_FIRST.value: "Conflicto intrabar: SL primero (simulado)",
-        ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value: "Apertura/gap: fill pendiente de revisión",
         ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value: "Sin conflicto identificado (no verificado)",
         ExecutionTraceStatus.UNDETERMINED.value: "N/A (niveles o apertura indeterminados)",
     }
     return labels.get(status, "N/A (histórico sin metadatos)")
+
+
+def _execution_policy_for_ui(trade):
+    if _trade_field_for_ui(trade, "execution_policy_version") == ExecutionPolicyVersion.SPOT_LONG_C1.value:
+        return "C1: apertura prioritaria; TP limit simulado"
+    return "N/A (metodología histórica no identificada)"
 
 
 def _execution_trace_summary_for_ui(trades):
@@ -240,8 +251,11 @@ def _execution_trace_summary_for_ui(trades):
         ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value,
         ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value,
     } for status in statuses)
+    c1_count = sum(_trade_field_for_ui(trade, "execution_policy_version") ==
+                   ExecutionPolicyVersion.SPOT_LONG_C1.value for trade in trades)
     return (f"Trazabilidad de salidas: {conflicts} conflictos intrabar (SL primero), "
-            f"{openings} aperturas/gaps pendientes, {unknown} estados desconocidos. "
+            f"{openings} aperturas/gaps, {unknown} estados desconocidos; "
+            f"con política C1: {c1_count}; sin versión acreditada: {len(trades) - c1_count}. "
             "SL primero es una hipótesis conservadora de simulación; OHLC no revela "
             "la secuencia real ni verifica los fills.")
 
@@ -269,6 +283,7 @@ def _backtest_trade_table_for_ui(trades, config):
             "PnL neto ($)": _trade_field_for_ui(trade, "net_pnl"),
             "Causa cierre": _trade_field_for_ui(trade, "exit_reason"),
             "Trazabilidad salida": _execution_trace_for_ui(trade),
+            "Política ejecución": _execution_policy_for_ui(trade),
         })
     return pd.DataFrame(rows)
 

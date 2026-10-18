@@ -10,7 +10,12 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src.backtest_metrics import BacktestMetricsCalculator
-from src.backtest_models import BacktestConfig, BacktestReport, ExecutionTraceStatus
+from src.backtest_models import (
+    BacktestConfig,
+    BacktestReport,
+    ExecutionPolicyVersion,
+    ExecutionTraceStatus,
+)
 from src.data_loader import BinanceDataLoader
 from tests.unit.test_backtest_metrics import make_verified_spot_trade
 
@@ -21,6 +26,7 @@ HELPERS = {
     "_planned_rr_for_ui", "_planned_rr_summary_for_ui",
     "_verified_trade_r_for_ui", "_backtest_trade_table_for_ui",
     "_execution_trace_for_ui", "_execution_trace_summary_for_ui",
+    "_execution_policy_for_ui",
 }
 
 
@@ -32,6 +38,7 @@ def _ui_helpers():
     assert {node.name for node in functions} == HELPERS
     namespace = {"math": math, "pd": pd,
                  "BacktestMetricsCalculator": BacktestMetricsCalculator,
+                 "ExecutionPolicyVersion": ExecutionPolicyVersion,
                  "ExecutionTraceStatus": ExecutionTraceStatus}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(APP_PATH), "exec"), namespace)
     return namespace
@@ -143,9 +150,27 @@ def test_execution_trace_table_and_summary_distinguish_conflict_gap_and_legacy()
     assert rows.loc[3, "Trazabilidad salida"] == "N/A (histórico sin metadatos)"
     summary = helpers["_execution_trace_summary_for_ui"]([conflict, gap, clean, legacy])
     assert "1 conflictos intrabar" in summary
-    assert "1 aperturas/gaps pendientes" in summary
+    assert "1 aperturas/gaps" in summary
     assert "1 estados desconocidos" in summary
     assert "OHLC no revela" in summary
+
+
+def test_c1_execution_policy_is_visible_without_reclassifying_old_gap_records():
+    helpers = _ui_helpers()
+    base = make_verified_spot_trade("base", 40.0, 38.0, 40.0)
+    prior = replace(base, execution_trace_status="OPENING_LEVEL_REVIEW")
+    current = replace(
+        base, trade_id="c1", execution_trace_status="OPENING_LEVEL_REVIEW",
+        execution_policy_version=ExecutionPolicyVersion.SPOT_LONG_C1.value,
+    )
+    rows = helpers["_backtest_trade_table_for_ui"]([prior, current], BacktestConfig())
+    assert "fill pendiente de revisión" in rows.loc[0, "Trazabilidad salida"]
+    assert rows.loc[0, "Política ejecución"] == "N/A (metodología histórica no identificada)"
+    assert "fill simulado C1 (no verificado)" in rows.loc[1, "Trazabilidad salida"]
+    assert "TP limit simulado" in rows.loc[1, "Política ejecución"]
+    summary = helpers["_execution_trace_summary_for_ui"]([prior, current])
+    assert "con política C1: 1" in summary
+    assert "sin versión acreditada: 1" in summary
 
 
 def _sample_report():

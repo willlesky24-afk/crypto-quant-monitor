@@ -23,6 +23,12 @@ class ExecutionTraceStatus(str, Enum):
     UNDETERMINED = "UNDETERMINED"
 
 
+class ExecutionPolicyVersion(str, Enum):
+    """Simulation policy tag; it does not certify real-market execution."""
+
+    SPOT_LONG_C1 = "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
+
+
 class PositionSide(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
@@ -205,6 +211,8 @@ class TradeResult:
     net_r_multiple: float | None = None
     # None means a legacy record without exit-bar classification, not no conflict.
     execution_trace_status: str | None = None
+    # Absent on reports produced before C1; never infer a historical policy.
+    execution_policy_version: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
