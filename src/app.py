@@ -29,7 +29,11 @@ try:
     from src.ai_providers.factory import ProviderFactory
     from src.anomaly_detection.detector import MarketAnomalyDetector
     from src.backtest_metrics import BacktestMetricsCalculator
-    from src.backtest_models import BacktestConfig, BacktestValidationError
+    from src.backtest_models import (
+        BacktestConfig,
+        BacktestValidationError,
+        ExecutionTraceStatus,
+    )
     from src.backtest_presets import (
         PROVEN_STRATEGIES,
         build_strategy_config,
@@ -71,7 +75,11 @@ except ImportError:
     from ai_providers.factory import ProviderFactory
     from anomaly_detection.detector import MarketAnomalyDetector
     from backtest_metrics import BacktestMetricsCalculator
-    from backtest_models import BacktestConfig, BacktestValidationError
+    from backtest_models import (
+        BacktestConfig,
+        BacktestValidationError,
+        ExecutionTraceStatus,
+    )
     from backtest_presets import (
         PROVEN_STRATEGIES,
         build_strategy_config,
@@ -211,6 +219,33 @@ def _verified_trade_r_for_ui(trade, config):
         return None
 
 
+def _execution_trace_for_ui(trade):
+    """An absent/unknown status never proves that an old fill was unambiguous."""
+    status = _trade_field_for_ui(trade, "execution_trace_status")
+    labels = {
+        ExecutionTraceStatus.INTRABAR_SL_FIRST.value: "Conflicto intrabar: SL primero (simulado)",
+        ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value: "Apertura/gap: fill pendiente de revisión",
+        ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value: "Sin conflicto identificado (no verificado)",
+        ExecutionTraceStatus.UNDETERMINED.value: "N/A (niveles o apertura indeterminados)",
+    }
+    return labels.get(status, "N/A (histórico sin metadatos)")
+
+
+def _execution_trace_summary_for_ui(trades):
+    statuses = [_trade_field_for_ui(trade, "execution_trace_status") for trade in trades]
+    conflicts = statuses.count(ExecutionTraceStatus.INTRABAR_SL_FIRST.value)
+    openings = statuses.count(ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value)
+    unknown = sum(status not in {
+        ExecutionTraceStatus.INTRABAR_SL_FIRST.value,
+        ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value,
+        ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value,
+    } for status in statuses)
+    return (f"Trazabilidad de salidas: {conflicts} conflictos intrabar (SL primero), "
+            f"{openings} aperturas/gaps pendientes, {unknown} estados desconocidos. "
+            "SL primero es una hipótesis conservadora de simulación; OHLC no revela "
+            "la secuencia real ni verifica los fills.")
+
+
 def _backtest_trade_table_for_ui(trades, config):
     """Keep historical missing levels/R explicit; never infer the initial stop."""
     def price(value):
@@ -233,6 +268,7 @@ def _backtest_trade_table_for_ui(trades, config):
             "R neto simulado": f"{verified_r[1]:.2f}" if verified_r else "N/A",
             "PnL neto ($)": _trade_field_for_ui(trade, "net_pnl"),
             "Causa cierre": _trade_field_for_ui(trade, "exit_reason"),
+            "Trazabilidad salida": _execution_trace_for_ui(trade),
         })
     return pd.DataFrame(rows)
 
@@ -1981,6 +2017,7 @@ with tab_backtest:
         with t_right:
             st.subheader("📋 Registro de Transacciones")
             if report.trades:
+                st.caption(_execution_trace_summary_for_ui(report.trades))
                 st.dataframe(_backtest_trade_table_for_ui(report.trades, getattr(report, "config", None)), height=350, use_container_width=True)
             else:
                 st.info("Sin transacciones.")

@@ -14,6 +14,15 @@ class TradeExitReason(str, Enum):
     SIGNAL_INVALIDATION = "SIGNAL_INVALIDATION"
 
 
+class ExecutionTraceStatus(str, Enum):
+    """Exit-bar evidence, not proof of the actual intrabar price path or fill."""
+
+    INTRABAR_SL_FIRST = "INTRABAR_SL_FIRST"
+    OPENING_LEVEL_REVIEW = "OPENING_LEVEL_REVIEW"
+    NO_IDENTIFIED_CONFLICT = "NO_IDENTIFIED_CONFLICT"
+    UNDETERMINED = "UNDETERMINED"
+
+
 class PositionSide(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
@@ -194,6 +203,8 @@ class TradeResult:
     initial_risk_per_unit: float | None = None
     initial_risk_amount: float | None = None
     net_r_multiple: float | None = None
+    # None means a legacy record without exit-bar classification, not no conflict.
+    execution_trace_status: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)

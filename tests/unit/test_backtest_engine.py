@@ -10,6 +10,7 @@ from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
     BacktestConfig,
     BacktestValidationError,
+    ExecutionTraceStatus,
     Position,
     SignalEvent,
     TradeExitReason,
@@ -873,6 +874,86 @@ def test_final_candle_time_exit_does_not_apply_trailing_after_close():
     assert trades[0].sl_price == pytest.approx(98.0)
     assert trades[0].initial_stop_price == pytest.approx(98.0)
     assert equity[-1].equity == pytest.approx(1010.0)
+
+
+@pytest.mark.parametrize(
+    ("exit_bar", "status", "reason", "fill"),
+    [
+        ((100.0, 105.0, 97.0, 101.0), "INTRABAR_SL_FIRST", "STOP_LOSS", 98.0),
+        ((97.0, 105.0, 96.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
+        ((105.0, 106.0, 97.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
+        ((97.0, 101.0, 96.0, 100.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 97.0),
+        ((105.0, 106.0, 99.0, 105.0), "OPENING_LEVEL_REVIEW", "TAKE_PROFIT", 105.0),
+        ((98.0, 105.0, 97.0, 101.0), "OPENING_LEVEL_REVIEW", "STOP_LOSS", 98.0),
+        ((100.0, 101.0, 97.0, 100.0), "NO_IDENTIFIED_CONFLICT", "STOP_LOSS", 98.0),
+        ((100.0, 105.0, 99.0, 104.0), "NO_IDENTIFIED_CONFLICT", "TAKE_PROFIT", 104.0),
+        ((100.0, 101.0, 99.0, 100.0), "NO_IDENTIFIED_CONFLICT", "TIME_HORIZON", 100.0),
+    ],
+)
+def test_exit_trace_distinguishes_intrabar_conflict_opening_level_and_clean_checks(
+    exit_bar, status, reason, fill
+):
+    bars = _trailing_spot_bars(exit_bar)
+    cfg = BacktestConfig(
+        initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0,
+        sl_atr_multiple=1.0, tp_atr_multiple=2.0,
+    )
+    trades, equity = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.execution_trace_status == status
+    assert trade.exit_reason == reason
+    assert trade.exit_price == pytest.approx(fill)
+    assert trade.initial_stop_price == trade.sl_price == pytest.approx(98.0)
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(1000.0 + trade.net_pnl)
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(trade.notional_exit * 0.001)
+
+
+def test_entry_bar_conflict_is_intrabar_not_a_gap_before_position_existed():
+    bars = _trailing_spot_bars()
+    bars.loc[1, ["high", "low"]] = [105.0, 97.0]
+    cfg = BacktestConfig(
+        initial_capital=1000.0, taker_fee_pct=0.0, slippage_pct=0.0,
+        sl_atr_multiple=1.0, tp_atr_multiple=2.0,
+    )
+    trades, _ = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+    assert trades[0].entry_timestamp == trades[0].exit_timestamp == bars.iloc[1]["timestamp"]
+    assert trades[0].execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+    assert trades[0].exit_price == pytest.approx(98.0)
+
+
+def test_break_even_stop_is_the_active_level_for_conflict_trace():
+    bars = _trailing_spot_bars(
+        (100.0, 103.0, 99.0, 101.0),
+        (101.0, 110.0, 99.0, 101.0),
+    )
+    trades, _ = BacktestEngine(_trailing_spot_config()).run(
+        bars, [make_test_signal(atr=2.0)]
+    )
+    trade = trades[0]
+    assert trade.sl_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_price == pytest.approx(100.0)
+    assert trade.r_multiple == trade.net_r_multiple == pytest.approx(0.0)
+
+
+def test_exit_trace_does_not_change_financial_aggregates():
+    bars = _trailing_spot_bars((100.0, 105.0, 97.0, 101.0))
+    cfg = BacktestConfig(
+        initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0,
+        sl_atr_multiple=1.0, tp_atr_multiple=2.0,
+    )
+    trades, equity = BacktestEngine(cfg).run(bars, [make_test_signal(atr=2.0)])
+    current = BacktestMetricsCalculator.calculate_metrics(trades, equity, 1000.0)
+    without_trace = BacktestMetricsCalculator.calculate_metrics(
+        [replace(trades[0], execution_trace_status=None)], equity, 1000.0
+    )
+    assert current == without_trace
 
 
 def test_atr_floor_and_entry_slippage_are_in_initial_risk():

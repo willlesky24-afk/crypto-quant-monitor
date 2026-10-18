@@ -15,6 +15,7 @@ from .backtest_models import (
     BacktestConfig,
     BacktestValidationError,
     EquityPoint,
+    ExecutionTraceStatus,
     MarketType,
     Position,
     PositionSide,
@@ -285,6 +286,8 @@ class BacktestEngine:
                             active_position.last_funding_time = bar_ts
 
                 # B. Resolve exits against the stop already effective for this bar.
+                active_stop = active_position.sl_price
+                active_target = active_position.tp_price
                 exit_triggered = False
                 exit_price = bar_close
                 exit_reason = TradeExitReason.TIME_HORIZON.value
@@ -344,6 +347,24 @@ class BacktestEngine:
                         exit_reason = TradeExitReason.TIME_HORIZON.value
 
                 if exit_triggered:
+                    # Describe only what the exit candle can establish. A pre-existing
+                    # position opening at/beyond a level is an opening/fill question,
+                    # even if both extremes also cross SL and TP. Do not change fills.
+                    if (is_short_pos or not all(math.isfinite(level) for level in
+                                                (active_stop, active_target))
+                            or not 0 < active_stop <= active_position.entry_price < active_target):
+                        trace_status = ExecutionTraceStatus.UNDETERMINED.value
+                    elif not active_stop < bar_open < active_target:
+                        trace_status = (
+                            ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+                            if bar_ts > active_position.entry_timestamp
+                            else ExecutionTraceStatus.UNDETERMINED.value
+                        )
+                    elif bar_low <= active_stop and bar_high >= active_target:
+                        trace_status = ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+                    else:
+                        trace_status = ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value
+
                     notional_exit = active_position.size_units * exit_price
                     fee_exit = notional_exit * self.config.taker_fee_pct
 
@@ -437,6 +458,7 @@ class BacktestEngine:
                         initial_risk_per_unit=active_position.initial_risk_per_unit,
                         initial_risk_amount=initial_risk_amount,
                         net_r_multiple=net_r_multiple,
+                        execution_trace_status=trace_status,
                     )
                     closed_trades.append(trade_result)
                     active_position = None

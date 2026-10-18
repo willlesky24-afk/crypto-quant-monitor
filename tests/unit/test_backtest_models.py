@@ -10,6 +10,7 @@ from src.backtest_models import (
     BacktestReport,
     BacktestValidationError,
     EquityPoint,
+    ExecutionTraceStatus,
     Position,
     SignalEvent,
     TradeDirection,
@@ -176,6 +177,17 @@ def test_trade_result_immutability_and_serialization():
     assert d["initial_stop_price"] is None  # Legacy records remain unknown.
     assert d["initial_risk_amount"] is None
     assert d["net_r_multiple"] is None
+    assert d["execution_trace_status"] is None
+
+    # Old JSON rows omit the additive field; omission remains unknown, not clean.
+    legacy = TradeResult(**{key: value for key, value in d.items()
+                            if key != "execution_trace_status"})
+    assert legacy.execution_trace_status is None
+    assert legacy.to_dict()["execution_trace_status"] is None
+    classified = replace(
+        trade, execution_trace_status=ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+    )
+    assert classified.to_dict()["execution_trace_status"] == "INTRABAR_SL_FIRST"
 
     with pytest.raises(FrozenInstanceError):
         trade.net_pnl = 300.0

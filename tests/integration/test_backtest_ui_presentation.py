@@ -10,7 +10,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from src.backtest_metrics import BacktestMetricsCalculator
-from src.backtest_models import BacktestConfig, BacktestReport
+from src.backtest_models import BacktestConfig, BacktestReport, ExecutionTraceStatus
 from src.data_loader import BinanceDataLoader
 from tests.unit.test_backtest_metrics import make_verified_spot_trade
 
@@ -20,6 +20,7 @@ HELPERS = {
     "_trade_field_for_ui", "_positive_finite_for_ui", "_supported_spot_long_for_ui",
     "_planned_rr_for_ui", "_planned_rr_summary_for_ui",
     "_verified_trade_r_for_ui", "_backtest_trade_table_for_ui",
+    "_execution_trace_for_ui", "_execution_trace_summary_for_ui",
 }
 
 
@@ -30,7 +31,8 @@ def _ui_helpers():
                  if isinstance(node, ast.FunctionDef) and node.name in HELPERS]
     assert {node.name for node in functions} == HELPERS
     namespace = {"math": math, "pd": pd,
-                 "BacktestMetricsCalculator": BacktestMetricsCalculator}
+                 "BacktestMetricsCalculator": BacktestMetricsCalculator,
+                 "ExecutionTraceStatus": ExecutionTraceStatus}
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(APP_PATH), "exec"), namespace)
     return namespace
 
@@ -119,8 +121,31 @@ def test_trade_table_separates_initial_and_final_stop_and_excludes_legacy_r():
     assert rows.loc[0, "PnL neto ($)"] == 38.0
     assert rows.loc[1, "SL inicial"] == "N/A"
     assert rows.loc[1, "R bruto simulado"] == rows.loc[1, "R neto simulado"] == "N/A"
+    assert rows.loc[1, "Trazabilidad salida"] == "N/A (histórico sin metadatos)"
     assert table([{"trade_id": "older", "entry_price": 100.0}], config).loc[0, "SL inicial"] == "N/A"
     assert table([verified], BacktestConfig(market_type="PERP")).loc[0, "R bruto simulado"] == "N/A"
+
+
+def test_execution_trace_table_and_summary_distinguish_conflict_gap_and_legacy():
+    helpers = _ui_helpers()
+    base = make_verified_spot_trade("base", 40.0, 38.0, 40.0)
+    conflict = replace(base, execution_trace_status="INTRABAR_SL_FIRST")
+    gap = replace(base, trade_id="gap", execution_trace_status="OPENING_LEVEL_REVIEW")
+    clean = replace(base, trade_id="clean", execution_trace_status="NO_IDENTIFIED_CONFLICT")
+    legacy = {key: value for key, value in base.to_dict().items()
+              if key != "execution_trace_status"}
+    rows = helpers["_backtest_trade_table_for_ui"](
+        [conflict, gap, clean, legacy], BacktestConfig()
+    )
+    assert "SL primero (simulado)" in rows.loc[0, "Trazabilidad salida"]
+    assert "fill pendiente de revisión" in rows.loc[1, "Trazabilidad salida"]
+    assert "no verificado" in rows.loc[2, "Trazabilidad salida"]
+    assert rows.loc[3, "Trazabilidad salida"] == "N/A (histórico sin metadatos)"
+    summary = helpers["_execution_trace_summary_for_ui"]([conflict, gap, clean, legacy])
+    assert "1 conflictos intrabar" in summary
+    assert "1 aperturas/gaps pendientes" in summary
+    assert "1 estados desconocidos" in summary
+    assert "OHLC no revela" in summary
 
 
 def _sample_report():
@@ -157,11 +182,41 @@ def test_streamlit_renders_verified_metrics_unknown_provenance_and_plan(
     assert any("Cobertura R: COMPLETE" in item.value for item in app.caption)
     assert any("Procedencia del dataset: UNKNOWN" in item.value for item in app.warning)
     assert any("Planes R:R verificables: 1 de 1" in item.value for item in app.caption)
+    assert any("1 estados desconocidos" in item.value for item in app.caption)
     assert any("SL inicial" in item.value.columns and "SL final" in item.value.columns
                for item in app.dataframe)
     preset_selector = next(item for item in app.selectbox
                            if item.label == "Estrategia Cuantitativa:")
     assert len(preset_selector.options) == 5
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("INTRABAR_SL_FIRST", "SL primero (simulado)"),
+        ("OPENING_LEVEL_REVIEW", "fill pendiente de revisión"),
+    ],
+)
+def test_streamlit_shows_execution_trace_without_changing_metrics(
+    monkeypatch, tmp_path, synthetic_ohlcv, status, expected
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "contexts.db"))
+    monkeypatch.setattr(BinanceDataLoader, "get_klines",
+                        lambda self, *args, **kwargs: synthetic_ohlcv.copy())
+    report = _sample_report()
+    report.trades = [replace(report.trades[0], execution_trace_status=status)]
+    app = AppTest.from_file(str(APP_PATH), default_timeout=30)
+    app.session_state["backtest_report"] = report
+    app.run()
+    assert not app.exception
+    assert any(expected in item.value["Trazabilidad salida"].iloc[0]
+               for item in app.dataframe if "Trazabilidad salida" in item.value.columns)
+    assert any("SL primero es una hipótesis conservadora" in item.value
+               for item in app.caption)
+    metrics = {item.label: item.value for item in app.metric}
+    assert metrics["Expectativa bruta (R) — Simulación"] == "1.00"
+    assert metrics["Expectativa neta (R) — Simulación"] == "0.95"
 
 
 @pytest.mark.parametrize(
