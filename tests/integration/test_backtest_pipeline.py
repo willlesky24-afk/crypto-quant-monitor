@@ -8,7 +8,12 @@ import pytest
 
 from src.backtest_engine import BacktestEngine
 from src.backtest_metrics import BacktestMetricsCalculator
-from src.backtest_models import BacktestConfig, SignalEvent, TradeExitReason
+from src.backtest_models import (
+    BacktestConfig,
+    BacktestValidationError,
+    SignalEvent,
+    TradeExitReason,
+)
 from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
 from src.parquet_store import ParquetStore
@@ -356,3 +361,24 @@ def test_causal_trailing_execution_reconciles_report_metrics_and_equity():
     assert metrics["gross_expectancy_r"] == pytest.approx(trade.r_multiple)
     assert metrics["net_expectancy_r"] == pytest.approx(trade.net_r_multiple)
     assert metrics["sharpe_ratio"] is None
+
+
+def test_runner_propagates_invalid_take_profit_instead_of_returning_a_report(
+    tmp_path: Path, make_synthetic_candles,
+):
+    candles = make_synthetic_candles(
+        start="2024-01-01", periods=205, freq="1h", base_price=100.0
+    )
+    config = BacktestConfig(
+        initial_capital=1000.0, min_quant_score=0.0,
+        tp_atr_multiple=-1e6, sl_atr_multiple=1.0,
+    )
+    runner = BacktestRunner(
+        config=config,
+        dataset_manager=HistoricalDatasetManager(base_dir=tmp_path / "d1a_historical"),
+    )
+
+    with pytest.raises(BacktestValidationError, match="Take Profit SPOT LONG inválido"):
+        runner.run_backtest(
+            symbol="BTCUSDT", interval="1h", df=candles, warmup_bars=200
+        )

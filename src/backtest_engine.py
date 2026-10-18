@@ -196,11 +196,6 @@ class BacktestEngine:
                 if allocated_cash > 0 and entry_price > 0:
                     if not math.isfinite(pending_signal.atr):
                         raise BacktestValidationError("ATR de señal no finito.")
-                    fee_entry = (allocated_cash * lev) * self.config.taker_fee_pct
-                    actual_capital_invested = (allocated_cash * lev) - fee_entry
-                    size_units = actual_capital_invested / entry_price
-                    if not math.isfinite(size_units) or size_units <= 0:
-                        raise BacktestValidationError("Unidades SPOT no positivas o no finitas.")
 
                     # Multipliers based on signal ATR (custom signal multiples or config defaults)
                     atr_val = max(pending_signal.atr, entry_price * 0.005)  # Safe fallback if ATR is 0
@@ -214,6 +209,15 @@ class BacktestEngine:
                         if getattr(pending_signal, "sl_atr_multiple", None) is not None
                         else self.config.sl_atr_multiple
                     )
+                    if not is_short:
+                        try:
+                            valid_tp_multiplier = not isinstance(tp_mult, bool) and math.isfinite(tp_mult)
+                        except (TypeError, ValueError):
+                            valid_tp_multiplier = False
+                        if not valid_tp_multiplier:
+                            raise BacktestValidationError(
+                                "Multiplicador Take Profit SPOT LONG no numérico o no finito."
+                            )
                     if not all(math.isfinite(value) for value in (tp_mult, sl_mult)):
                         raise BacktestValidationError("Multiplicadores de niveles no finitos.")
 
@@ -223,8 +227,27 @@ class BacktestEngine:
                     else:
                         tp_price = entry_price - (tp_mult * atr_val)
                         sl_price = entry_price + (sl_mult * atr_val)
+                    if not is_short and (
+                        not math.isfinite(tp_price)
+                        or tp_price <= 0
+                        or tp_price <= entry_price
+                    ):
+                        raise BacktestValidationError(
+                            "Take Profit SPOT LONG inválido: debe ser finito, positivo y superior "
+                            "al precio efectivo de entrada."
+                        )
                     if not all(math.isfinite(level) for level in (tp_price, sl_price)):
                         raise BacktestValidationError("Niveles de salida no finitos.")
+
+                    fee_entry = (allocated_cash * lev) * self.config.taker_fee_pct
+                    actual_capital_invested = (allocated_cash * lev) - fee_entry
+                    size_units = actual_capital_invested / entry_price
+                    if not math.isfinite(size_units) or size_units <= 0:
+                        raise BacktestValidationError("Unidades SPOT no positivas o no finitas.")
+                    if not is_short and not math.isfinite(size_units * tp_price):
+                        raise BacktestValidationError(
+                            "Take Profit SPOT LONG inválido: notional de salida no finito."
+                        )
                     initial_risk_per_unit = entry_price - sl_price
                     initial_risk_amount = size_units * initial_risk_per_unit
                     if (

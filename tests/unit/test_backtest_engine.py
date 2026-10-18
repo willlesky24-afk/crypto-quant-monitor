@@ -1483,3 +1483,151 @@ def test_p0_003c_c1_case_l_gap_followed_by_both_extremes():
     assert trades_up[0].exit_price == pytest.approx(104.0)
     assert trades_up[0].exit_reason == TradeExitReason.TAKE_PROFIT.value
     assert trades_up[0].execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+
+
+def _assert_d1a_rejection_has_no_financial_effect(error, config, entry_timestamp):
+    traceback = error.__traceback__
+    while traceback is not None and traceback.tb_frame.f_code.co_name != "run":
+        traceback = traceback.tb_next
+    assert traceback is not None
+    state = traceback.tb_frame.f_locals
+    assert state["bar_ts"] == entry_timestamp  # Rejection is at Open(T+1), not at signal Close(T).
+    assert state["current_cash"] == config.initial_capital
+    assert state["active_position"] is None
+    assert state["closed_trades"] == []
+    assert "fee_entry" not in state
+    assert "size_units" not in state
+    assert "fee_exit" not in state
+    assert "notional_exit" not in state
+    return state
+
+
+@pytest.mark.parametrize(
+    ("tp_multiple", "slippage", "expected_entry", "expected_target"),
+    [
+        (-50.0, 0.0, 100.0, 0.0),
+        (-50.5, 0.0, 100.0, -1.0),
+        (-0.5, 0.0, 100.0, 99.0),
+        (0.0, 0.0, 100.0, 100.0),
+        (-0.25, 0.01, 101.0, 100.5),
+    ],
+)
+def test_d1a_invalid_take_profit_rejected_before_position_or_cash_change(
+    tp_multiple, slippage, expected_entry, expected_target,
+):
+    bars = _make_c1_bars((100.0, 101.0, 99.0, 100.0))
+    config = _c1_config(position_size_pct=0.25, taker_fee_pct=0.001, slippage_pct=slippage)
+    signal = replace(make_test_signal(atr=2.0), tp_atr_multiple=tp_multiple)
+
+    with pytest.raises(BacktestValidationError, match="Take Profit SPOT LONG inválido") as error:
+        BacktestEngine(config).run(bars, [signal])
+
+    state = _assert_d1a_rejection_has_no_financial_effect(
+        error.value, config, bars.iloc[1]["timestamp"]
+    )
+    assert state["entry_price"] == pytest.approx(expected_entry)
+    assert state["tp_price"] == pytest.approx(expected_target)
+
+
+@pytest.mark.parametrize("tp_multiple", [float("nan"), float("inf"), -float("inf"), "invalid", True, 1e308])
+def test_d1a_nonfinite_or_nonnumeric_take_profit_rejected(tp_multiple):
+    bars = _make_c1_bars((100.0, 101.0, 99.0, 100.0))
+    config = _c1_config(position_size_pct=0.25, taker_fee_pct=0.001)
+    signal = replace(make_test_signal(atr=2.0), tp_atr_multiple=tp_multiple)
+
+    with pytest.raises(BacktestValidationError, match="Take Profit SPOT LONG") as error:
+        BacktestEngine(config).run(bars, [signal])
+
+    _assert_d1a_rejection_has_no_financial_effect(error.value, config, bars.iloc[1]["timestamp"])
+
+
+def test_d1a_finite_take_profit_with_overflowing_exit_notional_is_rejected():
+    bars = _make_c1_bars((100.0, 101.0, 99.0, 100.0))
+    config = _c1_config(position_size_pct=0.25, taker_fee_pct=0.001)
+    signal = replace(make_test_signal(atr=2.0), tp_atr_multiple=5e307)
+
+    with pytest.raises(BacktestValidationError, match="Take Profit SPOT LONG inválido: notional") as error:
+        BacktestEngine(config).run(bars, [signal])
+
+    traceback = error.value.__traceback__
+    while traceback is not None and traceback.tb_frame.f_code.co_name != "run":
+        traceback = traceback.tb_next
+    assert traceback is not None
+    state = traceback.tb_frame.f_locals
+    assert state["tp_price"] > state["entry_price"] > 0
+    assert state["current_cash"] == config.initial_capital
+    assert state["active_position"] is None
+    assert state["closed_trades"] == []
+    assert "fee_exit" not in state
+
+
+@pytest.mark.parametrize(
+    ("tp_multiple", "slippage", "expected_entry", "expected_target"),
+    [
+        (2.0, 0.0, 100.0, 104.0),
+        (1e-9, 0.0, 100.0, 100.000000002),
+        (0.1, 0.01, 101.0, 101.2),
+    ],
+)
+def test_d1a_valid_take_profit_preserves_next_bar_entry_and_accounting(
+    tp_multiple, slippage, expected_entry, expected_target,
+):
+    bars = _make_c1_bars((100.0, 105.0, 99.0, 104.0))
+    bars.loc[1, ["high", "low", "close"]] = [102.0, 100.0, 101.0]
+    config = _c1_config(position_size_pct=0.25, taker_fee_pct=0.001, slippage_pct=slippage)
+    signal = replace(make_test_signal(atr=2.0), tp_atr_multiple=tp_multiple)
+
+    trades, equity = BacktestEngine(config).run(bars, [signal])
+
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.entry_timestamp == bars.iloc[1]["timestamp"]
+    assert trade.entry_price == pytest.approx(expected_entry)
+    assert trade.tp_price == pytest.approx(expected_target)
+    assert trade.tp_price > trade.entry_price
+    assert trade.size_units > 0
+    assert trade.fee_entry > 0
+    assert trade.fee_exit >= 0
+    assert trade.initial_risk_amount == pytest.approx(
+        trade.size_units * (trade.entry_price - trade.initial_stop_price)
+    )
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(
+        config.initial_capital + trade.net_pnl
+    )
+
+
+def test_d1a_invalid_take_profit_after_closed_trade_preserves_existing_accounting():
+    bars = _make_c1_bars((100.0, 105.0, 99.0, 104.0))
+    bars.loc[3] = [bars.iloc[2]["timestamp"] + pd.Timedelta(hours=1), 100.0,
+                   101.0, 99.0, 100.0, 1000.0]
+    config = _c1_config(taker_fee_pct=0.001)
+    first_signal = make_test_signal(atr=2.0)
+    invalid_signal = replace(
+        make_test_signal(timestamp=str(bars.iloc[2]["timestamp"]), atr=2.0),
+        signal_id="sig-invalid-second",
+        tp_atr_multiple=-50.0,
+    )
+
+    prior_trades, prior_equity = BacktestEngine(config).run(bars.iloc[:3], [first_signal])
+    assert len(prior_trades) == 1
+    assert prior_trades[0].exit_reason == TradeExitReason.TAKE_PROFIT.value
+    assert prior_equity[-1].cash > config.initial_capital
+
+    with pytest.raises(BacktestValidationError, match="Take Profit SPOT LONG inválido") as error:
+        BacktestEngine(config).run(bars, [first_signal, invalid_signal])
+
+    traceback = error.value.__traceback__
+    while traceback is not None and traceback.tb_frame.f_code.co_name != "run":
+        traceback = traceback.tb_next
+    assert traceback is not None
+    state = traceback.tb_frame.f_locals
+    assert state["bar_ts"] == bars.iloc[3]["timestamp"]
+    assert state["current_cash"] == prior_equity[-1].cash
+    assert state["active_position"] is None
+    assert state["closed_trades"] == prior_trades
+    assert state["fee_entry"] == prior_trades[0].fee_entry
+    assert state["fee_exit"] == prior_trades[0].fee_exit
+    assert state["size_units"] == prior_trades[0].size_units
