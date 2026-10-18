@@ -382,3 +382,45 @@ def test_runner_propagates_invalid_take_profit_instead_of_returning_a_report(
         runner.run_backtest(
             symbol="BTCUSDT", interval="1h", df=candles, warmup_bars=200
         )
+
+
+def test_opening_gap_excursions_flow_to_aggregate_metrics_without_changing_pnl():
+    timestamps = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
+    candles = pd.DataFrame({
+        "timestamp": timestamps,
+        "open": [100.0, 100.0, 95.0],
+        "high": [101.0, 101.0, 105.0],
+        "low": [99.0, 99.0, 94.0],
+        "close": [100.0, 100.0, 101.0],
+    })
+    signal = SignalEvent(
+        signal_id="opening-gap-excursions", symbol="BTCUSDT", timeframe="1h",
+        candle_timestamp=timestamps[0], price_at_signal=100.0,
+        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
+        quant_score=100.0, risk_level="BAJO", atr=2.0,
+        poc=100.0, vah=101.0, val=99.0,
+    )
+    config = BacktestConfig(
+        initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0
+    )
+
+    trades, equity = BacktestEngine(config).run(candles, [signal])
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        trades, equity, initial_capital=config.initial_capital
+    )
+
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_price == pytest.approx(95.0)
+    assert trade.mfe_pct == pytest.approx(1.0)
+    assert trade.mae_pct == pytest.approx(5.0)
+    assert metrics["avg_mfe_pct"] == pytest.approx(1.0)
+    assert metrics["avg_mae_pct"] == pytest.approx(5.0)
+    assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert metrics["total_net_pnl"] == pytest.approx(round(trade.net_pnl, 2))
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(
+        config.initial_capital + trade.net_pnl
+    )

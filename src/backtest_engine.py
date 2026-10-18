@@ -290,7 +290,6 @@ class BacktestEngine:
             # -----------------------------------------------------------------
             if active_position is not None:
                 active_position.bars_held += 1
-                active_position.update_excursions(high=bar_high, low=bar_low)
                 is_short_pos = active_position.side == PositionSide.SHORT.value
 
                 # A. Apply Perpetual Funding Fees if applicable (every 8h: 00:00, 08:00, 16:00 UTC)
@@ -313,6 +312,7 @@ class BacktestEngine:
                 active_stop = active_position.sl_price
                 active_target = active_position.tp_price
                 exit_triggered = False
+                opening_exit = False
                 exit_price = bar_close
                 exit_reason = TradeExitReason.TIME_HORIZON.value
 
@@ -323,12 +323,14 @@ class BacktestEngine:
                     if is_preexisting and bar_open <= active_stop:
                         # Adverse gap down: stop-market exit filled at Open with adverse slippage
                         exit_triggered = True
+                        opening_exit = True
                         exit_price = bar_open * (1.0 - self.config.slippage_pct)
                         exit_reason = TradeExitReason.STOP_LOSS.value
 
                     elif is_preexisting and bar_open >= active_target:
                         # Favorable gap up: limit TP filled at target price (no gap improvement, no adverse slippage below limit)
                         exit_triggered = True
+                        opening_exit = True
                         exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
 
@@ -383,6 +385,13 @@ class BacktestEngine:
                         exit_triggered = True
                         exit_price = bar_close * (1.0 + self.config.slippage_pct)
                         exit_reason = TradeExitReason.TIME_HORIZON.value
+
+                # An opening exit has observed only Open(T); High/Low(T) occur
+                # after the position is gone. Other paths retain the OHLC policy.
+                if opening_exit:
+                    active_position.update_excursions(high=bar_open, low=bar_open)
+                else:
+                    active_position.update_excursions(high=bar_high, low=bar_low)
 
                 if exit_triggered:
                     # Describe only what the exit candle can establish. A pre-existing

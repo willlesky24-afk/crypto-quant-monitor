@@ -1435,6 +1435,8 @@ def test_p0_003c_c1_case_i_new_entry_on_current_bar_ignores_gap():
     assert trade.exit_price == pytest.approx(98.0)
     assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
     assert trade.execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+    assert trade.mfe_pct == pytest.approx(5.0)
+    assert trade.mae_pct == pytest.approx(5.0)
 
 
 def test_p0_003c_c1_case_j_slippage_effects_on_stop_and_limit():
@@ -1631,3 +1633,144 @@ def test_d1a_invalid_take_profit_after_closed_trade_preserves_existing_accountin
     assert state["fee_entry"] == prior_trades[0].fee_entry
     assert state["fee_exit"] == prior_trades[0].fee_exit
     assert state["size_units"] == prior_trades[0].size_units
+
+
+@pytest.mark.parametrize(
+    ("exit_bar", "exit_reason", "exit_price", "mfe_pct", "mae_pct"),
+    [
+        ((95.0, 105.0, 94.0, 101.0), TradeExitReason.STOP_LOSS.value, 95.0, 1.0, 5.0),
+        ((106.0, 107.0, 97.0, 100.0), TradeExitReason.TAKE_PROFIT.value, 104.0, 6.0, 1.0),
+    ],
+)
+def test_d1b1_opening_exit_uses_open_not_later_extremes(
+    exit_bar, exit_reason, exit_price, mfe_pct, mae_pct,
+):
+    bars = _make_c1_bars(exit_bar)
+    config = _c1_config(taker_fee_pct=0.001)
+    trades, equity = BacktestEngine(config).run(bars, [make_test_signal(atr=2.0)])
+
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.entry_timestamp == bars.iloc[1]["timestamp"]
+    assert trade.exit_timestamp == bars.iloc[2]["timestamp"]
+    assert trade.exit_reason == exit_reason
+    assert trade.execution_trace_status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
+    assert trade.entry_price == pytest.approx(100.0)
+    assert trade.exit_price == pytest.approx(exit_price)
+    assert trade.mfe_pct == pytest.approx(mfe_pct)
+    assert trade.mae_pct == pytest.approx(mae_pct)
+    assert trade.fee_entry == pytest.approx(1.0)
+    assert trade.fee_exit == pytest.approx(trade.notional_exit * config.taker_fee_pct)
+    assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
+    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(
+        config.initial_capital + trade.net_pnl
+    )
+
+
+def test_d1b1_opening_gap_preserves_previous_candle_excursions():
+    bars = _make_c1_bars((100.0, 103.0, 98.5, 101.0))
+    bars.loc[3] = [bars.iloc[2]["timestamp"] + pd.Timedelta(hours=1),
+                   95.0, 110.0, 94.0, 100.0, 1000.0]
+
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.exit_timestamp == bars.iloc[3]["timestamp"]
+    assert trade.exit_price == pytest.approx(95.0)
+    assert trade.mfe_pct == pytest.approx(3.0)  # High=103 from prior surviving bar.
+    assert trade.mae_pct == pytest.approx(5.0)  # Open=95, not later Low=94.
+
+
+def test_d1b1_stop_gap_slippage_does_not_turn_fill_into_market_excursion():
+    bars = _make_c1_bars((95.0, 110.0, 94.0, 101.0))
+    bars.loc[1, ["high", "low", "close"]] = [102.0, 100.0, 101.0]
+    config = _c1_config(slippage_pct=0.01, taker_fee_pct=0.001)
+
+    trades, equity = BacktestEngine(config).run(bars, [make_test_signal(atr=2.0)])
+
+    trade = trades[0]
+    assert trade.entry_price == pytest.approx(101.0)
+    assert trade.sl_price == pytest.approx(99.0)
+    assert trade.exit_price == pytest.approx(94.05)  # Modelled fill below Open=95.
+    assert trade.mfe_pct == pytest.approx((102.0 - 101.0) / 101.0 * 100.0)
+    assert trade.mae_pct == pytest.approx((101.0 - 95.0) / 101.0 * 100.0)
+    assert equity[-1].cash == equity[-1].equity == pytest.approx(
+        config.initial_capital + trade.net_pnl
+    )
+
+
+def test_d1b1_trailing_stop_gap_keeps_initial_risk_and_ignores_later_high():
+    bars = _make_c1_bars((99.0, 110.0, 98.0, 100.0))
+    bars.loc[1, ["high", "low", "close"]] = [103.0, 99.5, 102.0]
+    config = _c1_config(enable_trailing_stop=True, trailing_stop_activation_r=1.0)
+
+    trades, _ = BacktestEngine(config).run(bars, [make_test_signal(atr=2.0)])
+
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_price == pytest.approx(99.0)
+    assert trade.sl_price == pytest.approx(100.0)
+    assert trade.initial_stop_price == pytest.approx(98.0)
+    assert trade.initial_risk_amount == pytest.approx(20.0)
+    assert trade.r_multiple == pytest.approx(-0.5)
+    assert trade.mfe_pct == pytest.approx(3.0)
+    assert trade.mae_pct == pytest.approx(1.0)
+
+
+def test_d1b1_surviving_bar_and_horizon_keep_full_ohlc_excursions(monkeypatch):
+    bars = _make_c1_bars((100.0, 103.0, 98.5, 101.0))
+    bars.loc[3] = [bars.iloc[2]["timestamp"] + pd.Timedelta(hours=1),
+                   100.0, 102.0, 99.0, 101.0, 1000.0]
+    observed_ranges = []
+    original_update = Position.update_excursions
+
+    def record_range(self, high, low):
+        observed_ranges.append((high, low))
+        return original_update(self, high, low)
+
+    monkeypatch.setattr(Position, "update_excursions", record_range)
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+
+    assert observed_ranges == [(101.0, 99.0), (103.0, 98.5), (102.0, 99.0)]
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.TIME_HORIZON.value
+    assert trade.exit_timestamp == bars.iloc[3]["timestamp"]
+    assert trade.exit_price == pytest.approx(101.0)
+    assert trade.mfe_pct == pytest.approx(3.0)
+    assert trade.mae_pct == pytest.approx(1.5)
+
+
+def test_d1b1_intrabar_conflict_retains_existing_sl_first_policy():
+    bars = _make_c1_bars((100.0, 105.0, 95.0, 101.0))
+
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+
+    trade = trades[0]
+    assert trade.exit_reason == TradeExitReason.STOP_LOSS.value
+    assert trade.exit_price == pytest.approx(98.0)
+    assert trade.execution_trace_status == ExecutionTraceStatus.INTRABAR_SL_FIRST.value
+    assert trade.mfe_pct == pytest.approx(5.0)
+    assert trade.mae_pct == pytest.approx(5.0)
+
+
+@pytest.mark.parametrize("opening_price", [95.0, 106.0])
+def test_d1b1_opening_exit_updates_excursions_once_with_open_only(
+    monkeypatch, opening_price,
+):
+    bars = _make_c1_bars((opening_price, 107.0, 94.0, 100.0))
+    observed_ranges = []
+    original_update = Position.update_excursions
+
+    def record_range(self, high, low):
+        observed_ranges.append((high, low))
+        return original_update(self, high, low)
+
+    monkeypatch.setattr(Position, "update_excursions", record_range)
+    trades, _ = BacktestEngine(_c1_config()).run(bars, [make_test_signal(atr=2.0)])
+
+    assert len(trades) == 1
+    assert trades[0].exit_timestamp == bars.iloc[2]["timestamp"]
+    assert observed_ranges == [(101.0, 99.0), (opening_price, opening_price)]
