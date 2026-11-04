@@ -66,6 +66,12 @@ try:
     )
     from src.operator_service.interfaces import InMemoryMarketContextProvider
     from src.operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
+    from src.position_sizing import (
+        PositionSizingError,
+        compute_position_plan,
+        quote_to_usd,
+        stop_from_atr,
+    )
     from src.predictive_engine import PredictiveEngine
     from src.quant_score import QuantScore
     from src.regime_classifier import RegimeClassifier
@@ -115,6 +121,12 @@ except ImportError:
     )
     from operator_service.interfaces import InMemoryMarketContextProvider
     from operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
+    from position_sizing import (
+        PositionSizingError,
+        compute_position_plan,
+        quote_to_usd,
+        stop_from_atr,
+    )
     from predictive_engine import PredictiveEngine
     from quant_score import QuantScore
     from regime_classifier import RegimeClassifier
@@ -867,15 +879,107 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs(
+tab_live, tab_risk, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs(
     [
         "📡 Live Monitor",
+        "🛡️ Calculadora de Riesgo",
         "🤖 AI Copilot",
         "📈 Backtest Analytics",
         "⚙️ Notification Settings",
         "📖 Guía & Glosario",
     ]
 )
+
+
+# =====================================================================
+# TAB: CALCULADORA DE RIESGO (v3.1)
+# =====================================================================
+with tab_risk:
+    st.subheader("🛡️ ¿Cuánto puedo operar sin arriesgar de más?")
+    st.caption(
+        f"{symbol}: elige cuánto aceptas perder y calculamos el tamaño. Es información "
+        "de tamaño, no una recomendación de entrar. Cuenta en USD y sin apalancamiento."
+    )
+    last_bar = df.iloc[-1]
+    last_close = float(last_bar["close"])
+    last_atr = float(last_bar["atr"])
+    is_forex_symbol = symbol.endswith("=X")
+
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        risk_capital = st.number_input(
+            "Capital de tu cuenta (USD)", min_value=0.0, value=1000.0, step=100.0
+        )
+        risk_pct = st.number_input(
+            "¿Qué % del capital aceptas perder si sale mal?",
+            min_value=0.0,
+            max_value=100.0,
+            value=1.0,
+            step=0.25,
+        )
+        risk_side_label = st.radio(
+            "Tu idea",
+            ["Comprar (LONG)", "Vender (SHORT)"],
+            horizontal=True,
+        )
+        risk_side = "SHORT" if "SHORT" in risk_side_label else "LONG"
+    with r_col2:
+        risk_entry = st.number_input(
+            "Precio de entrada", min_value=0.0, value=last_close, format="%.5f"
+        )
+        risk_atr_mult = st.number_input(
+            f"Distancia del stop en ATR (ATR actual: {last_atr:.5f})",
+            min_value=0.0,
+            value=2.0,
+            step=0.25,
+        )
+        risk_fee = st.number_input(
+            "Comisión por lado (%)",
+            min_value=0.0,
+            value=0.0 if is_forex_symbol else 0.05,
+            step=0.01,
+            format="%.3f",
+        )
+
+    if "spread" in df.columns and math.isfinite(float(last_bar["spread"])):
+        risk_spread = float(last_bar["spread"])
+        spread_note = f"Spread real de la última vela: {risk_spread:.5f}."
+    else:
+        risk_spread = 0.0
+        spread_note = "Este proveedor no da spread: el cálculo no lo incluye."
+
+    try:
+        risk_stop = stop_from_atr(risk_entry, last_atr, risk_atr_mult, risk_side)
+        risk_plan = compute_position_plan(
+            capital=risk_capital,
+            risk_pct=risk_pct,
+            entry_price=risk_entry,
+            stop_price=risk_stop,
+            side=risk_side,
+            spread=risk_spread,
+            fee_pct=risk_fee,
+            quote_to_account=quote_to_usd(symbol, risk_entry),
+        )
+    except PositionSizingError as exc:
+        st.error(f"No se puede calcular: {exc}")
+    else:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Tamaño (unidades)", f"{risk_plan.units:,.4f}")
+        m2.metric("Valor de la posición", f"${risk_plan.notional:,.2f}")
+        m3.metric("Pérdida si toca el stop", f"${risk_plan.max_loss:,.2f}")
+        m4.metric("Costos incluidos", f"${risk_plan.costs:,.2f}")
+        st.write(
+            f"Stop en **{risk_stop:.5f}**, a {risk_plan.stop_distance_pct:.2f} % de la "
+            f"entrada. {spread_note}"
+        )
+        if risk_plan.limited_by_capital:
+            st.warning(
+                "Tu capital no alcanza para arriesgar ese %, porque no usamos "
+                "apalancamiento. El tamaño se limitó a tu capital y arriesgas menos."
+            )
+        st.info(
+            "El stop no es una garantía: con un salto de precio la pérdida puede ser mayor."
+        )
 
 
 # =====================================================================
