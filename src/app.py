@@ -43,6 +43,7 @@ try:
     )
     from src.backtest_runner import BacktestRunner
     from src.constants import LIVE_HISTORY_BARS
+    from src.daily_summary import build_market_summary
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
     from src.engine import MarketEngine
@@ -98,6 +99,7 @@ except ImportError:
     )
     from backtest_runner import BacktestRunner
     from constants import LIVE_HISTORY_BARS
+    from daily_summary import build_market_summary
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
     from engine import MarketEngine
@@ -993,6 +995,13 @@ with tab_live:
     signal = signal_engine.evaluate(analysis, profile)
     risk_engine = RiskEngine()
     risk = risk_engine.evaluate(analysis, profile)
+    summary = build_market_summary(
+        symbol, df, analysis, profile, RegimeClassifier().classify(df).regime
+    )
+    with st.expander("☀️ ¿Qué está pasando hoy?", expanded=True):
+        for summary_line in summary["lines"]:
+            st.write(summary_line)
+        st.caption("Descripción del mercado, no una recomendación de operar.")
     intel_engine = MarketIntelligence()
     intel = intel_engine.evaluate(analysis)
     quant_score_engine = QuantScore()
