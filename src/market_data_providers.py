@@ -284,16 +284,10 @@ class OandaProvider:
         self.host = self.HOSTS[env]
         self.timeout_seconds = timeout_seconds
 
-    def get_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame:
-        key = _check_interval(interval, self.INTERVALS)
-        sym = provider_symbol(symbol, self.name)
+    def _request_candles(self, sym: str, params: dict[str, Any]) -> list[Any]:
         query = urllib.parse.urlencode(
-            {
-                "granularity": self.INTERVALS[key],
-                "count": min(int(limit) + 1, _MAX_COUNT),
-                # Mid for analysis plus bid/ask for the executable spread (v2.3 D2).
-                "price": "MBA",
-            }
+            # Mid for analysis plus bid/ask for the executable spread (v2.3 D2).
+            {**params, "price": "MBA"}
         )
         req = urllib.request.Request(
             f"{self.host}/v3/instruments/{sym}/candles?{query}",
@@ -307,6 +301,11 @@ class OandaProvider:
             if msg:
                 raise ForexProviderUnavailableError(f"OANDA error for {sym}: {msg}")
             raise ForexInvalidDataError(f"No Forex candles returned for {sym}")
+        return candles
+
+    def _candles_to_frame(
+        self, candles: list[Any], symbol: str, sym: str
+    ) -> pd.DataFrame:
         records = []
         for c in candles:
             if not isinstance(c, dict):
@@ -349,9 +348,75 @@ class OandaProvider:
         df.attrs["spread_kind"] = (
             "bid_ask_open_close_mean" if "spread" in df.columns else "none"
         )
-        df = drop_weekend_closure(df)
+        return drop_weekend_closure(df)
+
+    def get_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame:
+        key = _check_interval(interval, self.INTERVALS)
+        sym = provider_symbol(symbol, self.name)
+        candles = self._request_candles(
+            sym,
+            {
+                "granularity": self.INTERVALS[key],
+                "count": min(int(limit) + 1, _MAX_COUNT),
+            },
+        )
+        df = self._candles_to_frame(candles, symbol, sym)
         attrs = dict(df.attrs)
         df = df.iloc[-int(limit) :].reset_index(drop=True)
+        df.attrs.update(attrs)
+        return df
+
+    def get_history(
+        self,
+        symbol: str,
+        interval: str,
+        start: str | pd.Timestamp,
+        end: str | pd.Timestamp,
+    ) -> pd.DataFrame:
+        """Closed candles in [start, end] paged forward with ``from`` + ``count``.
+
+        OANDA returns at most 5000 candles per request; each page starts at the
+        last received candle time (inclusive) and duplicates are removed.
+        """
+        key = _check_interval(interval, self.INTERVALS)
+        sym = provider_symbol(symbol, self.name)
+        start_ts = pd.Timestamp(start)
+        start_ts = start_ts.tz_localize("UTC") if start_ts.tzinfo is None else start_ts
+        end_ts = pd.Timestamp(end)
+        end_ts = end_ts.tz_localize("UTC") if end_ts.tzinfo is None else end_ts
+        if end_ts <= start_ts:
+            raise ForexInvalidDataError("get_history: end debe ser posterior a start.")
+        collected: list[Any] = []
+        cursor = start_ts
+        while cursor < end_ts:
+            page = self._request_candles(
+                sym,
+                {
+                    "granularity": self.INTERVALS[key],
+                    "from": cursor.strftime("%Y-%m-%dT%H:%M:%S.000000000Z"),
+                    "count": _MAX_COUNT,
+                },
+            )
+            page = [c for c in page if isinstance(c, dict)]
+            if not page:
+                break
+            last = pd.Timestamp(page[-1].get("time"))
+            collected.extend(page)
+            if last <= cursor:
+                break
+            cursor = last
+        if not collected:
+            raise ForexInvalidDataError(f"No Forex candles returned for {sym}")
+        seen: set[Any] = set()
+        unique = []
+        for c in collected:
+            if c.get("time") not in seen:
+                seen.add(c.get("time"))
+                unique.append(c)
+        df = self._candles_to_frame(unique, symbol, sym)
+        attrs = dict(df.attrs)
+        df = df[(df["timestamp"] >= start_ts) & (df["timestamp"] <= end_ts)]
+        df = df.reset_index(drop=True)
         df.attrs.update(attrs)
         return df
 

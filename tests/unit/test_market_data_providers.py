@@ -7,6 +7,7 @@ synthetic fixtures, not authenticated market history.
 from __future__ import annotations
 
 import json
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -371,3 +372,50 @@ def test_oanda_negative_spread_is_invalid(monkeypatch):
     _mock_urlopen(monkeypatch, payload)
     with pytest.raises(ForexInvalidDataError, match="spread"):
         OandaProvider(token="tok").get_klines("EURUSD=X", "1h", 5)
+
+
+# --- v3.0 D3: OANDA history paging -------------------------------------------------
+
+
+def test_oanda_history_pages_forward_and_dedupes(monkeypatch):
+    # 12 hourly candles from 2026-11-02 00:00 (Monday). Pages of at most 5
+    # candles starting at the requested 'from' (inclusive): 0-4, 4-8, 8-11.
+    all_times = pd.date_range("2026-11-02 00:00", periods=12, freq="1h", tz="UTC")
+    calls = []
+
+    def urlopen(req, timeout):
+        q = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(req.full_url).query))
+        calls.append(q)
+        start = pd.Timestamp(q["from"])
+        page = [t for t in all_times if t >= start][:5]
+        payload = {
+            "candles": [
+                {
+                    "complete": True,
+                    "volume": 1,
+                    "time": t.strftime("%Y-%m-%dT%H:%M:%S.000000000Z"),
+                    "mid": {"o": "1.1", "h": "1.2", "l": "1.0", "c": "1.1"},
+                }
+                for t in page
+            ]
+        }
+        resp = MagicMock()
+        resp.read.return_value = json.dumps(payload).encode()
+        cm = MagicMock()
+        cm.__enter__.return_value = resp
+        return cm
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    df = OandaProvider(token="tok").get_history(
+        "EURUSD=X", "1h", "2026-11-02 00:00", "2026-11-02 11:00"
+    )
+    assert list(df["timestamp"]) == list(all_times)
+    assert calls[0]["from"].startswith("2026-11-02T00:00:00")
+    assert len(calls) >= 3
+
+
+def test_oanda_history_rejects_inverted_range():
+    with pytest.raises(ForexInvalidDataError, match="posterior"):
+        OandaProvider(token="tok").get_history(
+            "EURUSD=X", "1h", "2026-01-02", "2026-01-01"
+        )
