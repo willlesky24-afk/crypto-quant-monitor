@@ -7,7 +7,56 @@ import pandas as pd
 import pytest
 
 from src.backtest_metrics import CRYPTO_24_7_PERIODS, BacktestMetricsCalculator
-from src.backtest_models import EquityPoint, TradeResult
+from src.backtest_models import EXCURSION_POLICY_VERSION, EquityPoint, TradeResult
+
+
+def test_exact_excursion_aggregates_are_independent_and_never_use_proxies():
+    base = make_verified_spot_trade("a", 40.0, 38.0, 40.0)
+    mfe_only = replace(
+        base, trade_id="mfe", mfe_pct=999.0, mae_pct=999.0,
+        excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC", mfe_exact_pct=2.0,
+        mae_observability="BOUNDED_OHLC", mae_lower_bound_pct=0.0,
+        mae_upper_bound_pct=3.0,
+    )
+    mae_only = replace(
+        base, trade_id="mae", excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="BOUNDED_OHLC", mfe_lower_bound_pct=0.0,
+        mfe_upper_bound_pct=4.0, mae_observability="EXACT_OHLC", mae_exact_pct=1.0,
+    )
+    both = replace(
+        base, trade_id="both", excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC", mfe_exact_pct=4.0,
+        mae_observability="EXACT_OHLC", mae_exact_pct=2.0,
+    )
+    metrics = BacktestMetricsCalculator.calculate_metrics(
+        [mfe_only, mae_only, both, base], [], 10_000.0
+    )
+    assert metrics["mfe_coverage_status"] == metrics["mae_coverage_status"] == "PARTIAL"
+    assert metrics["mfe_exact_trades"] == metrics["mae_exact_trades"] == 2
+    assert metrics["mfe_exact_denominator"] == metrics["mae_exact_denominator"] == 2
+    assert metrics["mfe_total_trades"] == metrics["mae_total_trades"] == 4
+    assert metrics["mfe_exact_avg_pct"] == pytest.approx(3.0)
+    assert metrics["mae_exact_avg_pct"] == pytest.approx(1.5)
+    assert metrics["avg_mfe_pct"] != metrics["mfe_exact_avg_pct"]
+
+
+def test_exact_excursion_coverage_complete_none_and_no_trades():
+    base = make_verified_spot_trade("a", 40.0, 38.0, 40.0)
+    both = replace(
+        base, excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC", mfe_exact_pct=0.0,
+        mae_observability="EXACT_OHLC", mae_exact_pct=1.0,
+    )
+    complete = BacktestMetricsCalculator.calculate_metrics([both], [], 10_000.0)
+    none = BacktestMetricsCalculator.calculate_metrics([base], [], 10_000.0)
+    empty = BacktestMetricsCalculator.calculate_metrics([], [], 10_000.0)
+    assert complete["mfe_coverage_status"] == complete["mae_coverage_status"] == "COMPLETE"
+    assert complete["mfe_exact_avg_pct"] == 0.0  # A measured zero is not missing.
+    assert none["mfe_coverage_status"] == none["mae_coverage_status"] == "NONE"
+    assert none["mfe_exact_avg_pct"] is None and none["mae_exact_avg_pct"] is None
+    assert empty["mfe_coverage_status"] == empty["mae_coverage_status"] == "NO_TRADES"
+    assert empty["mfe_exact_avg_pct"] is None and empty["mae_exact_avg_pct"] is None
 
 
 def create_sample_trade(

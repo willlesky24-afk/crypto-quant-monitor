@@ -9,14 +9,61 @@ import pytest
 
 from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
     BacktestConfig,
     BacktestValidationError,
     DatasetProvenance,
+    OptimizationUnavailableError,
 )
 from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
 from src.historical_data_loader import HistoricalDataLoader
 from src.parquet_store import ParquetStore
+from src.regime_classifier import MarketRegime
+from src.strategy_optimizer import OptimizedParameters
+
+
+def _verified_calibration_for_all_regimes():
+    return {
+        regime.value: OptimizedParameters(
+            regime=regime.value, volatility_state="NORMAL",
+            atr_tp_multiplier=3.0, atr_sl_multiplier=1.5,
+            expected_rr=2.0, sample_size=20, confidence=0.8,
+            validation_period={}, calibration_state="AVAILABLE",
+            excursion_policy_version=EXCURSION_POLICY_VERSION,
+        )
+        for regime in MarketRegime
+    }
+
+
+def test_runner_calibration_intent_is_explicit_and_fails_closed(make_synthetic_candles):
+    runner = BacktestRunner(predictive_mode=True)
+    candles = make_synthetic_candles(periods=220, freq="1h", base_price=100.0)
+    for unavailable in (None, {}):
+        with pytest.raises(OptimizationUnavailableError, match="no hay parámetros"):
+            runner.run_backtest(df=candles, predictive_mode=True,
+                                calibrated_params=unavailable, calibration_required=True)
+    plain = runner.run_backtest(df=candles, predictive_mode=True, calibrated_params={})
+    assert plain.calibration_state == "NOT_REQUESTED"
+    exact = _verified_calibration_for_all_regimes()
+    report = runner.run_backtest(df=candles, predictive_mode=True,
+                                 calibrated_params=exact, calibration_required=True)
+    assert report.calibration_state == "AVAILABLE"
+    assert report.metrics["calibration_state"] == "AVAILABLE"
+    with pytest.raises(OptimizationUnavailableError, match="faltan parámetros"):
+        runner.run_backtest(df=candles, predictive_mode=True,
+                            calibrated_params={"UNSEEN": next(iter(exact.values()))},
+                            calibration_required=True)
+
+
+def test_ui_clears_previous_report_when_requested_calibration_is_rejected(make_synthetic_candles):
+    helper = _load_ui_backtest_helper()
+    state = {"backtest_report": object()}
+    candles = make_synthetic_candles(periods=220, freq="1h", base_price=100.0)
+    with pytest.raises(OptimizationUnavailableError):
+        helper(BacktestConfig(), candles, "BTCUSDT", "1h", state,
+               calibrated_params={}, calibration_required=True)
+    assert "backtest_report" not in state
 
 
 def test_backtest_runner_empty_and_insufficient_warmup(tmp_path: Path):

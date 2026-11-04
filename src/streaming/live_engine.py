@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from src.backtest_models import CalibrationState, OptimizationUnavailableError
 from src.decision_engine import DecisionEngine, DecisionResult
 from src.engine import MarketEngine
 from src.indicators import TechnicalIndicators
@@ -40,11 +41,26 @@ class LiveExecutionEngine:
         calibrated_params: dict[str, Any] | None = None,
         predictive_mode: bool = True,
         warm_up_bars: int = 200,
+        calibration_required: bool = False,
     ) -> None:
         self.symbol = symbol.strip().upper()
         self.interval = interval.strip().lower()
         self.dispatcher = dispatcher
-        self.calibrated_params = calibrated_params or {}
+        # The explicit request flag is the source of truth. None and {} remain
+        # legitimate on legacy, uncalibrated calls but cannot satisfy a request.
+        self.calibration_required = calibration_required
+        self.calibrated_params = calibrated_params
+        if calibration_required and (not isinstance(calibrated_params, dict) or not calibrated_params):
+            raise OptimizationUnavailableError("Optimización no disponible: no hay parámetros calibrados.")
+        if calibration_required and not predictive_mode:
+            raise OptimizationUnavailableError("Optimización no disponible: modo predictivo desactivado.")
+        if calibration_required:
+            for params in calibrated_params.values():
+                DecisionEngine.validate_calibration_params(params, required=True)
+        self.calibration_state = (
+            CalibrationState.AVAILABLE.value if calibration_required
+            else CalibrationState.NOT_REQUESTED.value
+        )
         self.predictive_mode = predictive_mode
         self.warm_up_bars = warm_up_bars
 
@@ -100,6 +116,11 @@ class LiveExecutionEngine:
         Returns:
             Tuple of (SignalEvent, DecisionResult, list[NotificationResult])
         """
+        if self.calibration_required:
+            # A rejected new bar must not expose an earlier calibrated decision
+            # as though it belonged to the rejected observation.
+            self._last_decision = None
+            self._last_signal = None
         # 1. Warm-up verification
         if len(df) < self.warm_up_bars:
             logger.info(
@@ -127,6 +148,10 @@ class LiveExecutionEngine:
             pred_res = self.predictive_engine.evaluate(df_enriched, current_regime_res=regime_res)
 
             opt_param = self.calibrated_params.get(regime_res.regime.value) if self.calibrated_params else None
+            if self.calibration_required and opt_param is None:
+                raise OptimizationUnavailableError(
+                    f"Optimización no disponible: faltan parámetros para {regime_res.regime.value}."
+                )
 
             decision = self.decision_engine.evaluate(
                 signal=signal,
@@ -134,6 +159,7 @@ class LiveExecutionEngine:
                 intelligence=intel,
                 predictive=pred_res,
                 optimized_params=opt_param,
+                calibration_required=self.calibration_required,
                 regime=regime_res.regime,
                 technical_score=score["score"],
                 predictive_mode=True,

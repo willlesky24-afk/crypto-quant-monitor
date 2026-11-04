@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pandas as pd
 import pytest
 
-from src.backtest_models import BacktestConfig, BacktestReport, TradeResult
+from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
+    BacktestConfig,
+    BacktestReport,
+    ExcursionObservability,
+    OptimizationUnavailableError,
+    TradeResult,
+)
 from src.regime_classifier import MarketRegime
 from src.strategy_optimizer import (
     MFEMAEDistribution,
@@ -22,7 +30,7 @@ def make_synthetic_trades(
     mae_mean: float = 1.5,
     seed: int = 42,
 ) -> list[TradeResult]:
-    """Generates synthetic TradeResult items with specified regime and timestamp range."""
+    """Synthetic exact-OHLC evidence fixtures; not authenticated market history."""
     import numpy as np
 
     rng = np.random.default_rng(seed)
@@ -67,12 +75,16 @@ def make_synthetic_trades(
             exit_reason="TAKE_PROFIT" if is_win else "STOP_LOSS",
             mfe_pct=mfe_pct,
             mae_pct=mae_pct,
+            excursion_policy_version=EXCURSION_POLICY_VERSION,
+            mfe_observability=ExcursionObservability.EXACT_OHLC.value,
+            mae_observability=ExcursionObservability.EXACT_OHLC.value,
+            mfe_exact_pct=mfe_pct,
+            mae_exact_pct=mae_pct,
+            atr_entry=entry_price * 0.015,
             is_win=is_win,
         )
         # Attach regime attribute dynamically
         object.__setattr__(t, "regime", regime)
-        # Entry ATR simulated around 1.5% of price
-        object.__setattr__(t, "atr_entry", entry_price * 0.015)
         trades.append(t)
 
     return trades
@@ -80,16 +92,14 @@ def make_synthetic_trades(
 
 def test_strategy_optimizer_empty_trades_and_distribution():
     optimizer = StrategyOptimizer()
-    dist = optimizer.analyze_distribution([])
-
+    with pytest.raises(OptimizationUnavailableError, match="NO_TRADES"):
+        optimizer.analyze_distribution([])
+    with pytest.raises(OptimizationUnavailableError, match="NO_TRADES"):
+        optimizer.optimize_all_regimes([])
+    dist = optimizer.analyze_distribution(make_synthetic_trades(n_trades=2))
     assert isinstance(dist, MFEMAEDistribution)
-    assert dist.sample_size == 0
-    assert dist.mfe_median == 0.0
-    assert dist.mae_median == 0.0
-    assert dist.win_rate_pct == 0.0
-
-    d = dist.to_dict()
-    assert d["sample_size"] == 0
+    assert dist.sample_size == 2
+    assert dist.to_dict()["sample_size"] == 2
 
 
 def test_strategy_optimizer_determinism():
@@ -131,20 +141,13 @@ def test_strategy_optimizer_respects_bounds():
     assert res_tiny.atr_sl_multiplier >= 1.0
 
 
-def test_strategy_optimizer_small_sample_penalty():
-    """Validates small sample handling: confidence penalty and fallback to defaults."""
+def test_strategy_optimizer_small_sample_is_unavailable_without_defaults():
+    """A requested optimization cannot substitute regime defaults for evidence."""
     optimizer = StrategyOptimizer(min_sample_size=15)
     few_trades = make_synthetic_trades(n_trades=4, seed=55)
 
-    res = optimizer.optimize_regime(MarketRegime.TRENDING_BULL, few_trades)
-
-    assert res.sample_size == 4
-    assert res.confidence < 0.30
-    assert res.validation_period["status"] == "insufficient_training_sample"
-    assert res.validation_period["penalty_applied"] is True
-    # Default for TRENDING_BULL is 3.5 / 1.5
-    assert res.atr_tp_multiplier == 3.5
-    assert res.atr_sl_multiplier == 1.5
+    with pytest.raises(OptimizationUnavailableError, match="inferior al mínimo"):
+        optimizer.optimize_regime(MarketRegime.TRENDING_BULL, few_trades)
 
 
 def test_strategy_optimizer_separation_by_regime():
@@ -278,18 +281,18 @@ def test_strategy_optimizer_with_candles():
 
     optimizer = StrategyOptimizer()
     # Trades without explicit regime
-    trades = make_synthetic_trades(n_trades=10, regime="", seed=888)
+    trades = make_synthetic_trades(n_trades=20, regime="", seed=888)
     # Assign entry_timestamp to match candles
     for i, t in enumerate(trades):
-        object.__setattr__(t, "signal_timestamp", candles["timestamp"].iloc[55 + i])
-        object.__setattr__(t, "entry_timestamp", candles["timestamp"].iloc[56 + i])
+        object.__setattr__(t, "signal_timestamp", candles["timestamp"].iloc[40 + i])
+        object.__setattr__(t, "entry_timestamp", candles["timestamp"].iloc[41 + i])
 
     results = optimizer.optimize_all_regimes(trades, candles=candles)
     assert isinstance(results, dict)
     assert any(res.sample_size > 0 for res in results.values())
 
 
-def test_strategy_optimizer_edge_cases_and_fallbacks():
+def test_strategy_optimizer_edge_cases_and_only_statistical_fallback():
     optimizer = StrategyOptimizer(min_sample_size=10)
 
     # 1. Trade without to_dict or dict (custom object)
@@ -302,8 +305,8 @@ def test_strategy_optimizer_edge_cases_and_fallbacks():
         atr_entry = 0.0
 
     raw = RawTrade()
-    res = optimizer.analyze_distribution([raw])
-    assert res.sample_size == 1
+    with pytest.raises(OptimizationUnavailableError, match="heredada"):
+        optimizer.analyze_distribution([raw])
 
     # 2. Trade without timestamps
     train_set, val_set = optimizer.split_walk_forward([{"trade_id": "no_ts"}])
@@ -326,5 +329,54 @@ def test_strategy_optimizer_edge_cases_and_fallbacks():
 
     res_report = optimizer.optimize_from_report(LegacyReport())
     assert MarketRegime.TRENDING_BULL.value in res_report
+
+
+@pytest.mark.parametrize("field,value", [
+    ("mfe_observability", "BOUNDED_OHLC"),
+    ("mae_observability", "UNDETERMINED"),
+    ("excursion_policy_version", None),
+    ("mfe_exact_pct", None),
+    ("mae_exact_pct", float("nan")),
+    ("atr_entry", 0.0),
+    ("atr_entry", float("inf")),
+])
+def test_optimizer_rejects_incomplete_cohort_without_proxy_or_zero(field, value):
+    trades = make_synthetic_trades(n_trades=12)
+    contaminated = replace(trades[0], **{field: value})
+    with pytest.raises(OptimizationUnavailableError, match="Optimización no disponible"):
+        StrategyOptimizer().optimize_regime("TRENDING_BULL", [contaminated, *trades[1:]])
+
+
+def test_optimizer_uses_exact_fields_not_legacy_proxies_and_preserves_formula():
+    trades = make_synthetic_trades(n_trades=12, mfe_mean=4.0, mae_mean=1.5)
+    altered = [replace(t, mfe_pct=1000.0, mae_pct=1000.0) for t in trades]
+    optimizer = StrategyOptimizer()
+    baseline = optimizer.optimize_regime("TRENDING_BULL", trades)
+    with_wrong_proxies = optimizer.optimize_regime("TRENDING_BULL", altered)
+    assert baseline.atr_tp_multiplier == with_wrong_proxies.atr_tp_multiplier
+    assert baseline.atr_sl_multiplier == with_wrong_proxies.atr_sl_multiplier
+    assert baseline.calibration_state == "AVAILABLE"
+    assert baseline.excursion_policy_version == EXCURSION_POLICY_VERSION
+    dist = optimizer.analyze_distribution(trades)
+    assert dist.mfe_median == pytest.approx(
+        pd.Series([t.mfe_exact_pct / 1.5 for t in trades]).median()
+    )
+
+
+def test_optimizer_legacy_dict_never_becomes_exact_evidence():
+    exact = make_synthetic_trades(n_trades=12)
+    legacy = exact[0].to_dict()
+    for key in ("excursion_policy_version", "mfe_observability", "mae_observability",
+                "mfe_exact_pct", "mae_exact_pct"):
+        legacy.pop(key)
+    with pytest.raises(OptimizationUnavailableError, match="heredada"):
+        StrategyOptimizer().optimize_regime("TRENDING_BULL", [legacy, *exact[1:]])
+
+
+def test_optimizer_rejects_overflowing_atr_scale():
+    trades = make_synthetic_trades(n_trades=12)
+    extreme = replace(trades[0], entry_price=1e-300, atr_entry=1e300)
+    with pytest.raises(OptimizationUnavailableError, match="escala ATR"):
+        StrategyOptimizer().optimize_regime("TRENDING_BULL", [extreme, *trades[1:]])
 
 

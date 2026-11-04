@@ -3,15 +3,84 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 
-from src.backtest_models import BacktestConfig
+from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
+    BacktestConfig,
+    OptimizationUnavailableError,
+)
 from src.backtest_runner import BacktestRunner
 from src.notifications.channels.discord import DiscordWebhookChannel
 from src.notifications.channels.telegram import TelegramChannel
 from src.notifications.dispatcher import NotificationDispatcher
+from src.regime_classifier import MarketRegime
+from src.strategy_optimizer import OptimizedParameters
 from src.streaming.candle_aggregator import CandleAggregator, KlineEvent
 from src.streaming.live_engine import LiveExecutionEngine
 from src.streaming.websocket_client import BinanceWebSocketClient
+
+
+def _parity_calibrations():
+    return {
+        regime.value: OptimizedParameters(
+            regime=regime.value, volatility_state="NORMAL",
+            atr_tp_multiplier=4.0, atr_sl_multiplier=2.0,
+            expected_rr=2.0, sample_size=20, confidence=0.8,
+            validation_period={}, calibration_state="AVAILABLE",
+            excursion_policy_version=EXCURSION_POLICY_VERSION,
+        ) for regime in MarketRegime
+    }
+
+
+@pytest.mark.parametrize("required, expected", [(False, (3.0, 1.5)), (True, (4.0, 2.0))])
+def test_last_closed_bar_parity_for_explicit_calibration_intent(make_synthetic_candles, required, expected):
+    candles = make_synthetic_candles(start="2025-01-01", periods=225, freq="1h", base_price=50000.0)
+    params = _parity_calibrations() if required else None
+    runner = BacktestRunner(config=BacktestConfig(), predictive_mode=True)
+    evaluated = []
+    original = runner.decision_engine.evaluate
+
+    def capture(*args, **kwargs):
+        decision = original(*args, **kwargs)
+        evaluated.append(decision)
+        return decision
+
+    runner.decision_engine.evaluate = capture
+    report = runner.run_backtest(
+        df=candles, predictive_mode=True, calibrated_params=params,
+        calibration_required=required, warmup_bars=200,
+    )
+    assert report.calibration_state == ("AVAILABLE" if required else "NOT_REQUESTED")
+    assert evaluated
+    live = LiveExecutionEngine(
+        "BTCUSDT", "1h", calibrated_params=params,
+        calibration_required=required, warm_up_bars=200,
+    )
+    last = candles.iloc[-1]
+    event = KlineEvent(
+        symbol="BTCUSDT", interval="1h",
+        start_time=pd.Timestamp(last["timestamp"]),
+        close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
+        open=float(last["open"]), high=float(last["high"]), low=float(last["low"]),
+        close=float(last["close"]), volume=float(last["volume"]), is_closed=True,
+    )
+    signal, decision, notifications = live.on_candle_closed(candles, event)
+    assert signal is not None and decision is not None
+    assert notifications == []  # no dispatcher / no orders
+    assert (decision.tp_multiplier, decision.sl_multiplier) == expected
+    assert (evaluated[-1].tp_multiplier, evaluated[-1].sl_multiplier) == expected
+    assert decision.direction == evaluated[-1].direction
+
+
+def test_live_and_replay_reject_unavailable_calibration_without_fallback(make_synthetic_candles):
+    candles = make_synthetic_candles(start="2025-01-01", periods=225, freq="1h", base_price=50000.0)
+    with pytest.raises(OptimizationUnavailableError):
+        BacktestRunner(predictive_mode=True).run_backtest(
+            df=candles, predictive_mode=True, calibrated_params={}, calibration_required=True
+        )
+    with pytest.raises(OptimizationUnavailableError):
+        LiveExecutionEngine("BTCUSDT", "1h", calibrated_params={}, calibration_required=True)
 
 
 def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):

@@ -11,8 +11,9 @@ from src.backtest_runner import BacktestRunner
 from src.dataset_manager import HistoricalDatasetManager
 from src.parquet_store import ParquetStore
 from src.predictive_engine import PredictiveEngine
-from src.regime_classifier import RegimeClassifier
+from src.regime_classifier import MarketRegime, RegimeClassifier
 from src.strategy_optimizer import StrategyOptimizer
+from tests.unit.test_strategy_optimizer import make_synthetic_trades
 
 
 def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles):
@@ -91,6 +92,15 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     )
     assert isinstance(calibrated_params, dict)
     assert len(calibrated_params) > 0
+    # This fixture spans regimes absent from the first training report. Supply
+    # independently labelled synthetic exact-OHLC training fixtures so the
+    # *test* can exercise the calibrated route without any regime fallback.
+    # These are not authenticated historical market observations.
+    for regime in MarketRegime:
+        if regime.value not in calibrated_params:
+            fixture_trades = make_synthetic_trades(n_trades=20, regime=regime.value)
+            calibrated_params[regime.value] = optimizer.optimize_regime(regime, fixture_trades)
+    assert set(calibrated_params) == {regime.value for regime in MarketRegime}
 
     # -------------------------------------------------------------------------
     # 3. Execution: Legacy Mode vs. Predictive-Enhanced Mode
@@ -118,6 +128,7 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
         warmup_bars=100,
         predictive_mode=True,
         calibrated_params=calibrated_params,
+        calibration_required=True,
     )
 
     # -------------------------------------------------------------------------
@@ -169,6 +180,7 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
         warmup_bars=100,
         predictive_mode=True,
         calibrated_params=calibrated_params,
+        calibration_required=True,
     )
 
     assert enhanced_report.total_trades == enhanced_report_run2.total_trades

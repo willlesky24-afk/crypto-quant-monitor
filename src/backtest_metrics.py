@@ -5,7 +5,13 @@ from typing import Any
 
 import pandas as pd
 
-from .backtest_models import BacktestValidationError, EquityPoint, TradeResult
+from .backtest_models import (
+    EXCURSION_POLICY_VERSION,
+    BacktestValidationError,
+    EquityPoint,
+    ExcursionObservability,
+    TradeResult,
+)
 
 CRYPTO_24_7_PERIODS: dict[str, int] = {
     "1m": 525_600, "5m": 105_120, "15m": 35_040,
@@ -23,6 +29,36 @@ class BacktestMetricsCalculator:
 
     drawdown dynamics, and trade excursion profiles (MFE/MAE).
     """
+
+    @staticmethod
+    def _exact_excursion_summary(trades: list[TradeResult], name: str) -> dict[str, Any]:
+        """Average only independently exact observations; never impute missing values."""
+        total = len(trades)
+        values = []
+        for trade in trades:
+            value = getattr(trade, f"{name}_exact_pct", None)
+            if (
+                getattr(trade, "excursion_policy_version", None) == EXCURSION_POLICY_VERSION
+                and getattr(trade, f"{name}_observability", None) == ExcursionObservability.EXACT_OHLC.value
+                and isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                and value >= 0
+            ):
+                values.append(float(value))
+        count = len(values)
+        status = (
+            "NO_TRADES" if total == 0 else
+            "NONE" if count == 0 else
+            "COMPLETE" if count == total else "PARTIAL"
+        )
+        return {
+            f"{name}_total_trades": total,
+            f"{name}_exact_trades": count,
+            f"{name}_exact_denominator": count,
+            f"{name}_exact_avg_pct": round(sum(values) / count, 2) if count else None,
+            f"{name}_coverage_status": status,
+        }
 
     @staticmethod
     def _verified_spot_long_r(trade: TradeResult) -> tuple[float, float] | None:
@@ -183,6 +219,10 @@ class BacktestMetricsCalculator:
         """Calculates comprehensive performance and risk metrics across completed trades."""
         total_trades = len(trades)
         verified_r = cls._verified_r_summary(trades)
+        exact_excursions = {
+            **cls._exact_excursion_summary(trades, "mfe"),
+            **cls._exact_excursion_summary(trades, "mae"),
+        }
 
         equity_values = [point.equity for point in equity_curve]
         _, max_dd_pct, max_dd_usd, max_dd_duration = cls.calculate_drawdown_series(
@@ -199,6 +239,7 @@ class BacktestMetricsCalculator:
                 "expectancy": 0.0,
                 "expectancy_r": 0.0,
                 **verified_r,
+                **exact_excursions,
                 "payoff_ratio": 0.0,
                 "max_drawdown_pct": round(max_dd_pct, 2),
                 "max_drawdown_usd": round(max_dd_usd, 2),
@@ -310,6 +351,7 @@ class BacktestMetricsCalculator:
             "expectancy": round(expectancy_usd, 2),
             "expectancy_r": round(expectancy_r, 2),
             **verified_r,
+            **exact_excursions,
             "payoff_ratio": round(payoff_ratio, 2) if payoff_ratio != math.inf else math.inf,
             "max_drawdown_pct": round(max_dd_pct, 2),
             "max_drawdown_usd": round(max_dd_usd, 2),

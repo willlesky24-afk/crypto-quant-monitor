@@ -8,6 +8,7 @@ import pytest
 from src.backtest_engine import BacktestEngine
 from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
     BacktestConfig,
     BacktestValidationError,
     ExecutionTraceStatus,
@@ -15,6 +16,115 @@ from src.backtest_models import (
     SignalEvent,
     TradeExitReason,
 )
+
+
+def _observability_run(bars, *, tp=2.0, sl=1.0, holding=5, slippage=0.0):
+    """Synthetic OHLC fixtures only; not a claim about real intrabar paths."""
+    times = pd.date_range("2024-01-01", periods=len(bars), freq="1h", tz="UTC")
+    df = pd.DataFrame([
+        {"timestamp": time, "open": opened, "high": high, "low": low, "close": closed, "volume": 1000.0}
+        for time, (opened, high, low, closed) in zip(times, bars, strict=True)
+    ])
+    cfg = BacktestConfig(
+        slippage_pct=slippage, taker_fee_pct=0.0,
+        tp_atr_multiple=tp, sl_atr_multiple=sl,
+        max_holding_bars=holding,
+    )
+    signal = make_test_signal(timestamp=str(times[0]), atr=2.0)
+    trades, _ = BacktestEngine(cfg).run(df, [signal])
+    assert len(trades) == 1
+    assert trades[0].excursion_policy_version == EXCURSION_POLICY_VERSION
+    return trades[0]
+
+
+@pytest.mark.parametrize(("last_bar", "reason"), [
+    ((100.0, 105.0, 99.0, 103.0), "TAKE_PROFIT"),
+    ((100.0, 101.0, 97.0, 98.0), "STOP_LOSS"),
+    ((100.0, 105.0, 97.0, 99.0), "STOP_LOSS"),
+])
+def test_intrabar_excursions_are_bounds_not_fabricated_path(last_bar, reason):
+    trade = _observability_run([(100, 101, 99, 100), last_bar])
+    assert trade.exit_reason == reason
+    assert trade.mfe_observability == "BOUNDED_OHLC"
+    assert trade.mae_observability == "BOUNDED_OHLC"
+    assert trade.mfe_exact_pct is None and trade.mae_exact_pct is None
+    assert trade.mfe_lower_bound_pct == trade.mae_lower_bound_pct == 0.0
+    assert trade.mfe_upper_bound_pct >= trade.mfe_lower_bound_pct
+    assert trade.mae_upper_bound_pct >= trade.mae_lower_bound_pct
+
+
+def test_horizon_and_same_bar_exit_use_full_surviving_candle():
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 101, 99, 100)],
+        tp=10.0, sl=5.0, holding=1,
+    )
+    assert trade.exit_reason == "TIME_HORIZON"
+    assert trade.entry_timestamp == trade.exit_timestamp
+    assert trade.mfe_observability == trade.mae_observability == "EXACT_OHLC"
+    assert trade.mfe_exact_pct == trade.mae_exact_pct == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(("exit_bar", "reason", "expected_mfe", "expected_mae"), [
+    ((112, 120, 111, 115), "TAKE_PROFIT", 12.0, 1.0),
+    ((95, 99, 90, 93), "STOP_LOSS", 5.0, 5.0),
+])
+def test_open_exit_observes_only_open_and_previous_candles(exit_bar, reason, expected_mfe, expected_mae):
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 105, 99, 103), exit_bar],
+        tp=5.0, sl=2.0,
+    )
+    assert trade.exit_reason == reason
+    assert trade.mfe_observability == trade.mae_observability == "EXACT_OHLC"
+    assert trade.mfe_exact_pct == pytest.approx(expected_mfe)
+    assert trade.mae_exact_pct == pytest.approx(expected_mae)
+
+
+def test_prior_favorable_extreme_can_be_exact_while_adverse_is_bounded():
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 110, 99, 105), (100, 109, 95, 98)],
+        tp=10.0, sl=2.0,
+    )
+    assert trade.exit_reason == "STOP_LOSS"
+    assert trade.mfe_observability == "EXACT_OHLC"
+    assert trade.mfe_exact_pct == pytest.approx(10.0)
+    assert trade.mae_observability == "BOUNDED_OHLC"
+    assert trade.mae_lower_bound_pct == pytest.approx(1.0)
+    assert trade.mae_upper_bound_pct == pytest.approx(5.0)
+
+
+def test_prior_adverse_extreme_can_be_exact_while_favorable_is_bounded():
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 101, 97, 100), (100, 121, 98, 120)],
+        tp=10.0, sl=2.0,
+    )
+    assert trade.exit_reason == "TAKE_PROFIT"
+    assert trade.mae_observability == "EXACT_OHLC"
+    assert trade.mae_exact_pct == pytest.approx(3.0)
+    assert trade.mfe_observability == "BOUNDED_OHLC"
+    assert trade.mfe_lower_bound_pct == pytest.approx(1.0)
+    assert trade.mfe_upper_bound_pct == pytest.approx(21.0)
+
+
+def test_incoherent_ohlc_is_indeterminate_without_changing_cash_or_exit():
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 99, 98, 100)],
+        tp=10.0, sl=5.0, holding=1,
+    )
+    assert trade.exit_reason == "TIME_HORIZON"
+    assert trade.mfe_observability == trade.mae_observability == "UNDETERMINED"
+    assert trade.mfe_exact_pct is None and trade.mae_exact_pct is None
+    assert trade.mfe_lower_bound_pct is None and trade.mae_upper_bound_pct is None
+
+
+def test_slippage_fill_is_not_an_observed_market_extreme():
+    trade = _observability_run(
+        [(100, 101, 99, 100), (100, 105, 99, 103)],
+        slippage=0.001,
+    )
+    assert trade.entry_price == pytest.approx(100.1)
+    assert trade.mfe_observability == "BOUNDED_OHLC"
+    assert trade.mfe_lower_bound_pct == 0.0
+    assert trade.mae_lower_bound_pct > 0.0  # observed Open is below the slipped fill
 
 
 def make_test_signal(

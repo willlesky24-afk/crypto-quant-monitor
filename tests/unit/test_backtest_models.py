@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
     BacktestConfig,
     BacktestReport,
     BacktestValidationError,
@@ -219,6 +220,33 @@ def test_trade_result_serializes_effective_risk_without_reinterpreting_final_sto
     assert data["initial_risk_per_unit"] == 2.0
     assert data["initial_risk_amount"] == 19.98
     assert data["net_r_multiple"] == pytest.approx(37.92104 / 19.98)
+
+
+def test_excursion_metadata_is_additive_and_legacy_rows_stay_unknown():
+    from tests.unit.test_backtest_metrics import make_verified_spot_trade
+
+    base = make_verified_spot_trade("legacy", 40.0, 38.0, 40.0)
+    legacy_dict = base.to_dict()
+    for key in ("excursion_policy_version", "mfe_observability", "mae_observability",
+                "mfe_exact_pct", "mae_exact_pct", "mfe_lower_bound_pct",
+                "mfe_upper_bound_pct", "mae_lower_bound_pct", "mae_upper_bound_pct",
+                "atr_entry"):
+        legacy_dict.pop(key)
+    old = TradeResult(**legacy_dict)
+    assert old.mfe_observability == old.mae_observability == "LEGACY_UNKNOWN"
+    assert old.excursion_policy_version is None
+    assert old.mfe_exact_pct is None and old.mae_exact_pct is None
+    current = replace(
+        base, excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC", mfe_exact_pct=4.0,
+        mae_observability="BOUNDED_OHLC", mae_lower_bound_pct=0.0,
+        mae_upper_bound_pct=2.0, atr_entry=2.0,
+    )
+    data = current.to_dict()
+    assert data["mfe_exact_pct"] == 4.0
+    assert data["mae_exact_pct"] is None
+    assert data["mae_upper_bound_pct"] == 2.0
+    assert data["execution_policy_version"] is None
 
 
 def test_equity_point_and_backtest_report_serialization():

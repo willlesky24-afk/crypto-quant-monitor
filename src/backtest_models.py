@@ -29,6 +29,18 @@ class ExecutionPolicyVersion(str, Enum):
     SPOT_LONG_C1 = "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
 
 
+class ExcursionObservability(str, Enum):
+    """Evidence available for one excursion under the OHLC simulation model."""
+
+    EXACT_OHLC = "EXACT_OHLC"
+    BOUNDED_OHLC = "BOUNDED_OHLC"
+    UNDETERMINED = "UNDETERMINED"
+    LEGACY_UNKNOWN = "LEGACY_UNKNOWN"
+
+
+EXCURSION_POLICY_VERSION = "OHLC_D1B3_V1"
+
+
 class PositionSide(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
@@ -41,6 +53,16 @@ class MarketType(str, Enum):
 
 class BacktestValidationError(ValueError):
     """Unsupported backtest configuration or invalid financial input."""
+
+
+class OptimizationUnavailableError(BacktestValidationError):
+    """An explicitly requested calibration lacks sufficient verified evidence."""
+
+
+class CalibrationState(str, Enum):
+    NOT_REQUESTED = "NOT_REQUESTED"
+    AVAILABLE = "AVAILABLE"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 @dataclass(frozen=True)
@@ -154,6 +176,10 @@ class Position:
     highest_price: float = field(default=0.0)
     lowest_price: float = field(default=0.0)
     is_active: bool = True
+    # Only completed survivor candles and observed opens enter these extrema.
+    observed_high_price: float | None = None
+    observed_low_price: float | None = None
+    excursion_data_valid: bool = True
 
     def __post_init__(self):
         if self.highest_price == 0.0:
@@ -167,6 +193,11 @@ class Position:
             self.highest_price = high
         if low < self.lowest_price:
             self.lowest_price = low
+
+    def update_observed_excursions(self, high: float, low: float) -> None:
+        """Record market observations attributable to the open position."""
+        self.observed_high_price = high if self.observed_high_price is None else max(self.observed_high_price, high)
+        self.observed_low_price = low if self.observed_low_price is None else min(self.observed_low_price, low)
 
 
 @dataclass(frozen=True)
@@ -213,6 +244,17 @@ class TradeResult:
     execution_trace_status: str | None = None
     # Absent on reports produced before C1; never infer a historical policy.
     execution_policy_version: str | None = None
+    # Absence of this independent policy tag means historical observability is unknown.
+    excursion_policy_version: str | None = None
+    mfe_observability: str = ExcursionObservability.LEGACY_UNKNOWN.value
+    mae_observability: str = ExcursionObservability.LEGACY_UNKNOWN.value
+    mfe_exact_pct: float | None = None
+    mae_exact_pct: float | None = None
+    mfe_lower_bound_pct: float | None = None
+    mfe_upper_bound_pct: float | None = None
+    mae_lower_bound_pct: float | None = None
+    mae_upper_bound_pct: float | None = None
+    atr_entry: float | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -281,6 +323,17 @@ class BacktestReport:
     r_excluded_trades: int = 0
     r_coverage_status: str = "UNKNOWN"
     r_unavailable_reason: str | None = None
+    mfe_exact_avg_pct: float | None = None
+    mae_exact_avg_pct: float | None = None
+    mfe_exact_trades: int = 0
+    mae_exact_trades: int = 0
+    mfe_exact_denominator: int = 0
+    mae_exact_denominator: int = 0
+    mfe_total_trades: int = 0
+    mae_total_trades: int = 0
+    mfe_coverage_status: str = "UNKNOWN"
+    mae_coverage_status: str = "UNKNOWN"
+    calibration_state: str = CalibrationState.NOT_REQUESTED.value
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -316,4 +369,15 @@ class BacktestReport:
             "r_coverage_status": self.r_coverage_status,
             "r_unavailable_reason": self.r_unavailable_reason,
             "return_on_capital_pct": self.return_on_capital_pct,
+            "mfe_exact_avg_pct": self.mfe_exact_avg_pct,
+            "mae_exact_avg_pct": self.mae_exact_avg_pct,
+            "mfe_exact_trades": self.mfe_exact_trades,
+            "mae_exact_trades": self.mae_exact_trades,
+            "mfe_exact_denominator": self.mfe_exact_denominator,
+            "mae_exact_denominator": self.mae_exact_denominator,
+            "mfe_total_trades": self.mfe_total_trades,
+            "mae_total_trades": self.mae_total_trades,
+            "mfe_coverage_status": self.mfe_coverage_status,
+            "mae_coverage_status": self.mae_coverage_status,
+            "calibration_state": self.calibration_state,
         }

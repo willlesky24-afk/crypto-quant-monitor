@@ -30,6 +30,7 @@ try:
     from src.anomaly_detection.detector import MarketAnomalyDetector
     from src.backtest_metrics import BacktestMetricsCalculator
     from src.backtest_models import (
+        EXCURSION_POLICY_VERSION,
         BacktestConfig,
         BacktestValidationError,
         ExecutionPolicyVersion,
@@ -77,6 +78,7 @@ except ImportError:
     from anomaly_detection.detector import MarketAnomalyDetector
     from backtest_metrics import BacktestMetricsCalculator
     from backtest_models import (
+        EXCURSION_POLICY_VERSION,
         BacktestConfig,
         BacktestValidationError,
         ExecutionPolicyVersion,
@@ -120,7 +122,10 @@ except ImportError:
     from volume_profile import VolumeProfile
 
 
-def _run_backtest_for_ui(config, candles, symbol, interval, session_state):
+def _run_backtest_for_ui(
+    config, candles, symbol, interval, session_state,
+    *, calibrated_params=None, calibration_required=False,
+):
     """Replace the displayed report only after a successful validated run."""
     session_state.pop("backtest_report", None)
     report = BacktestRunner(config=config).run_backtest(
@@ -128,6 +133,8 @@ def _run_backtest_for_ui(config, candles, symbol, interval, session_state):
         symbol=symbol,
         interval=interval,
         predictive_mode=True,
+        calibrated_params=calibrated_params,
+        calibration_required=calibration_required,
     )
     session_state["backtest_report"] = report
     return report
@@ -169,6 +176,36 @@ def _r_coverage_for_ui(metrics):
 
 def _trade_field_for_ui(trade, field):
     return trade.get(field) if isinstance(trade, dict) else getattr(trade, field, None)
+
+
+def _excursion_for_ui(trade, name):
+    """Show exact values or justified intervals, never a legacy point proxy."""
+    if _trade_field_for_ui(trade, "excursion_policy_version") != EXCURSION_POLICY_VERSION:
+        return "N/A (proxy heredado; observabilidad no acreditada)"
+    status = _trade_field_for_ui(trade, f"{name}_observability")
+    if status == "EXACT_OHLC":
+        value = _trade_field_for_ui(trade, f"{name}_exact_pct")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+            return f"{value:.2f}% (exacta OHLC)"
+    if status == "BOUNDED_OHLC":
+        lower = _trade_field_for_ui(trade, f"{name}_lower_bound_pct")
+        upper = _trade_field_for_ui(trade, f"{name}_upper_bound_pct")
+        if (isinstance(lower, (int, float)) and isinstance(upper, (int, float))
+                and not isinstance(lower, bool) and not isinstance(upper, bool)
+                and math.isfinite(lower) and math.isfinite(upper) and 0 <= lower <= upper):
+            return f"[{lower:.2f}%, {upper:.2f}%] (cota OHLC)"
+    return "N/A (indeterminada)"
+
+
+def _excursion_coverage_for_ui(metrics, name):
+    status = metrics.get(f"{name}_coverage_status", "UNKNOWN")
+    if status == "UNKNOWN":
+        return f"{name.upper()} exacta OHLC: N/A; cobertura UNKNOWN (histórico sin clasificación)."
+    count = metrics.get(f"{name}_exact_trades", 0)
+    total = metrics.get(f"{name}_total_trades", metrics.get("total_trades", 0))
+    average = metrics.get(f"{name}_exact_avg_pct")
+    displayed = f"{average:.2f}%" if isinstance(average, (int, float)) and math.isfinite(average) else "N/A"
+    return f"{name.upper()} exacta OHLC: {displayed}; cobertura {status} ({count}/{total} operaciones)."
 
 
 def _positive_finite_for_ui(value):
@@ -1858,6 +1895,15 @@ with tab_backtest:
         if metrics.get("r_unavailable_reason"):
             st.caption(metrics["r_unavailable_reason"])
         st.caption("R bruto/neto: media por operación con riesgo inicial matemáticamente verificable. No certifica la fuente histórica ni predice resultados futuros.")
+        st.caption(_excursion_coverage_for_ui(metrics, "mfe"))
+        st.caption(_excursion_coverage_for_ui(metrics, "mae"))
+        calibration_state = metrics.get("calibration_state", "UNKNOWN")
+        if calibration_state == "AVAILABLE":
+            st.caption("Optimización disponible: parámetros derivados de excursiones exactas OHLC con cobertura completa.")
+        elif calibration_state == "NOT_REQUESTED":
+            st.caption("Optimización no solicitada: parámetros manuales, presets o predeterminados no son calibración empírica.")
+        else:
+            st.warning("Optimización no disponible o no acreditada: no se muestran parámetros calibrados.")
 
         # 1.1 Breakdown: LONG vs SHORT
         long_trades = [t for t in report.trades if str(_trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")).upper() == "LONG"]
@@ -1990,42 +2036,42 @@ with tab_backtest:
             if report.trades:
                 trade_rows = [t.to_dict() if hasattr(t, "to_dict") else dict(t)
                               for t in report.trades]
-                trades_df = pd.DataFrame(trade_rows)
 
-                mae_col = trades_df["mae_pct"] if "mae_pct" in trades_df.columns else trades_df.get("mae", 0.0)
-                mfe_col = trades_df["mfe_pct"] if "mfe_pct" in trades_df.columns else trades_df.get("mfe", 0.0)
-
-                fig_mfe = go.Figure()
-                fig_mfe.add_trace(
-                    go.Scatter(
-                        x=mae_col,
-                        y=mfe_col,
+                exact_rows = [t for t in trade_rows if (
+                    t.get("excursion_policy_version") == EXCURSION_POLICY_VERSION
+                    and t.get("mfe_observability") == "EXACT_OHLC"
+                    and t.get("mae_observability") == "EXACT_OHLC"
+                    and isinstance(t.get("mfe_exact_pct"), (int, float))
+                    and isinstance(t.get("mae_exact_pct"), (int, float))
+                    and math.isfinite(t["mfe_exact_pct"])
+                    and math.isfinite(t["mae_exact_pct"])
+                )]
+                if exact_rows:
+                    fig_mfe = go.Figure()
+                    fig_mfe.add_trace(go.Scatter(
+                        x=[t["mae_exact_pct"] for t in exact_rows],
+                        y=[t["mfe_exact_pct"] for t in exact_rows],
                         mode="markers",
-                        marker={
-                            "size": 9,
-                            "color": ["#00FF88" if p > 0 else "#FF2E63" for p in trades_df.get("net_pnl", [])],
-                            "line": {"width": 1, "color": "#FFFFFF"},
-                        },
-                        text=[
-                            f"Trade {t.get('trade_id', '')} ({t.get('side', '')}): PnL ${t.get('net_pnl', 0.0):.2f}<br>Máx Caída (MAE): {t.get('mae_pct', 0.0):.2f}%<br>Máx Ganancia (MFE): {t.get('mfe_pct', 0.0):.2f}%"
-                            for t in trade_rows
-                        ],
+                        marker={"size": 9, "color": ["#00FF88" if t.get("net_pnl", 0) > 0 else "#FF2E63" for t in exact_rows]},
+                        text=[f"Trade {t.get('trade_id', '')}: MAE {t['mae_exact_pct']:.2f}%, MFE {t['mfe_exact_pct']:.2f}% (OHLC)" for t in exact_rows],
                         hoverinfo="text",
+                    ))
+                    fig_mfe.update_layout(
+                        xaxis_title="MAE exacta bajo OHLC (%)",
+                        yaxis_title="MFE exacta bajo OHLC (%)",
+                        height=360, template="plotly_dark",
+                        paper_bgcolor="#07090E", plot_bgcolor="#07090E",
+                        margin={"l": 20, "r": 20, "t": 30, "b": 20},
                     )
-                )
-                fig_mfe.update_layout(
-                    xaxis_title="Pérdida Máxima Temporal (MAE %)",
-                    yaxis_title="Ganancia Máxima Alcanzada (MFE %)",
-                    height=360,
-                    template="plotly_dark",
-                    paper_bgcolor="#07090E",
-                    plot_bgcolor="#07090E",
-                    margin={"l": 20, "r": 20, "t": 30, "b": 20},
-                    xaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
-                    yaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
-                )
-                st.plotly_chart(fig_mfe, use_container_width=True)
-                st.caption("💡 **MAE (Eje X)**: Peor caída temporal sufrida antes del cierre. **MFE (Eje Y)**: Mayor ganancia alcanzada durante el trade.")
+                    st.plotly_chart(fig_mfe, use_container_width=True)
+                else:
+                    st.info("No hay operaciones con MFE y MAE exactas conjuntamente para el gráfico.")
+                st.dataframe(pd.DataFrame([
+                    {"Trade": t.get("trade_id", ""), "MFE": _excursion_for_ui(t, "mfe"),
+                     "MAE": _excursion_for_ui(t, "mae")}
+                    for t in trade_rows
+                ]), use_container_width=True)
+                st.caption("Las cotas OHLC no revelan el orden intrabar ni prueban ejecución real. Los proxies históricos no se muestran como puntos exactos.")
             else:
                 st.info("No se registraron operaciones en este período de simulación.")
 

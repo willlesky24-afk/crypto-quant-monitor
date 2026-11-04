@@ -13,7 +13,9 @@ from .backtest_models import (
     BacktestConfig,
     BacktestReport,
     BacktestValidationError,
+    CalibrationState,
     DatasetProvenance,
+    OptimizationUnavailableError,
     SignalEvent,
     TradeDirection,
 )
@@ -88,6 +90,7 @@ class BacktestRunner:
         df: pd.DataFrame | None = None,
         predictive_mode: bool | None = None,
         calibrated_params: dict[str, Any] | None = None,
+        calibration_required: bool = False,
     ) -> BacktestReport:
         """Executes a full backtest pipeline for a given symbol and interval.
 
@@ -101,6 +104,8 @@ class BacktestRunner:
         - df: Optional in-memory DataFrame (if provided, bypasses disk dataset loading).
         - predictive_mode: Optional flag to enable predictive-enhanced decision flow (overrides instance default).
         - calibrated_params: Optional dictionary of OptimizedParameters by regime.
+        - calibration_required: Explicit request for verified optimization; omission
+          preserves the existing uncalibrated/manual/preset execution contract.
 
         Returns:
         - BacktestReport containing trade log, performance metrics, and equity curve.
@@ -114,6 +119,13 @@ class BacktestRunner:
         use_predictive = (
             predictive_mode if predictive_mode is not None else self.predictive_mode
         )
+        if calibration_required and not use_predictive:
+            raise OptimizationUnavailableError("Optimización no disponible: modo predictivo desactivado.")
+        if calibration_required and (not isinstance(calibrated_params, dict) or not calibrated_params):
+            raise OptimizationUnavailableError("Optimización no disponible: no hay parámetros calibrados.")
+        if calibration_required:
+            for params in calibrated_params.values():
+                DecisionEngine.validate_calibration_params(params, required=True)
 
         # The rolling volume mean needs 20 bars. Predictive mode also needs its
         # declared history and the regime classifier's minimum, regardless of
@@ -166,6 +178,10 @@ class BacktestRunner:
                 equity_curve=[],
                 metrics=empty_metrics,
                 provenance=provenance,
+                calibration_state=(
+                    CalibrationState.AVAILABLE.value if calibration_required
+                    else CalibrationState.NOT_REQUESTED.value
+                ),
             )
 
         # 2. Enrich indicators across the full causal dataset
@@ -204,12 +220,17 @@ class BacktestRunner:
                     if calibrated_params
                     else None
                 )
+                if calibration_required and opt_param is None:
+                    raise OptimizationUnavailableError(
+                        f"Optimización no disponible: faltan parámetros para {regime_res.regime.value}."
+                    )
                 decision = self.decision_engine.evaluate(
                     signal,
                     risk,
                     intel,
                     predictive=pred_res,
                     optimized_params=opt_param,
+                    calibration_required=calibration_required,
                     regime=regime_res.regime,
                     technical_score=score["score"],
                     predictive_mode=True,
@@ -285,6 +306,10 @@ class BacktestRunner:
             equity_curve=equity_curve,
             metrics=metrics,
             provenance=provenance,
+            calibration_state=(
+                CalibrationState.AVAILABLE.value if calibration_required
+                else CalibrationState.NOT_REQUESTED.value
+            ),
         )
 
     @staticmethod
@@ -297,6 +322,7 @@ class BacktestRunner:
         equity_curve: list[Any],
         metrics: dict[str, Any],
         provenance: DatasetProvenance | None = None,
+        calibration_state: str = CalibrationState.NOT_REQUESTED.value,
     ) -> BacktestReport:
         start_ts = str(candles_df["timestamp"].min()) if not candles_df.empty else ""
         end_ts = str(candles_df["timestamp"].max()) if not candles_df.empty else ""
@@ -326,6 +352,17 @@ class BacktestRunner:
             max_drawdown_duration_bars=metrics["max_drawdown_duration_bars"],
             avg_mfe_pct=metrics["avg_mfe_pct"],
             avg_mae_pct=metrics["avg_mae_pct"],
+            mfe_exact_avg_pct=metrics["mfe_exact_avg_pct"],
+            mae_exact_avg_pct=metrics["mae_exact_avg_pct"],
+            mfe_exact_trades=metrics["mfe_exact_trades"],
+            mae_exact_trades=metrics["mae_exact_trades"],
+            mfe_exact_denominator=metrics["mfe_exact_denominator"],
+            mae_exact_denominator=metrics["mae_exact_denominator"],
+            mfe_total_trades=metrics["mfe_total_trades"],
+            mae_total_trades=metrics["mae_total_trades"],
+            mfe_coverage_status=metrics["mfe_coverage_status"],
+            mae_coverage_status=metrics["mae_coverage_status"],
+            calibration_state=calibration_state,
             avg_bars_held=metrics["avg_bars_held"],
             total_gross_pnl=metrics["total_gross_pnl"],
             total_fees_paid=metrics["total_fees_paid"],

@@ -11,6 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 from src.backtest_metrics import BacktestMetricsCalculator
 from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
     BacktestConfig,
     BacktestReport,
     ExecutionPolicyVersion,
@@ -27,6 +28,7 @@ HELPERS = {
     "_verified_trade_r_for_ui", "_backtest_trade_table_for_ui",
     "_execution_trace_for_ui", "_execution_trace_summary_for_ui",
     "_execution_policy_for_ui",
+    "_excursion_for_ui", "_excursion_coverage_for_ui",
 }
 
 
@@ -40,6 +42,7 @@ def _ui_helpers():
                  "BacktestMetricsCalculator": BacktestMetricsCalculator,
                  "ExecutionPolicyVersion": ExecutionPolicyVersion,
                  "ExecutionTraceStatus": ExecutionTraceStatus}
+    namespace["EXCURSION_POLICY_VERSION"] = EXCURSION_POLICY_VERSION
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(APP_PATH), "exec"), namespace)
     return namespace
 
@@ -64,6 +67,29 @@ def test_verified_expectancy_display_never_uses_legacy(
     assert format_value(metrics, "net_expectancy_r") == expected_net
     metrics["gross_expectancy_r"] = None
     assert format_value(metrics, "gross_expectancy_r") == "N/A"
+
+
+def test_excursion_ui_independently_formats_exact_bounds_missing_and_legacy():
+    helpers = _ui_helpers()
+    fmt = helpers["_excursion_for_ui"]
+    coverage = helpers["_excursion_coverage_for_ui"]
+    legacy = {"mfe_pct": 99.0, "mae_pct": 88.0}
+    assert "proxy heredado" in fmt(legacy, "mfe")
+    current = {
+        "excursion_policy_version": EXCURSION_POLICY_VERSION,
+        "mfe_observability": "EXACT_OHLC", "mfe_exact_pct": 0.0,
+        "mae_observability": "BOUNDED_OHLC",
+        "mae_lower_bound_pct": 1.0, "mae_upper_bound_pct": 3.0,
+    }
+    assert fmt(current, "mfe") == "0.00% (exacta OHLC)"
+    assert fmt(current, "mae") == "[1.00%, 3.00%] (cota OHLC)"
+    assert "indeterminada" in fmt({**current, "mae_observability": "UNDETERMINED"}, "mae")
+    assert "indeterminada" in fmt({**current, "mfe_exact_pct": None}, "mfe")
+    assert "2/3" in coverage({"mfe_coverage_status": "PARTIAL", "mfe_exact_trades": 2,
+                              "mfe_total_trades": 3, "mfe_exact_avg_pct": 1.25}, "mfe")
+    assert "N/A" in coverage({"mae_coverage_status": "NONE", "mae_exact_trades": 0,
+                               "mae_total_trades": 3, "mae_exact_avg_pct": None}, "mae")
+    assert "UNKNOWN" in coverage({}, "mfe")
 
 
 def test_r_coverage_describes_partial_complete_missing_and_no_trades():
@@ -187,6 +213,39 @@ def _sample_report():
         gross_expectancy_r=1.0, net_expectancy_r=0.95,
         r_verified_trades=1, r_excluded_trades=0, r_coverage_status="COMPLETE",
     )
+
+
+def test_streamlit_renders_independent_excursion_coverage_and_intervals(
+    monkeypatch, tmp_path, synthetic_ohlcv,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "contexts.db"))
+    monkeypatch.setattr(BinanceDataLoader, "get_klines",
+                        lambda self, *args, **kwargs: synthetic_ohlcv.copy())
+    report = _sample_report()
+    trade = replace(
+        report.trades[0], excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC", mfe_exact_pct=2.0,
+        mae_observability="BOUNDED_OHLC", mae_lower_bound_pct=0.5,
+        mae_upper_bound_pct=1.5,
+    )
+    report = replace(
+        report, trades=[trade], mfe_exact_avg_pct=2.0, mfe_exact_trades=1,
+        mfe_exact_denominator=1, mfe_total_trades=1, mfe_coverage_status="COMPLETE",
+        mae_exact_avg_pct=None, mae_exact_trades=0, mae_exact_denominator=0,
+        mae_total_trades=1, mae_coverage_status="NONE",
+    )
+    app = AppTest.from_file(str(APP_PATH), default_timeout=30)
+    app.session_state["backtest_report"] = report
+    app.run()
+    assert not app.exception
+    assert any("MFE exacta OHLC: 2.00%; cobertura COMPLETE (1/1" in item.value
+               for item in app.caption)
+    assert any("MAE exacta OHLC: N/A; cobertura NONE (0/1" in item.value
+               for item in app.caption)
+    assert any("[0.50%, 1.50%] (cota OHLC)" in item.value["MAE"].iloc[0]
+               for item in app.dataframe if "MAE" in item.value.columns)
+    assert any("Optimización no solicitada" in item.value for item in app.caption)
 
 
 def test_streamlit_renders_verified_metrics_unknown_provenance_and_plan(

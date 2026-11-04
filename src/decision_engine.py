@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 try:
+    from .backtest_models import (
+        EXCURSION_POLICY_VERSION,
+        CalibrationState,
+        OptimizationUnavailableError,
+    )
     from .constants import (
         DECISION_FAVORABLE,
         DECISION_WAIT_CONFIRMATION,
@@ -11,6 +17,11 @@ try:
         RISK_LOW,
     )
 except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from backtest_models import (
+        EXCURSION_POLICY_VERSION,
+        CalibrationState,
+        OptimizationUnavailableError,
+    )
     from constants import (
         DECISION_FAVORABLE,
         DECISION_WAIT_CONFIRMATION,
@@ -88,6 +99,39 @@ class DecisionEngine:
 
         self.legacy_mode = legacy_mode
 
+    @staticmethod
+    def validate_calibration_params(
+        optimized_params: OptimizedParameters | dict[str, Any] | None,
+        *,
+        required: bool,
+    ) -> None:
+        """Validate an explicit calibration request before relying on TP/SL values."""
+        if required and optimized_params is None:
+            raise OptimizationUnavailableError("Optimización no disponible: faltan parámetros del régimen.")
+        if optimized_params is None:
+            return
+        state = (
+            optimized_params.get("calibration_state") if isinstance(optimized_params, dict)
+            else getattr(optimized_params, "calibration_state", None)
+        )
+        policy = (
+            optimized_params.get("excursion_policy_version") if isinstance(optimized_params, dict)
+            else getattr(optimized_params, "excursion_policy_version", None)
+        )
+        if state == CalibrationState.UNAVAILABLE.value:
+            raise OptimizationUnavailableError("Optimización no disponible: calibración suspendida.")
+        if (required or state == CalibrationState.AVAILABLE.value) and (
+            state != CalibrationState.AVAILABLE.value or policy != EXCURSION_POLICY_VERSION
+        ):
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: parámetros sin cobertura EXACT_OHLC acreditada."
+            )
+        if required or state == CalibrationState.AVAILABLE.value:
+            for key in ("atr_tp_multiplier", "atr_sl_multiplier"):
+                value = optimized_params.get(key) if isinstance(optimized_params, dict) else getattr(optimized_params, key, None)
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+                    raise OptimizationUnavailableError(f"Optimización no disponible: {key} inválido.")
+
     def evaluate(
         self,
         signal: dict[str, Any],
@@ -99,14 +143,20 @@ class DecisionEngine:
         technical_score: float | None = None,
         legacy_mode: bool | None = None,
         predictive_mode: bool | None = None,
+        calibration_required: bool = False,
     ) -> DecisionResult:
         """Evaluates market state, risks, predictive probabilities, and calibrated parameters."""
+        self.validate_calibration_params(optimized_params, required=calibration_required)
         # 1. Determine execution mode (legacy vs enhanced predictive)
         is_legacy = (
             legacy_mode
             if legacy_mode is not None
             else (not predictive_mode if predictive_mode is not None else self.legacy_mode)
         )
+        if calibration_required and (is_legacy or predictive is None):
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: decisión predictiva calibrada no ejecutable."
+            )
 
         # Baseline technical confidence adjustment
         raw_confidence = float(signal.get("confidence", 0.0))

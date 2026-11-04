@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import math
+from dataclasses import replace
 
 import pytest
 
+from src.backtest_models import EXCURSION_POLICY_VERSION, OptimizationUnavailableError
 from src.constants import (
     DECISION_FAVORABLE,
     DECISION_WAIT_CONFIRMATION,
@@ -225,6 +228,37 @@ def test_predictive_strategy_optimized_parameters_integration():
     res_default = engine.evaluate(signal, risk, intel, predictive=predictive, optimized_params=None)
     assert res_default.tp_multiplier == 3.0
     assert res_default.sl_multiplier == 1.5
+
+
+def test_required_calibration_accepts_only_verified_finite_parameters():
+    engine = DecisionEngine()
+    signal, risk, intel, predictive = make_mock_inputs()
+    exact = OptimizedParameters(
+        regime="TRENDING_BULL", volatility_state="NORMAL",
+        atr_tp_multiplier=4.25, atr_sl_multiplier=1.75, expected_rr=2.43,
+        sample_size=20, confidence=0.8, validation_period={},
+        calibration_state="AVAILABLE", excursion_policy_version=EXCURSION_POLICY_VERSION,
+    )
+    result = engine.evaluate(
+        signal, risk, intel, predictive=predictive, optimized_params=exact,
+        calibration_required=True,
+    )
+    assert (result.tp_multiplier, result.sl_multiplier) == (4.25, 1.75)
+    for invalid in (
+        None,
+        replace(exact, calibration_state="UNAVAILABLE"),
+        replace(exact, excursion_policy_version=None),
+        replace(exact, atr_tp_multiplier=math.nan),
+        replace(exact, atr_sl_multiplier=0.0),
+        {"calibration_state": "AVAILABLE", "excursion_policy_version": EXCURSION_POLICY_VERSION},
+    ):
+        with pytest.raises(OptimizationUnavailableError):
+            engine.evaluate(
+                signal, risk, intel, predictive=predictive, optimized_params=invalid,
+                calibration_required=True,
+            )
+    uncalibrated = engine.evaluate(signal, risk, intel, predictive=predictive)
+    assert (uncalibrated.tp_multiplier, uncalibrated.sl_multiplier) == (3.0, 1.5)
 
 
 def test_predictive_strategy_determinism_and_serialization():

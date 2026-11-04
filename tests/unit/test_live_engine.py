@@ -1,19 +1,109 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from src.backtest_models import EXCURSION_POLICY_VERSION, OptimizationUnavailableError
 from src.constants import DECISION_FAVORABLE
 from src.decision_engine import DecisionResult
 from src.indicators import TechnicalIndicators
 from src.notifications.channels.discord import DiscordWebhookChannel
 from src.notifications.dispatcher import NotificationDispatcher
 from src.notifications.models import SignalEvent
+from src.regime_classifier import MarketRegime
+from src.strategy_optimizer import OptimizedParameters
 from src.streaming.candle_aggregator import CandleAggregator, KlineEvent
 from src.streaming.live_engine import LiveExecutionEngine
+
+
+def _closed_fixture(df):
+    last = df.iloc[-1]
+    return KlineEvent(
+        symbol="BTCUSDT", interval="1h",
+        start_time=pd.Timestamp(last["timestamp"]),
+        close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
+        open=float(last["open"]), high=float(last["high"]),
+        low=float(last["low"]), close=float(last["close"]),
+        volume=float(last["volume"]), is_closed=True,
+    )
+
+
+def _exact_calibrations():
+    return {
+        regime.value: OptimizedParameters(
+            regime=regime.value, volatility_state="NORMAL",
+            atr_tp_multiplier=4.0, atr_sl_multiplier=2.0,
+            expected_rr=2.0, sample_size=20, confidence=0.8,
+            validation_period={}, calibration_state="AVAILABLE",
+            excursion_policy_version=EXCURSION_POLICY_VERSION,
+        )
+        for regime in MarketRegime
+    }
+
+
+@pytest.mark.parametrize("params", [None, {}])
+def test_live_legacy_no_calibration_request_retains_defaults(params):
+    df = _generate_synthetic_ohlcv(220)
+    engine = LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params)
+    _, decision, notifications = engine.on_candle_closed(df, _closed_fixture(df))
+    assert engine.calibration_state == "NOT_REQUESTED"
+    assert decision is not None
+    assert (decision.tp_multiplier, decision.sl_multiplier) == (3.0, 1.5)
+    assert notifications == []
+
+
+@pytest.mark.parametrize("params", [None, {}])
+def test_live_required_calibration_rejects_absence_at_construction(params):
+    with pytest.raises(OptimizationUnavailableError, match="no hay parámetros"):
+        LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
+                            calibration_required=True)
+
+
+def test_live_required_calibration_uses_verified_parameters_and_no_stale_decision():
+    df = _generate_synthetic_ohlcv(220)
+    params = _exact_calibrations()
+    engine = LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
+                                 calibration_required=True)
+    signal, decision, notifications = engine.on_candle_closed(df, _closed_fixture(df))
+    assert signal is not None and decision is not None
+    assert (decision.tp_multiplier, decision.sl_multiplier) == (4.0, 2.0)
+    assert engine.calibration_state == "AVAILABLE"
+    assert notifications == []
+    history_length = len(engine.signal_history)
+    params.clear()
+    with pytest.raises(OptimizationUnavailableError, match="faltan parámetros"):
+        engine.on_candle_closed(df, _closed_fixture(df))
+    assert engine.last_decision is None
+    assert len(engine.signal_history) == history_length
+
+
+@pytest.mark.parametrize("kind", ["missing_regime", "invalid_value", "suspended"])
+def test_live_required_calibration_never_falls_back_on_bad_regime(kind):
+    df = _generate_synthetic_ohlcv(220)
+    params = _exact_calibrations()
+    if kind == "missing_regime":
+        params = {"NOT_A_REGIME": next(iter(params.values()))}
+    elif kind == "invalid_value":
+        params = {key: replace(value, atr_tp_multiplier=np.nan)
+                  for key, value in params.items()}
+    else:
+        params = {key: replace(value, calibration_state="UNAVAILABLE")
+                  for key, value in params.items()}
+    if kind == "missing_regime":
+        engine = LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
+                                     calibration_required=True)
+        with pytest.raises(OptimizationUnavailableError):
+            engine.on_candle_closed(df, _closed_fixture(df))
+        assert engine.last_decision is None
+        assert engine.signal_history == []
+    else:
+        with pytest.raises(OptimizationUnavailableError):
+            LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
+                                calibration_required=True)
 
 
 def _generate_synthetic_ohlcv(bars: int = 250) -> pd.DataFrame:

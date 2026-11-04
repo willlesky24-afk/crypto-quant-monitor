@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
+from src.backtest_models import (
+    EXCURSION_POLICY_VERSION,
+    CalibrationState,
+    ExcursionObservability,
+    OptimizationUnavailableError,
+)
 from src.regime_classifier import MarketRegime, RegimeClassifier
 
 if TYPE_CHECKING:
@@ -24,6 +30,8 @@ class OptimizedParameters:
     sample_size: int
     confidence: float
     validation_period: dict[str, Any]
+    calibration_state: str = CalibrationState.NOT_REQUESTED.value
+    excursion_policy_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -120,8 +128,13 @@ class StrategyOptimizer:
                 "entry_timestamp": getattr(trade, "entry_timestamp", None),
                 "entry_price": getattr(trade, "entry_price", 0.0),
                 "exit_price": getattr(trade, "exit_price", 0.0),
-                "mfe_pct": getattr(trade, "mfe_pct", 0.0),
-                "mae_pct": getattr(trade, "mae_pct", 0.0),
+                "mfe_pct": getattr(trade, "mfe_pct", None),
+                "mae_pct": getattr(trade, "mae_pct", None),
+                "mfe_observability": getattr(trade, "mfe_observability", None),
+                "mae_observability": getattr(trade, "mae_observability", None),
+                "mfe_exact_pct": getattr(trade, "mfe_exact_pct", None),
+                "mae_exact_pct": getattr(trade, "mae_exact_pct", None),
+                "excursion_policy_version": getattr(trade, "excursion_policy_version", None),
                 "is_win": getattr(trade, "is_win", False),
                 "regime": getattr(trade, "regime", ""),
                 "atr_entry": getattr(trade, "atr_entry", 0.0),
@@ -170,22 +183,35 @@ class StrategyOptimizer:
     def _calculate_atr_excursions(
         self,
         trade: dict[str, Any],
-        fallback_atr_pct: float = 1.5,
     ) -> tuple[float, float]:
-        """Calculates normalized MFE and MAE expressed in multiples of ATR."""
-        entry_price = float(trade.get("entry_price", 0.0))
-        mfe_pct = float(trade.get("mfe_pct", 0.0))
-        mae_pct = float(trade.get("mae_pct", 0.0))
-        atr_entry = float(trade.get("atr_entry", 0.0))
-
-        if entry_price > 0 and atr_entry > 0:
-            atr_pct = (atr_entry / entry_price) * 100.0
-        else:
-            atr_pct = fallback_atr_pct
-
-        atr_pct = max(atr_pct, 1e-4)
+        """Normalize independently exact excursions; never impute ATR or a proxy."""
+        if trade.get("excursion_policy_version") != EXCURSION_POLICY_VERSION:
+            raise OptimizationUnavailableError("Optimización no disponible: versión de excursiones heredada o desconocida.")
+        for name in ("mfe", "mae"):
+            if trade.get(f"{name}_observability") != ExcursionObservability.EXACT_OHLC.value:
+                raise OptimizationUnavailableError(
+                    f"Optimización no disponible: cobertura {name.upper()} no es EXACT_OHLC completa."
+                )
+        try:
+            entry_price = float(trade["entry_price"])
+            atr_entry = float(trade["atr_entry"])
+            mfe_pct = float(trade["mfe_exact_pct"])
+            mae_pct = float(trade["mae_exact_pct"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise OptimizationUnavailableError("Optimización no disponible: MFE/MAE exactos o ATR ausentes.") from exc
+        if not all(np.isfinite(value) for value in (entry_price, atr_entry, mfe_pct, mae_pct)):
+            raise OptimizationUnavailableError("Optimización no disponible: excursión o ATR no finito.")
+        if entry_price <= 0 or atr_entry <= 0 or mfe_pct < 0 or mae_pct < 0:
+            raise OptimizationUnavailableError("Optimización no disponible: precio, ATR o excursión inválidos.")
+        raw_atr_pct = (atr_entry / entry_price) * 100.0
+        if not np.isfinite(raw_atr_pct) or raw_atr_pct <= 0:
+            raise OptimizationUnavailableError("Optimización no disponible: escala ATR no finita.")
+        atr_pct = max(raw_atr_pct, 1e-4)
         mfe_atr = mfe_pct / atr_pct
         mae_atr = mae_pct / atr_pct
+
+        if not all(np.isfinite(value) for value in (mfe_atr, mae_atr)):
+            raise OptimizationUnavailableError("Optimización no disponible: múltiplo ATR no finito.")
 
         return mfe_atr, mae_atr
 
@@ -195,19 +221,7 @@ class StrategyOptimizer:
     ) -> MFEMAEDistribution:
         """Computes empirical percentiles and summary statistics for MFE / MAE distributions."""
         if not trades:
-            return MFEMAEDistribution(
-                sample_size=0,
-                mfe_mean=0.0,
-                mfe_median=0.0,
-                mfe_p25=0.0,
-                mfe_p75=0.0,
-                mfe_p90=0.0,
-                mae_mean=0.0,
-                mae_median=0.0,
-                mae_p75=0.0,
-                mae_p85=0.0,
-                win_rate_pct=0.0,
-            )
+            raise OptimizationUnavailableError("Optimización no disponible: NO_TRADES.")
 
         norm_trades = [self._extract_trade_dict(t) for t in trades]
         mfe_list: list[float] = []
@@ -262,30 +276,14 @@ class StrategyOptimizer:
 
         # 1. Handling small or insufficient sample sizes (Anti-Overfitting Protection)
         if n_train < self.min_sample_size:
-            atr_tp = float(defaults["tp"])
-            atr_sl = float(defaults["sl"])
-            expected_rr = round(atr_tp / max(atr_sl, 1e-6), 2)
-            confidence = round((n_train / max(self.min_sample_size, 1)) * 0.40, 3)
-
-            val_info = {
-                "train_period": "2023-2024",
-                "validation_period": "2025",
-                "train_sample_size": n_train,
-                "validation_sample_size": len(norm_val),
-                "status": "insufficient_training_sample",
-                "penalty_applied": True,
-            }
-
-            return OptimizedParameters(
-                regime=regime_str,
-                volatility_state=volatility_state,
-                atr_tp_multiplier=round(atr_tp, 2),
-                atr_sl_multiplier=round(atr_sl, 2),
-                expected_rr=expected_rr,
-                sample_size=n_train,
-                confidence=confidence,
-                validation_period=val_info,
+            raise OptimizationUnavailableError(
+                f"Optimización no disponible para {regime_str}: muestra {n_train} "
+                f"inferior al mínimo {self.min_sample_size}."
             )
+
+        # Validate the entire train/validation cohort before computing any statistics.
+        for trade in (*norm_train, *norm_val):
+            self._calculate_atr_excursions(trade)
 
         # 2. Empirical MFE / MAE Optimization on TRAIN trades
         train_dist = self.analyze_distribution(norm_train)
@@ -348,7 +346,7 @@ class StrategyOptimizer:
             val_info["validation_simulated_wins"] = val_wins
             val_info["validation_simulated_losses"] = val_losses
         else:
-            val_info["validation_simulated_win_rate_pct"] = 0.0
+            val_info["validation_simulated_win_rate_pct"] = None
 
         return OptimizedParameters(
             regime=regime_str,
@@ -359,6 +357,8 @@ class StrategyOptimizer:
             sample_size=n_train,
             confidence=confidence,
             validation_period=val_info,
+            calibration_state=CalibrationState.AVAILABLE.value,
+            excursion_policy_version=EXCURSION_POLICY_VERSION,
         )
 
     def optimize_all_regimes(
@@ -397,12 +397,18 @@ class StrategyOptimizer:
             train_sub = [t for t in train_trades if t.get("regime") == reg]
             val_sub = [t for t in val_trades if t.get("regime") == reg]
 
+            if not train_sub:
+                continue
+
             opt_params = self.optimize_regime(
                 regime=reg,
                 train_trades=train_sub,
                 val_trades=val_sub,
             )
             results[reg] = opt_params
+
+        if not results:
+            raise OptimizationUnavailableError("Optimización no disponible: NO_TRADES de entrenamiento por régimen.")
 
         return results
 

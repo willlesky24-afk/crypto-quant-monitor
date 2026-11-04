@@ -12,9 +12,11 @@ import pandas as pd
 
 from .backtest_metrics import BacktestMetricsCalculator
 from .backtest_models import (
+    EXCURSION_POLICY_VERSION,
     BacktestConfig,
     BacktestValidationError,
     EquityPoint,
+    ExcursionObservability,
     ExecutionPolicyVersion,
     ExecutionTraceStatus,
     MarketType,
@@ -43,6 +45,83 @@ class BacktestEngine:
 
     def __init__(self, config: BacktestConfig | None = None):
         self.config = config or BacktestConfig()
+
+    @staticmethod
+    def _coherent_ohlc(open_price: float, high: float, low: float, close: float) -> bool:
+        """Local evidence check; does not change the engine's dataset acceptance policy."""
+        return (
+            all(math.isfinite(value) and value > 0 for value in (open_price, high, low, close))
+            and low <= min(open_price, close) <= max(open_price, close) <= high
+        )
+
+    @staticmethod
+    def _excursion_evidence(
+        position: Position,
+        bar_open: float,
+        bar_high: float,
+        bar_low: float,
+        bar_close: float,
+        opening_exit: bool,
+        intrabar_exit: bool,
+    ) -> dict[str, float | str | None]:
+        """Bound extrema attributable to the position, never inferring intrabar order.
+
+        The fill (including slippage) is the excursion denominator, not an observed
+        market high/low. An opening exit sees only Open; a horizon exit sees the
+        full bar. For intrabar exits, the current High/Low are possible extrema,
+        not necessarily observations made before the exit.
+        """
+        unknown: dict[str, float | str | None] = {
+            "mfe_observability": ExcursionObservability.UNDETERMINED.value,
+            "mae_observability": ExcursionObservability.UNDETERMINED.value,
+            "mfe_exact_pct": None, "mae_exact_pct": None,
+            "mfe_lower_bound_pct": None, "mfe_upper_bound_pct": None,
+            "mae_lower_bound_pct": None, "mae_upper_bound_pct": None,
+        }
+        if (
+            not position.excursion_data_valid
+            or position.observed_high_price is None
+            or position.observed_low_price is None
+            or not math.isfinite(position.entry_price)
+            or position.entry_price <= 0
+        ):
+            return unknown
+        if not opening_exit and not BacktestEngine._coherent_ohlc(
+            bar_open, bar_high, bar_low, bar_close
+        ):
+            return unknown
+
+        low_high = max(position.observed_high_price, bar_open)
+        low_low = min(position.observed_low_price, bar_open)
+        if opening_exit:
+            high_high, high_low = low_high, low_low
+        else:
+            high_high = max(low_high, bar_high)
+            high_low = min(low_low, bar_low)
+            if not intrabar_exit:
+                low_high, low_low = high_high, high_low
+        entry = position.entry_price
+        mfe_lower = max(0.0, (low_high - entry) / entry * 100.0)
+        mfe_upper = max(0.0, (high_high - entry) / entry * 100.0)
+        mae_lower = max(0.0, (entry - low_low) / entry * 100.0)
+        mae_upper = max(0.0, (entry - high_low) / entry * 100.0)
+
+        result = unknown.copy()
+        for name, lower, upper in (
+            ("mfe", mfe_lower, mfe_upper),
+            ("mae", mae_lower, mae_upper),
+        ):
+            exact = (not intrabar_exit) or math.isclose(
+                lower, upper, rel_tol=1e-12, abs_tol=1e-12
+            )
+            result[f"{name}_observability"] = (
+                ExcursionObservability.EXACT_OHLC.value if exact
+                else ExcursionObservability.BOUNDED_OHLC.value
+            )
+            result[f"{name}_lower_bound_pct"] = lower
+            result[f"{name}_upper_bound_pct"] = upper
+            result[f"{name}_exact_pct"] = lower if exact else None
+        return result
 
     @staticmethod
     def validate_chronology(df: pd.DataFrame) -> pd.Series:
@@ -281,6 +360,8 @@ class BacktestEngine:
                         last_funding_time=bar_ts,
                         highest_price=bar_high,
                         lowest_price=bar_low,
+                        observed_high_price=bar_open,
+                        observed_low_price=bar_open,
                     )
                     current_cash -= allocated_cash
                 pending_signal = None
@@ -461,6 +542,7 @@ class BacktestEngine:
                             if active_position.entry_price > 0
                             else 0.0
                         )
+
                     else:
                         mfe_pct = (
                             ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
@@ -472,6 +554,12 @@ class BacktestEngine:
                             if active_position.entry_price > 0
                             else 0.0
                         )
+
+                    excursion_evidence = self._excursion_evidence(
+                        active_position, bar_open, bar_high, bar_low, bar_close,
+                        opening_exit=opening_exit,
+                        intrabar_exit=(exit_reason != TradeExitReason.TIME_HORIZON.value and not opening_exit),
+                    )
 
                     trade_result = TradeResult(
                         trade_id=f"trade-{len(closed_trades) + 1}",
@@ -510,9 +598,18 @@ class BacktestEngine:
                             ExecutionPolicyVersion.SPOT_LONG_C1.value
                             if not is_short_pos else None
                         ),
+                        excursion_policy_version=EXCURSION_POLICY_VERSION,
+                        atr_entry=active_position.signal.atr,
+                        **excursion_evidence,
                     )
                     closed_trades.append(trade_result)
                     active_position = None
+
+                if active_position is not None:
+                    if self._coherent_ohlc(bar_open, bar_high, bar_low, bar_close):
+                        active_position.update_observed_excursions(bar_high, bar_low)
+                    else:
+                        active_position.excursion_data_valid = False
 
                 # A surviving position may move to break-even at Close(T), based on
                 # this completed candle; the new stop can only execute from T+1.
