@@ -7,25 +7,35 @@ Streamlit.
 
 ## Versión actual
 
-La versión actual es **v2.0 — Notification System, Live Streaming & Dashboard Visualizer** (Tag: `v2.0-live-notifications-dashboard`), construida sobre la arquitectura del monitor en vivo (v1.6/v1.7), el motor histórico columnar Parquet (Fase 2), el framework de backtesting orientado a eventos (Fase 3) y el motor predictivo con optimización de estrategias (Fase 4). Incluye:
+La versión actual es **v2.1 — Integridad del backtest y observabilidad MFE/MAE** (Tag: `v2.1`).
+Consolida sobre v2.0 (streaming, notificaciones y dashboard) las correcciones de rigor
+cuantitativo del backtest y el cierre de la integración continua:
 
-- streaming de baja latencia con Binance WebSocket resiliente (`ResilientWebSocketClient`) con reconexión automática y heartbeat;
-- agregación de velas en buffer rodante de memoria acotada (`CandleAggregator`) con evaluación estricta anti-repintado de velas cerradas;
-- motor de ejecución en tiempo real (`LiveExecutionEngine`) con paridad determinista comprobada (100%) respecto a `BacktestRunner`;
-- sistema de alertas multicanal (`DiscordWebhookChannel`, `TelegramChannel`, `WebhookChannel`) con formato semántico dinámico (LONG, SHORT, WAIT);
-- despachador inteligente (`NotificationDispatcher`) con gestor de cooldown anti-spam en memoria (`CooldownManager`) y filtrado por score predictivo;
-- dashboard interactivo multi-pestaña en Streamlit (Live Market Monitor, Backtest & Strategy Analytics, Notification Settings);
-- descarga de OHLCV en vivo e histórica desde Binance con validación de integridad;
-- almacenamiento columnar optimizado en Apache Parquet con particionado anual;
-- RSI, ATR, volumen promedio, EMA 50/200 y Volume Profile vectorizado de alta velocidad (`np.histogram`);
-- análisis de mercado, alertas, señal, riesgo, decisión y Quant Score;
-- motor de backtesting cronológico event-driven libre de look-ahead bias con soporte LONG/SHORT y contratos perpetuos;
-- clasificación causal de regímenes de mercado (`RegimeClassifier`);
-- capa probabilística y estimación condicional de escenarios (`PredictiveEngine`);
-- optimización empírica de parámetros TP/SL basada en MFE/MAE con Walk-Forward Validation (`StrategyOptimizer`);
-- capa de decisión adaptativa (`Enhanced DecisionEngine`) con trazabilidad completa (`DecisionResult`);
-- cálculo de métricas institucionales (Win Rate, Profit Factor, Expectancy, Drawdown, MFE, MAE);
-- historial persistente en SQLite con control de migraciones.
+- **Backtest SPOT LONG 1x verificado**: validación cronológica estricta, warm-up causal,
+  trailing desde la vela siguiente, prioridad de gaps de apertura y TP límite, rechazo de
+  TP inválido, R bruto y neto con riesgo inicial inmutable, drawdown desde capital inicial,
+  conciliación de caja/equity y anualización de Sharpe con procedencia de datos.
+- **Observabilidad MFE/MAE (D1B3)**: estados independientes `EXACT_OHLC`, `BOUNDED_OHLC`,
+  `UNDETERMINED` y `LEGACY_UNKNOWN` (política `OHLC_D1B3_V1`), cotas inferior/superior en
+  salidas intrabar y promedios exactos con denominador y cobertura
+  (`NO_TRADES`/`NONE`/`PARTIAL`/`COMPLETE`). Ningún dato ausente se convierte en cero.
+- **Calibración fail-closed**: `StrategyOptimizer` solo usa excursiones exactas con
+  cobertura completa y ATR válido; con muestra insuficiente o evidencia incompleta lanza
+  `OptimizationUnavailableError` en lugar de devolver parámetros por defecto. La intención se
+  declara con `calibration_required` (por defecto `False`) en `BacktestRunner`,
+  `LiveExecutionEngine` y `DecisionEngine`.
+- **Copiloto de IA** (Gemini / OpenAI / Ollama): chat, análisis de imágenes, escáner de
+  mercado cripto y forex y veredicto con niveles SL/TP calculados por el motor.
+- **Calidad**: 862 pruebas offline y deterministas, Ruff (lint y formato) limpio y CI en
+  GitHub Actions sobre Python 3.12 y 3.13.
+
+### Límites conocidos de v2.1
+
+- El backtest solo simula **SPOT LONG 1x**; SHORT, PERP y apalancamiento se rechazan.
+- La interfaz no solicita calibración: los backtests corren como "optimización no solicitada".
+- Los datos forex provienen de un endpoint no oficial de Yahoo Finance: válido para uso
+  personal, no para uso comercial.
+- Pendientes fuera de alcance: D1C, D2 y P0-003C-E (política global de aceptación OHLCV).
 
 ## Arquitectura v1.6
 
@@ -211,9 +221,14 @@ Discord Telegram Webhook
 - **98% de cobertura en streaming** (`src/streaming/`, 405/414 líneas).
 - **Linter**: Verificación estricta con Ruff (0 errores, 0 advertencias).
 
-## Próxima fase (Fase 6)
+## Hoja de ruta
 
-**AI Market Agent**: Agente conversacional e inteligente para la interpretación contextual de señales cuantitativas, análisis de regímenes de mercado y síntesis explicativa automatizada para el usuario.
+- **v2.2 — Datos multiproveedor**: adaptador de proveedores (Twelve Data, OANDA demo),
+  forex mayor y metales (XAU/USD, XAG/USD), procedencia por vela y verificación cruzada.
+- **v2.3 — Simulador completo**: SHORT, spreads y sesiones forex.
+- **v3.0 — Prueba de ventaja**: backtest multianual fuera de muestra sobre un universo fijo.
+- **v3.1 — Ranking de oportunidades** e índices bursátiles.
+- **v3.2 — Agente de IA verificado** contra los cálculos del motor.
+- **v4.x — Producto**: usuarios, suscripciones, nube y marco legal.
 
-
-
+Los planes de fases anteriores se conservan en `docs/historial/`.
