@@ -370,3 +370,104 @@ def compare_sources(
         "AGREE" if result["max_close_diff_pct"] <= tolerance_pct else "DISAGREE"
     )
     return result
+
+
+class CachedCandleSource:
+    """Incremental Parquet cache in front of one provider.
+
+    Why: free tiers are rate-limited (Twelve Data ~8 requests/minute), and closed
+    candles do not change, so they are downloaded once and reused. The cache is
+    keyed by provider (``EURUSD_OANDA``) so different sources are never mixed.
+
+    The cache is fresh while the next candle after the last cached one has not
+    closed yet. Otherwise the provider is queried and merged; when a provider
+    re-publishes a cached candle with different values the newest values win and
+    the count is reported in ``attrs["revised_bars"]`` instead of hidden.
+    """
+
+    _PRICE_FIELDS = ("open", "high", "low", "close", "volume")
+
+    def __init__(
+        self,
+        provider: Any,
+        cache_dir: str | Any,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        try:
+            from .parquet_store import ParquetStore
+        except ImportError:  # Streamlit execution with ``src`` on sys.path.
+            from parquet_store import ParquetStore
+        self.provider = provider
+        self.store = ParquetStore(cache_dir)
+        self._now = now or (lambda: datetime.now(timezone.utc))
+
+    def _key(self, symbol: str) -> str:
+        return f"{canonical_pair(symbol)}_{self.provider.name.upper()}"
+
+    def get_klines(self, symbol: str, interval: str, limit: int) -> pd.DataFrame:
+        key = _check_interval(interval, {k: k for k in INTERVAL_DURATION})
+        dur = INTERVAL_DURATION[key]
+        cache_key = self._key(symbol)
+        cached = self.store.load_dataset(cache_key, key)
+        manifest = self.store.read_manifest(cache_key, key) or {}
+        meta = manifest.get("extra_metadata", {})
+        now = pd.Timestamp(self._now())
+
+        if (
+            not cached.empty
+            and len(cached) >= int(limit)
+            and cached["timestamp"].iloc[-1] + 2 * dur > now
+        ):
+            out = cached.iloc[-int(limit) :].reset_index(drop=True)
+            out.attrs.update(
+                {
+                    "provider": meta.get("provider", self.provider.name),
+                    "provider_symbol": meta.get("provider_symbol"),
+                    "volume_kind": meta.get("volume_kind"),
+                    "cache": "HIT",
+                    "revised_bars": 0,
+                }
+            )
+            return out
+
+        fresh = self.provider.get_klines(symbol, key, limit)
+        attrs = dict(fresh.attrs)
+        revised = 0
+        if cached.empty:
+            merged = fresh
+        else:
+            overlap = cached.merge(fresh, on="timestamp", suffixes=("_old", "_new"))
+            if not overlap.empty:
+                changed = pd.Series(False, index=overlap.index)
+                for f in self._PRICE_FIELDS:
+                    changed |= ~(
+                        (overlap[f"{f}_old"] - overlap[f"{f}_new"]).abs() <= 1e-12
+                    )
+                revised = int(changed.sum())
+            merged = (
+                pd.concat([cached, fresh], ignore_index=True)
+                .drop_duplicates(subset=["timestamp"], keep="last")
+                .sort_values("timestamp")
+                .reset_index(drop=True)
+            )
+        if not merged.empty:
+            self.store.save_dataset(
+                merged[["timestamp", *self._PRICE_FIELDS]],
+                cache_key,
+                key,
+                source=attrs.get("provider", self.provider.name),
+                extra_manifest_metadata={
+                    "provider": attrs.get("provider"),
+                    "provider_symbol": attrs.get("provider_symbol"),
+                    "volume_kind": attrs.get("volume_kind"),
+                },
+            )
+        out = merged.iloc[-int(limit) :].reset_index(drop=True)
+        out.attrs.update(
+            {
+                **attrs,
+                "cache": "REFRESH" if not cached.empty else "MISS",
+                "revised_bars": revised,
+            }
+        )
+        return out

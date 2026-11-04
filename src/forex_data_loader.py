@@ -10,6 +10,7 @@ import pandas as pd
 
 try:
     from .market_data_providers import (
+        CachedCandleSource,
         ForexDataError,
         ForexInvalidDataError,
         ForexProviderUnavailableError,
@@ -19,6 +20,7 @@ try:
     )
 except ImportError:  # Streamlit execution with ``src`` on sys.path.
     from market_data_providers import (
+        CachedCandleSource,
         ForexDataError,
         ForexInvalidDataError,
         ForexProviderUnavailableError,
@@ -96,6 +98,12 @@ class ForexDataLoader:
                 environment=os.getenv("OANDA_ENVIRONMENT", "practice"),
                 timeout_seconds=timeout_seconds,
             )
+        cache_dir = os.getenv("FOREX_CACHE_DIR", "").strip()
+        self._source = (
+            CachedCandleSource(self._provider, cache_dir)
+            if self._provider is not None and cache_dir
+            else self._provider
+        )
 
     def available_pairs(self) -> dict[str, str]:
         """Pairs this provider can actually serve (metals only with spot quotes)."""
@@ -121,7 +129,7 @@ class ForexDataLoader:
     ) -> pd.DataFrame:
         """Fetch standardized OHLCV candles for a Forex pair or spot metal."""
         if self._provider is not None:
-            return self._provider.get_klines(symbol, interval, limit)
+            return self._source.get_klines(symbol, interval, limit)
         if canonical_pair(symbol) in _METAL_CODES:
             raise ForexProviderUnavailableError(
                 f"{symbol}: los metales al contado requieren Twelve Data u OANDA "

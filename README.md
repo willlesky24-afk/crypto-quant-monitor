@@ -7,6 +7,19 @@ Streamlit.
 
 ## Versión actual
 
+### v2.2 — Datos multiproveedor (Tag: `v2.2`)
+
+- Proveedores enchufables vía `FOREX_PROVIDER`: `oanda` (recomendado: precio de broker y
+  volumen por ticks), `twelvedata` (verificación cruzada) y `yahoo` (solo desarrollo).
+- Oro y plata al contado (XAU/USD, XAG/USD) con OANDA o Twelve Data.
+- Misma validación OHLC para todas las fuentes, solo velas cerradas y eliminación de velas
+  publicadas dentro del cierre semanal (viernes 17:00 a domingo 17:00, hora de Nueva York).
+- Procedencia por serie (`provider`, `provider_symbol`, `volume_kind`) y `compare_sources()`
+  para verificar dos fuentes con tolerancia explícita.
+- Caché Parquet incremental por proveedor (`FOREX_CACHE_DIR`).
+
+### v2.1
+
 La versión actual es **v2.1 — Integridad del backtest y observabilidad MFE/MAE** (Tag: `v2.1`).
 Consolida sobre v2.0 (streaming, notificaciones y dashboard) las correcciones de rigor
 cuantitativo del backtest y el cierre de la integración continua:
