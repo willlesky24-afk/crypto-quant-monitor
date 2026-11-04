@@ -108,3 +108,16 @@ def test_loader_uses_cache_only_when_configured(monkeypatch, tmp_path):
     assert not isinstance(ForexDataLoader()._source, CachedCandleSource)
     monkeypatch.setenv("FOREX_CACHE_DIR", str(tmp_path))
     assert isinstance(ForexDataLoader()._source, CachedCandleSource)
+
+
+def test_cache_restarts_when_spread_column_appears(tmp_path):
+    old = _bars("2026-11-04 00:00", 3)
+    new = _bars("2026-11-04 02:00", 3)
+    new["spread"] = 0.0002
+    prov = FakeProvider([old, new])
+    src = CachedCandleSource(prov, tmp_path, now=_clock("2026-11-04 03:30"))
+    src.get_klines("EURUSD=X", "1h", 3)
+    src._now = _clock("2026-11-04 05:30")
+    out = src.get_klines("EURUSD=X", "1h", 10)
+    assert out["spread"].notna().all()
+    assert list(out["timestamp"].dt.hour) == [2, 3, 4]

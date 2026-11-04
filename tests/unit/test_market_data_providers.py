@@ -172,7 +172,7 @@ def test_oanda_uses_practice_host_bearer_and_complete_candles(monkeypatch):
     assert req.full_url.startswith(
         "https://api-fxpractice.oanda.com/v3/instruments/EUR_USD/candles"
     )
-    assert "granularity=H1" in req.full_url and "price=M" in req.full_url
+    assert "granularity=H1" in req.full_url and "price=MBA" in req.full_url
     assert req.get_header("Authorization") == "Bearer tok"
 
 
@@ -331,3 +331,43 @@ def test_twelvedata_drops_weekend_bars(monkeypatch):
     )
     assert pd.Timestamp("2026-10-31 05:00", tz="UTC") not in set(df["timestamp"])
     assert df.attrs["weekend_bars_removed"] == 1
+
+
+# --- v2.3 D2: OANDA bid/ask spread per candle ------------------------------------
+
+
+def test_oanda_adds_spread_from_bid_ask(monkeypatch):
+    payload = _oanda_payload(n=2, last_complete=True)
+    for c in payload["candles"]:
+        # bid/ask open spread 0.0002, close spread 0.0004 -> candle spread 0.0003
+        m = c["mid"]
+        c["bid"] = {
+            "o": f"{float(m['o']) - 0.0001:.5f}",
+            "c": f"{float(m['c']) - 0.0002:.5f}",
+        }
+        c["ask"] = {
+            "o": f"{float(m['o']) + 0.0001:.5f}",
+            "c": f"{float(m['c']) + 0.0002:.5f}",
+        }
+    urlopen = _mock_urlopen(monkeypatch, payload)
+    df = OandaProvider(token="tok").get_klines("EURUSD=X", "1h", 5)
+    assert "price=MBA" in urlopen.call_args[0][0].full_url
+    assert df["spread"].tolist() == pytest.approx([0.0003, 0.0003])
+    assert df.attrs["spread_kind"] == "bid_ask_open_close_mean"
+
+
+def test_oanda_without_bid_ask_has_no_spread_column(monkeypatch):
+    _mock_urlopen(monkeypatch, _oanda_payload(n=2, last_complete=True))
+    df = OandaProvider(token="tok").get_klines("EURUSD=X", "1h", 5)
+    assert "spread" not in df.columns
+    assert df.attrs["spread_kind"] == "none"
+
+
+def test_oanda_negative_spread_is_invalid(monkeypatch):
+    payload = _oanda_payload(n=1, last_complete=True)
+    c = payload["candles"][0]
+    c["bid"] = {"o": "1.2", "c": "1.2"}
+    c["ask"] = {"o": "1.1", "c": "1.1"}
+    _mock_urlopen(monkeypatch, payload)
+    with pytest.raises(ForexInvalidDataError, match="spread"):
+        OandaProvider(token="tok").get_klines("EURUSD=X", "1h", 5)

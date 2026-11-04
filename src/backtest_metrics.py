@@ -80,7 +80,13 @@ class BacktestMetricsCalculator:
         authenticate its external origin, but its direction and cash arithmetic
         can be checked without guessing an absent initial stop or risk.
         """
-        if trade.direction != "LONG" or trade.side != "LONG":
+        # SHORT is verifiable only for MARGIN_1X records (v2.3); historical SHORT
+        # records without that policy tag are never inferred as verified.
+        is_short = trade.direction == "SHORT" and trade.side == "SHORT"
+        if is_short:
+            if trade.execution_policy_version != "MARGIN_1X_C1_OPEN_PRIORITY_TP_LIMIT":
+                return None
+        elif trade.direction != "LONG" or trade.side != "LONG":
             return None
         fields = (
             trade.entry_price,
@@ -112,14 +118,14 @@ class BacktestMetricsCalculator:
             or trade.exit_price <= 0
             or units <= 0
             or stop <= 0
-            or stop >= entry
+            or (stop <= entry if is_short else stop >= entry)
             or risk <= 0
             or trade.fee_entry < 0
             or trade.fee_exit < 0
             or trade.funding_fees != 0
         ):
             return None
-        risk_per_unit = entry - stop
+        risk_per_unit = stop - entry if is_short else entry - stop
 
         def close(actual: float, expected: float) -> bool:
             return math.isclose(
@@ -140,7 +146,15 @@ class BacktestMetricsCalculator:
             (
                 close(trade.notional_entry, units * entry + trade.fee_entry),
                 close(trade.notional_exit, units * trade.exit_price),
-                close(trade.gross_pnl, units * (trade.exit_price - entry)),
+                close(
+                    trade.gross_pnl,
+                    units
+                    * (
+                        (entry - trade.exit_price)
+                        if is_short
+                        else (trade.exit_price - entry)
+                    ),
+                ),
                 close(
                     trade.net_pnl, trade.gross_pnl - trade.fee_entry - trade.fee_exit
                 ),

@@ -105,7 +105,20 @@ def build_candle_frame(
             raise ForexInvalidDataError(
                 f"Inconsistent Forex candle at index {index} for {symbol}"
             )
-        clean.append({"timestamp": timestamp, **values})
+        row = {"timestamp": timestamp, **values}
+        if "spread" in rec:
+            try:
+                spread = float(rec["spread"])
+            except (TypeError, ValueError) as exc:
+                raise ForexInvalidDataError(
+                    f"Invalid spread at index {index} for {symbol}"
+                ) from exc
+            if not np.isfinite(spread) or spread < 0:
+                raise ForexInvalidDataError(
+                    f"Invalid spread at index {index} for {symbol}: {spread}"
+                )
+            row["spread"] = spread
+        clean.append(row)
 
     df = pd.DataFrame(clean).sort_values("timestamp").reset_index(drop=True)
     if df["timestamp"].duplicated().any():
@@ -278,7 +291,8 @@ class OandaProvider:
             {
                 "granularity": self.INTERVALS[key],
                 "count": min(int(limit) + 1, _MAX_COUNT),
-                "price": "M",
+                # Mid for analysis plus bid/ask for the executable spread (v2.3 D2).
+                "price": "MBA",
             }
         )
         req = urllib.request.Request(
@@ -302,18 +316,38 @@ class OandaProvider:
             mid = c.get("mid")
             if not isinstance(mid, dict):
                 raise ForexInvalidDataError(f"Missing mid prices for {sym}")
-            records.append(
-                {
-                    "timestamp": c.get("time"),
-                    "open": mid.get("o"),
-                    "high": mid.get("h"),
-                    "low": mid.get("l"),
-                    "close": mid.get("c"),
-                    "volume": c.get("volume"),
-                }
+            rec = {
+                "timestamp": c.get("time"),
+                "open": mid.get("o"),
+                "high": mid.get("h"),
+                "low": mid.get("l"),
+                "close": mid.get("c"),
+                "volume": c.get("volume"),
+            }
+            bid, ask = c.get("bid"), c.get("ask")
+            if isinstance(bid, dict) and isinstance(ask, dict):
+                # Candle spread: mean of the observed open and close bid/ask
+                # spreads (OANDA publishes no intrabar spread path).
+                try:
+                    rec["spread"] = (
+                        (float(ask["o"]) - float(bid["o"]))
+                        + (float(ask["c"]) - float(bid["c"]))
+                    ) / 2.0
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ForexInvalidDataError(
+                        f"Invalid bid/ask spread for {sym}"
+                    ) from exc
+            records.append(rec)
+        with_spread = sum("spread" in r for r in records)
+        if 0 < with_spread < len(records):
+            raise ForexInvalidDataError(
+                f"bid/ask spread incompleto para {sym}: {with_spread}/{len(records)} velas"
             )
         df = build_candle_frame(
             records, symbol, provider=self.name, provider_sym=sym, volume_kind="tick"
+        )
+        df.attrs["spread_kind"] = (
+            "bid_ask_open_close_mean" if "spread" in df.columns else "none"
         )
         df = drop_weekend_closure(df)
         attrs = dict(df.attrs)
@@ -433,6 +467,12 @@ class CachedCandleSource:
         fresh = self.provider.get_klines(symbol, key, limit)
         attrs = dict(fresh.attrs)
         revised = 0
+        if not cached.empty and ("spread" in cached.columns) != (
+            "spread" in fresh.columns
+        ):
+            # Column set changed (e.g. bid/ask spread added in v2.3): never mix
+            # rows with and without spread; the cache restarts from fresh data.
+            cached = cached.iloc[0:0]
         if cached.empty:
             merged = fresh
         else:
@@ -451,8 +491,11 @@ class CachedCandleSource:
                 .reset_index(drop=True)
             )
         if not merged.empty:
+            cols = ["timestamp", *self._PRICE_FIELDS]
+            if "spread" in merged.columns:
+                cols.append("spread")
             self.store.save_dataset(
-                merged[["timestamp", *self._PRICE_FIELDS]],
+                merged[cols],
                 cache_key,
                 key,
                 source=attrs.get("provider", self.provider.name),

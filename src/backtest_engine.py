@@ -68,6 +68,7 @@ class BacktestEngine:
         bar_close: float,
         opening_exit: bool,
         intrabar_exit: bool,
+        is_short: bool = False,
     ) -> dict[str, float | str | None]:
         """Bound extrema attributable to the position, never inferring intrabar order.
 
@@ -109,10 +110,18 @@ class BacktestEngine:
             if not intrabar_exit:
                 low_high, low_low = high_high, high_low
         entry = position.entry_price
-        mfe_lower = max(0.0, (low_high - entry) / entry * 100.0)
-        mfe_upper = max(0.0, (high_high - entry) / entry * 100.0)
-        mae_lower = max(0.0, (entry - low_low) / entry * 100.0)
-        mae_upper = max(0.0, (entry - high_low) / entry * 100.0)
+        # low_high/low_low: extrema certainly observed; high_high/high_low: the
+        # widest extrema possibly observed. SHORT mirrors LONG (v2.3 D1).
+        if not is_short:
+            mfe_lower = max(0.0, (low_high - entry) / entry * 100.0)
+            mfe_upper = max(0.0, (high_high - entry) / entry * 100.0)
+            mae_lower = max(0.0, (entry - low_low) / entry * 100.0)
+            mae_upper = max(0.0, (entry - high_low) / entry * 100.0)
+        else:
+            mfe_lower = max(0.0, (entry - low_low) / entry * 100.0)
+            mfe_upper = max(0.0, (entry - high_low) / entry * 100.0)
+            mae_lower = max(0.0, (low_high - entry) / entry * 100.0)
+            mae_upper = max(0.0, (high_high - entry) / entry * 100.0)
 
         result = unknown.copy()
         for name, lower, upper in (
@@ -177,24 +186,32 @@ class BacktestEngine:
         return timestamps
 
     def validate_config(self) -> None:
-        """Only the SPOT LONG 1x cash ledger is supported in this phase."""
+        """Supported ledgers: SPOT LONG 1x and MARGIN_1X (LONG/SHORT, 1x).
+
+        MARGIN_1X models forex/spot-metals CFD-style exposure without leverage:
+        the notional is reserved as margin and PnL = units x (exit - entry) x side.
+        Crypto SPOT stays LONG-only (no borrowing is modelled); PERP stays blocked.
+        """
         cfg = self.config
         market = str(cfg.market_type).strip().upper()
         direction = str(cfg.direction).strip().upper()
-        if market != MarketType.SPOT.value:
+        if market not in (MarketType.SPOT.value, MarketType.MARGIN_1X.value):
             raise BacktestValidationError(
                 f"market_type={cfg.market_type!r} no disponible: PERP y otros instrumentos "
-                "requieren un modelo contable validado. Disponible: SPOT LONG 1x."
+                "requieren un modelo contable validado. Disponible: SPOT LONG 1x o "
+                "MARGIN_1X."
             )
-        if direction != PositionSide.LONG.value:
+        if market == MarketType.SPOT.value and direction != PositionSide.LONG.value:
             raise BacktestValidationError(
                 f"direction={cfg.direction!r} no disponible para SPOT: "
-                "SHORT y BOTH requieren otro modelo. Disponible: SPOT LONG 1x."
+                "SHORT y BOTH requieren MARGIN_1X. Disponible: SPOT LONG 1x."
             )
+        if direction not in ("LONG", "SHORT", "BOTH"):
+            raise BacktestValidationError(f"direction={cfg.direction!r} no reconocida.")
         if not math.isfinite(cfg.leverage) or cfg.leverage != 1.0:
             raise BacktestValidationError(
-                f"leverage={cfg.leverage!r} no disponible para SPOT: "
-                "no se simula apalancamiento. Disponible: SPOT LONG 1x."
+                f"leverage={cfg.leverage!r} no disponible: "
+                "no se simula apalancamiento. Disponible: 1x."
             )
         for name in (
             "initial_capital",
@@ -252,6 +269,35 @@ class BacktestEngine:
                     f"Datos financieros inválidos: {column} debe ser positivo y finito."
                 )
 
+        is_margin = (
+            str(self.config.market_type).strip().upper() == MarketType.MARGIN_1X.value
+        )
+        # v2.3 D2: optional per-candle bid/ask spread (absolute price units).
+        # Prices are mid; buys execute at mid + spread/2, sells at mid - spread/2.
+        if "spread" in candles.columns:
+            spreads = pd.to_numeric(candles["spread"], errors="coerce")
+            if not spreads.map(math.isfinite).all() or (spreads < 0).any():
+                raise BacktestValidationError(
+                    "Datos financieros inválidos: spread debe ser finito y >= 0."
+                )
+            half_spreads = (spreads / 2.0).tolist()
+        else:
+            half_spreads = [0.0] * len(candles)
+        # v2.3 D4: MARGIN_1X instruments (forex, spot metals) do not trade during
+        # the weekly closure; bars published inside it are rejected, not traded.
+        if is_margin:
+            try:
+                from .market_data_providers import drop_weekend_closure
+            except ImportError:  # Streamlit execution with ``src`` on sys.path.
+                from market_data_providers import drop_weekend_closure
+            if drop_weekend_closure(candles[["timestamp"]]).attrs[
+                "weekend_bars_removed"
+            ]:
+                raise BacktestValidationError(
+                    "Velas dentro del cierre semanal (viernes 17:00 a domingo 17:00 "
+                    "Nueva York): no son negociables en MARGIN_1X."
+                )
+
         # Build lookup map of valid signals by timestamp
         signals_map: dict[pd.Timestamp, SignalEvent] = {}
         if signals:
@@ -274,6 +320,7 @@ class BacktestEngine:
             bar_high = float(bar["high"])
             bar_low = float(bar["low"])
             bar_close = float(bar["close"])
+            half_spread = half_spreads[i]
 
             # -----------------------------------------------------------------
             # 1. Process Pending Order (Entry on Open of T+1)
@@ -281,37 +328,40 @@ class BacktestEngine:
             if active_position is None and pending_signal is not None:
                 slip = self.config.slippage_pct
                 sig_dir = pending_signal.direction.upper()
-                if sig_dir != PositionSide.LONG.value:
+                is_short = ("SHORT" in sig_dir) or ("SELL" in sig_dir)
+                if is_short and not is_margin:
                     raise BacktestValidationError(
                         f"Señal {sig_dir!r} no disponible para SPOT LONG 1x."
                     )
-                is_short = ("SHORT" in sig_dir) or ("SELL" in sig_dir)
+                if not is_short and sig_dir != PositionSide.LONG.value:
+                    raise BacktestValidationError(f"Señal {sig_dir!r} no reconocida.")
                 pos_side = (
                     PositionSide.SHORT.value if is_short else PositionSide.LONG.value
                 )
+                side_label = "SHORT" if is_short else "LONG"
 
+                # LONG buys at ask, SHORT sells at bid; slippage is always adverse.
                 if not is_short:
-                    entry_price = bar_open * (1.0 + slip)
+                    entry_price = (bar_open + half_spread) * (1.0 + slip)
                 else:
-                    entry_price = bar_open * (1.0 - slip)
+                    entry_price = (bar_open - half_spread) * (1.0 - slip)
                 if not math.isfinite(entry_price) or entry_price <= 0:
                     raise BacktestValidationError(
-                        "Precio de entrada SPOT no positivo o no finito."
+                        "Precio de entrada no positivo o no finito."
                     )
 
-                # Position sizing based on available cash and leverage
                 allocated_cash = current_cash * max(
                     0.0, min(1.0, self.config.position_size_pct)
                 )
-                lev = max(1.0, float(self.config.leverage))
                 if allocated_cash > 0 and entry_price > 0:
-                    if not math.isfinite(pending_signal.atr):
-                        raise BacktestValidationError("ATR de señal no finito.")
-
-                    # Multipliers based on signal ATR (custom signal multiples or config defaults)
-                    atr_val = max(
-                        pending_signal.atr, entry_price * 0.005
-                    )  # Safe fallback if ATR is 0
+                    if not math.isfinite(pending_signal.atr) or pending_signal.atr <= 0:
+                        raise BacktestValidationError(
+                            "ATR de señal no positivo o no finito: no se aplica un "
+                            "ATR mínimo implícito."
+                        )
+                    # v2.3 D3: the real ATR, never a hidden floor (a 0.5% floor
+                    # widened forex levels ~5x versus the live signal).
+                    atr_val = float(pending_signal.atr)
                     tp_mult = (
                         pending_signal.tp_atr_multiple
                         if getattr(pending_signal, "tp_atr_multiple", None) is not None
@@ -322,17 +372,17 @@ class BacktestEngine:
                         if getattr(pending_signal, "sl_atr_multiple", None) is not None
                         else self.config.sl_atr_multiple
                     )
-                    if not is_short:
-                        try:
-                            valid_tp_multiplier = not isinstance(
-                                tp_mult, bool
-                            ) and math.isfinite(tp_mult)
-                        except (TypeError, ValueError):
-                            valid_tp_multiplier = False
-                        if not valid_tp_multiplier:
-                            raise BacktestValidationError(
-                                "Multiplicador Take Profit SPOT LONG no numérico o no finito."
-                            )
+                    try:
+                        valid_tp_multiplier = not isinstance(
+                            tp_mult, bool
+                        ) and math.isfinite(tp_mult)
+                    except (TypeError, ValueError):
+                        valid_tp_multiplier = False
+                    if not valid_tp_multiplier:
+                        raise BacktestValidationError(
+                            f"Multiplicador Take Profit {'SPOT ' if not is_short else ''}"
+                            f"{side_label} no numérico o no finito."
+                        )
                     if not all(math.isfinite(value) for value in (tp_mult, sl_mult)):
                         raise BacktestValidationError(
                             "Multiplicadores de niveles no finitos."
@@ -341,47 +391,66 @@ class BacktestEngine:
                     if not is_short:
                         tp_price = entry_price + (tp_mult * atr_val)
                         sl_price = entry_price - (sl_mult * atr_val)
+                        tp_valid = (
+                            math.isfinite(tp_price)
+                            and tp_price > 0
+                            and tp_price > entry_price
+                        )
                     else:
                         tp_price = entry_price - (tp_mult * atr_val)
                         sl_price = entry_price + (sl_mult * atr_val)
-                    if not is_short and (
-                        not math.isfinite(tp_price)
-                        or tp_price <= 0
-                        or tp_price <= entry_price
-                    ):
+                        tp_valid = (
+                            math.isfinite(tp_price) and 0 < tp_price < entry_price
+                        )
+                    if not tp_valid:
+                        if not is_short:
+                            raise BacktestValidationError(
+                                "Take Profit SPOT LONG inválido: debe ser finito, "
+                                "positivo y superior al precio efectivo de entrada."
+                            )
                         raise BacktestValidationError(
-                            "Take Profit SPOT LONG inválido: debe ser finito, positivo y superior "
-                            "al precio efectivo de entrada."
+                            "Take Profit SHORT inválido: debe ser finito, positivo e "
+                            "inferior al precio efectivo de entrada."
                         )
                     if not all(math.isfinite(level) for level in (tp_price, sl_price)):
                         raise BacktestValidationError("Niveles de salida no finitos.")
 
-                    fee_entry = (allocated_cash * lev) * self.config.taker_fee_pct
-                    actual_capital_invested = (allocated_cash * lev) - fee_entry
+                    fee_entry = allocated_cash * self.config.taker_fee_pct
+                    actual_capital_invested = allocated_cash - fee_entry
                     size_units = actual_capital_invested / entry_price
                     if not math.isfinite(size_units) or size_units <= 0:
                         raise BacktestValidationError(
                             "Unidades SPOT no positivas o no finitas."
                         )
-                    if not is_short and not math.isfinite(size_units * tp_price):
+                    if not math.isfinite(size_units * tp_price):
                         raise BacktestValidationError(
-                            "Take Profit SPOT LONG inválido: notional de salida no finito."
+                            f"Take Profit {'SPOT ' if not is_short else ''}{side_label} "
+                            "inválido: notional de salida no finito."
                         )
-                    initial_risk_per_unit = entry_price - sl_price
+                    initial_risk_per_unit = (
+                        sl_price - entry_price if is_short else entry_price - sl_price
+                    )
                     initial_risk_amount = size_units * initial_risk_per_unit
+                    stop_on_wrong_side = (
+                        sl_price <= entry_price if is_short else sl_price >= entry_price
+                    )
                     if (
                         not math.isfinite(sl_price)
                         or sl_price <= 0
-                        or sl_price >= entry_price
+                        or stop_on_wrong_side
                         or not math.isfinite(initial_risk_per_unit)
                         or initial_risk_per_unit <= 0
                         or not math.isfinite(initial_risk_amount)
                         or initial_risk_amount <= 0
                     ):
                         raise BacktestValidationError(
-                            "Stop inicial SPOT LONG o riesgo inicial inválido."
+                            f"Stop inicial {'SHORT' if is_short else 'SPOT LONG'} o "
+                            "riesgo inicial inválido."
                         )
 
+                    # Observations attributable to the position are executable on
+                    # the exit side: bid for LONG, ask for SHORT.
+                    exit_adj = half_spread if is_short else -half_spread
                     active_position = Position(
                         position_id=f"pos-{len(closed_trades) + 1}",
                         signal=pending_signal,
@@ -398,10 +467,10 @@ class BacktestEngine:
                         side=pos_side,
                         funding_fees_accumulated=0.0,
                         last_funding_time=bar_ts,
-                        highest_price=bar_high,
-                        lowest_price=bar_low,
-                        observed_high_price=bar_open,
-                        observed_low_price=bar_open,
+                        highest_price=bar_high + exit_adj,
+                        lowest_price=bar_low + exit_adj,
+                        observed_high_price=bar_open + exit_adj,
+                        observed_low_price=bar_open + exit_adj,
                     )
                     current_cash -= allocated_cash
                 pending_signal = None
@@ -435,124 +504,118 @@ class BacktestEngine:
                             active_position.last_funding_time = bar_ts
 
                 # B. Resolve exits against the stop already effective for this bar.
+                # Exit-side executable prices: LONG sells at bid (mid - half
+                # spread), SHORT buys back at ask (mid + half spread).
+                adj = half_spread if is_short_pos else -half_spread
+                ex_open, ex_high = bar_open + adj, bar_high + adj
+                ex_low, ex_close = bar_low + adj, bar_close + adj
                 active_stop = active_position.sl_price
                 active_target = active_position.tp_price
                 exit_triggered = False
                 opening_exit = False
-                exit_price = bar_close
+                exit_price = ex_close
                 exit_reason = TradeExitReason.TIME_HORIZON.value
+                slip = self.config.slippage_pct
+                is_preexisting = bar_ts > active_position.entry_timestamp
+                horizon_reached = (
+                    active_position.bars_held >= self.config.max_holding_bars
+                    or i == total_bars - 1
+                )
 
                 if not is_short_pos:
-                    is_preexisting = bar_ts > active_position.entry_timestamp
-
                     # 1. Opening priority for pre-existing positions (Gaps at Open of T)
-                    if is_preexisting and bar_open <= active_stop:
-                        # Adverse gap down: stop-market exit filled at Open with adverse slippage
+                    if is_preexisting and ex_open <= active_stop:
+                        # Adverse gap down: stop-market exit at Open, adverse slippage
                         exit_triggered = True
                         opening_exit = True
-                        exit_price = bar_open * (1.0 - self.config.slippage_pct)
+                        exit_price = ex_open * (1.0 - slip)
                         exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    elif is_preexisting and bar_open >= active_target:
-                        # Favorable gap up: limit TP filled at target price (no gap improvement, no adverse slippage below limit)
+                    elif is_preexisting and ex_open >= active_target:
+                        # Favorable gap up: limit TP filled at target (no improvement)
                         exit_triggered = True
                         opening_exit = True
                         exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
-
-                    # 2. Intrabar monitoring (Opening strictly between levels, or position newly opened on bar T)
-                    elif bar_low <= active_stop and bar_high >= active_target:
-                        # Intrabar conflict: both levels touched, conservative SL first convention
+                    # 2. Intrabar monitoring; a conflict resolves SL first
+                    elif ex_low <= active_stop:
                         exit_triggered = True
-                        exit_price = active_stop * (1.0 - self.config.slippage_pct)
+                        exit_price = active_stop * (1.0 - slip)
                         exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    elif bar_low <= active_stop:
-                        # Stop Loss touched intrabar
-                        exit_triggered = True
-                        exit_price = active_stop * (1.0 - self.config.slippage_pct)
-                        exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    elif bar_high >= active_target:
-                        # Take Profit touched intrabar: limit fill at target price (no adverse slippage below limit)
+                    elif ex_high >= active_target:
+                        # Limit TP: no adverse slippage below the limit
                         exit_triggered = True
                         exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
-
-                    elif (
-                        active_position.bars_held >= self.config.max_holding_bars
-                        or i == total_bars - 1
-                    ):
-                        # Time Horizon expired
+                    elif horizon_reached:
                         exit_triggered = True
-                        exit_price = bar_close * (1.0 - self.config.slippage_pct)
+                        exit_price = ex_close * (1.0 - slip)
                         exit_reason = TradeExitReason.TIME_HORIZON.value
-
                 else:
-                    # SHORT Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
-                    if (
-                        bar_high >= active_position.sl_price
-                        and bar_low <= active_position.tp_price
-                    ):
+                    # SHORT mirrors LONG exactly (v2.3 D1): gaps first, SL first on
+                    # conflict, TP as a buy limit without slippage.
+                    if is_preexisting and ex_open >= active_stop:
                         exit_triggered = True
-                        exit_price = active_position.sl_price * (
-                            1.0 + self.config.slippage_pct
-                        )
+                        opening_exit = True
+                        exit_price = ex_open * (1.0 + slip)
                         exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    # SHORT Case B: Stop Loss touched
-                    elif bar_high >= active_position.sl_price:
+                    elif is_preexisting and ex_open <= active_target:
                         exit_triggered = True
-                        effective_sl = max(bar_open, active_position.sl_price)
-                        exit_price = effective_sl * (1.0 + self.config.slippage_pct)
-                        exit_reason = TradeExitReason.STOP_LOSS.value
-
-                    # SHORT Case C: Take Profit touched
-                    elif bar_low <= active_position.tp_price:
-                        exit_triggered = True
-                        effective_tp = min(bar_open, active_position.tp_price)
-                        exit_price = effective_tp * (1.0 + self.config.slippage_pct)
+                        opening_exit = True
+                        exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
-
-                    # SHORT Case D: Time Horizon expired (Max holding bars reached or end of series)
-                    elif (
-                        active_position.bars_held >= self.config.max_holding_bars
-                        or i == total_bars - 1
-                    ):
+                    elif ex_high >= active_stop:
                         exit_triggered = True
-                        exit_price = bar_close * (1.0 + self.config.slippage_pct)
+                        exit_price = active_stop * (1.0 + slip)
+                        exit_reason = TradeExitReason.STOP_LOSS.value
+                    elif ex_low <= active_target:
+                        exit_triggered = True
+                        exit_price = active_target
+                        exit_reason = TradeExitReason.TAKE_PROFIT.value
+                    elif horizon_reached:
+                        exit_triggered = True
+                        exit_price = ex_close * (1.0 + slip)
                         exit_reason = TradeExitReason.TIME_HORIZON.value
 
                 # An opening exit has observed only Open(T); High/Low(T) occur
                 # after the position is gone. Other paths retain the OHLC policy.
                 if opening_exit:
-                    active_position.update_excursions(high=bar_open, low=bar_open)
+                    active_position.update_excursions(high=ex_open, low=ex_open)
                 else:
-                    active_position.update_excursions(high=bar_high, low=bar_low)
+                    active_position.update_excursions(high=ex_high, low=ex_low)
 
                 if exit_triggered:
                     # Describe only what the exit candle can establish. A pre-existing
                     # position opening at/beyond a level is resolved immediately at Open;
                     # subsequent intrabar extremes do not override the opening exit.
-                    if (
-                        is_short_pos
-                        or not all(
-                            math.isfinite(level)
-                            for level in (active_stop, active_target)
-                        )
-                        or not 0
+                    # Levels as (lower, upper) in price terms for either side.
+                    lower_level, upper_level = (
+                        (active_target, active_stop)
+                        if is_short_pos
+                        else (active_stop, active_target)
+                    )
+                    levels_coherent = (
+                        0 < active_target < active_position.entry_price <= active_stop
+                        if is_short_pos
+                        else 0
                         < active_stop
                         <= active_position.entry_price
                         < active_target
+                    )
+                    if (
+                        not all(
+                            math.isfinite(level)
+                            for level in (active_stop, active_target)
+                        )
+                        or not levels_coherent
                     ):
                         trace_status = ExecutionTraceStatus.UNDETERMINED.value
-                    elif not active_stop < bar_open < active_target:
+                    elif not lower_level < ex_open < upper_level:
                         trace_status = (
                             ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value
                             if bar_ts > active_position.entry_timestamp
                             else ExecutionTraceStatus.UNDETERMINED.value
                         )
-                    elif bar_low <= active_stop and bar_high >= active_target:
+                    elif ex_low <= lower_level and ex_high >= upper_level:
                         trace_status = ExecutionTraceStatus.INTRABAR_SL_FIRST.value
                     else:
                         trace_status = ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value
@@ -582,9 +645,25 @@ class BacktestEngine:
                     ):
                         raise BacktestValidationError("Liquidación SPOT no finita.")
 
-                    # SPOT: sale proceeds less exit fee. Entry fee was paid inside
+                    # LONG: sale proceeds less exit fee. Entry fee was paid inside
                     # the original allocation, so it must not be charged twice.
-                    current_cash += notional_exit - fee_exit
+                    # SHORT (MARGIN_1X): the reserved margin (units x entry) is
+                    # released plus the PnL; a loss beyond it would need a
+                    # liquidation model that is not implemented.
+                    if not is_short_pos:
+                        cash_back = notional_exit - fee_exit
+                    else:
+                        cash_back = (
+                            active_position.size_units * active_position.entry_price
+                            + gross_pnl
+                            - fee_exit
+                        )
+                        if cash_back < 0:
+                            raise BacktestValidationError(
+                                "Pérdida SHORT supera el margen 1x reservado: "
+                                "liquidación no modelada."
+                            )
+                    current_cash += cash_back
                     realized_net_pnl += net_pnl
                     if current_cash < 0 or not math.isclose(
                         current_cash,
@@ -618,68 +697,89 @@ class BacktestEngine:
                     )
 
                     if not is_short_pos:
-                        mfe_pct = (
+                        # Excursions are non-negative by definition (slippage can put the
+                        # fill outside the bar range); same floor as the D1B3 exact fields.
+                        mfe_pct = max(
+                            0.0,
                             (
                                 (
-                                    active_position.highest_price
-                                    - active_position.entry_price
+                                    (
+                                        active_position.highest_price
+                                        - active_position.entry_price
+                                    )
+                                    / active_position.entry_price
+                                    * 100.0
                                 )
-                                / active_position.entry_price
-                                * 100.0
-                            )
-                            if active_position.entry_price > 0
-                            else 0.0
+                                if active_position.entry_price > 0
+                                else 0.0
+                            ),
                         )
-                        mae_pct = (
+                        # Excursions are non-negative by definition (slippage can put the
+                        # fill outside the bar range); same floor as the D1B3 exact fields.
+                        mae_pct = max(
+                            0.0,
                             (
                                 (
-                                    active_position.entry_price
-                                    - active_position.lowest_price
+                                    (
+                                        active_position.entry_price
+                                        - active_position.lowest_price
+                                    )
+                                    / active_position.entry_price
+                                    * 100.0
                                 )
-                                / active_position.entry_price
-                                * 100.0
-                            )
-                            if active_position.entry_price > 0
-                            else 0.0
+                                if active_position.entry_price > 0
+                                else 0.0
+                            ),
                         )
 
                     else:
-                        mfe_pct = (
+                        # Excursions are non-negative by definition (slippage can put the
+                        # fill outside the bar range); same floor as the D1B3 exact fields.
+                        mfe_pct = max(
+                            0.0,
                             (
                                 (
-                                    active_position.entry_price
-                                    - active_position.lowest_price
+                                    (
+                                        active_position.entry_price
+                                        - active_position.lowest_price
+                                    )
+                                    / active_position.entry_price
+                                    * 100.0
                                 )
-                                / active_position.entry_price
-                                * 100.0
-                            )
-                            if active_position.entry_price > 0
-                            else 0.0
+                                if active_position.entry_price > 0
+                                else 0.0
+                            ),
                         )
-                        mae_pct = (
+                        # Excursions are non-negative by definition (slippage can put the
+                        # fill outside the bar range); same floor as the D1B3 exact fields.
+                        mae_pct = max(
+                            0.0,
                             (
                                 (
-                                    active_position.highest_price
-                                    - active_position.entry_price
+                                    (
+                                        active_position.highest_price
+                                        - active_position.entry_price
+                                    )
+                                    / active_position.entry_price
+                                    * 100.0
                                 )
-                                / active_position.entry_price
-                                * 100.0
-                            )
-                            if active_position.entry_price > 0
-                            else 0.0
+                                if active_position.entry_price > 0
+                                else 0.0
+                            ),
                         )
 
                     excursion_evidence = self._excursion_evidence(
                         active_position,
-                        bar_open,
-                        bar_high,
-                        bar_low,
-                        bar_close,
+                        ex_open,
+                        ex_high,
+                        ex_low,
+                        ex_close,
                         opening_exit=opening_exit,
                         intrabar_exit=(
                             exit_reason != TradeExitReason.TIME_HORIZON.value
                             and not opening_exit
                         ),
+                        is_short=is_short_pos,
                     )
 
                     trade_result = TradeResult(
@@ -716,9 +816,9 @@ class BacktestEngine:
                         net_r_multiple=net_r_multiple,
                         execution_trace_status=trace_status,
                         execution_policy_version=(
-                            ExecutionPolicyVersion.SPOT_LONG_C1.value
-                            if not is_short_pos
-                            else None
+                            ExecutionPolicyVersion.MARGIN_1X_C1.value
+                            if is_margin
+                            else ExecutionPolicyVersion.SPOT_LONG_C1.value
                         ),
                         excursion_policy_version=EXCURSION_POLICY_VERSION,
                         atr_entry=active_position.signal.atr,
@@ -728,8 +828,8 @@ class BacktestEngine:
                     active_position = None
 
                 if active_position is not None:
-                    if self._coherent_ohlc(bar_open, bar_high, bar_low, bar_close):
-                        active_position.update_observed_excursions(bar_high, bar_low)
+                    if self._coherent_ohlc(ex_open, ex_high, ex_low, ex_close):
+                        active_position.update_observed_excursions(ex_high, ex_low)
                     else:
                         active_position.excursion_data_valid = False
 
@@ -742,14 +842,14 @@ class BacktestEngine:
                             "Riesgo inicial de posición no disponible."
                         )
                     if not is_short_pos:
-                        if bar_high >= active_position.entry_price + (
+                        if ex_high >= active_position.entry_price + (
                             self.config.trailing_stop_activation_r * initial_risk
                         ):
                             active_position.sl_price = max(
                                 active_position.sl_price, active_position.entry_price
                             )
                     else:
-                        if bar_low <= active_position.entry_price - (
+                        if ex_low <= active_position.entry_price - (
                             self.config.trailing_stop_activation_r * initial_risk
                         ):
                             active_position.sl_price = min(
@@ -761,8 +861,16 @@ class BacktestEngine:
             # -----------------------------------------------------------------
             unrealized_equity = 0.0
             if active_position is not None:
-                # Open SPOT holdings are marked to market, without assuming a sale.
-                unrealized_equity = active_position.size_units * bar_close
+                # Marked at the exit-side price, without assuming a sale. SHORT:
+                # reserved margin (units x entry) plus open PnL units x (entry - ask).
+                if active_position.side == PositionSide.SHORT.value:
+                    unrealized_equity = active_position.size_units * (
+                        2.0 * active_position.entry_price - (bar_close + half_spread)
+                    )
+                else:
+                    unrealized_equity = active_position.size_units * (
+                        bar_close - half_spread
+                    )
 
             bar_equity = current_cash + unrealized_equity
             if not math.isfinite(bar_equity) or not math.isfinite(current_cash):

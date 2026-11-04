@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+# Single source of truth with the provider weekend filter (v2.2).
+try:
+    from .market_data_providers import _NY_TZ, _WEEKLY_CLOSE_HOUR_NY
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from market_data_providers import _NY_TZ, _WEEKLY_CLOSE_HOUR_NY
 
 
 @dataclass(frozen=True)
@@ -25,22 +32,25 @@ def get_forex_session_status(dt: datetime | None = None) -> ForexSessionStatus:
     - London: 07:00 to 16:00 UTC
     - New York: 12:00 to 21:00 UTC
 
-    Market closed: Friday 21:00 UTC until Sunday 21:00 UTC.
+    Market closed: Friday 17:00 New York until Sunday 17:00 New York
+    (21:00 UTC in summer, 22:00 UTC in winter; DST handled by the time zone).
+    Session hours below are indicative UTC windows.
     """
     now = dt or datetime.now(timezone.utc)
-    weekday = now.weekday()  # 0=Monday, ..., 4=Friday, 5=Saturday, 6=Sunday
     hour = now.hour
     minute = now.minute
     time_float = hour + (minute / 60.0)
 
-    # Check if market is closed for weekend (Friday 21:00 UTC to Sunday 21:00 UTC)
-    is_weekend_closed = False
-    if weekday == 4 and time_float >= 21.0:
-        is_weekend_closed = True
-    elif weekday == 5:
-        is_weekend_closed = True
-    elif weekday == 6 and time_float < 21.0:
-        is_weekend_closed = True
+    ny = now.astimezone(ZoneInfo(_NY_TZ))
+    ny_dow, ny_hour = ny.weekday(), ny.hour
+    is_weekend_closed = (
+        (ny_dow == 4 and ny_hour >= _WEEKLY_CLOSE_HOUR_NY)
+        or ny_dow == 5
+        or (ny_dow == 6 and ny_hour < _WEEKLY_CLOSE_HOUR_NY)
+    )
+    reopen_utc = (
+        "21:00 UTC" if ny.utcoffset().total_seconds() == -4 * 3600 else "22:00 UTC"
+    )
 
     active_sessions: list[str] = []
     session_details: dict[str, str] = {
@@ -62,7 +72,7 @@ def get_forex_session_status(dt: datetime | None = None) -> ForexSessionStatus:
 
     if is_weekend_closed:
         status_headline = "🔴 Mercado Forex Cerrado (Fin de Semana)"
-        reopen_info = "Reapertura: Domingo a las 21:00 UTC (17:00 EST / 23:00 España)"
+        reopen_info = f"Reapertura: domingo 17:00 Nueva York ({reopen_utc})"
     else:
         # Check overlap
         if (
@@ -76,7 +86,7 @@ def get_forex_session_status(dt: datetime | None = None) -> ForexSessionStatus:
             status_headline = f"🟢 Mercado Abierto: {' + '.join(active_sessions)}"
         else:
             status_headline = "🟢 Mercado Abierto (Transición Interbancaria)"
-        reopen_info = "Abierto 24/5 continuo hasta el viernes 21:00 UTC"
+        reopen_info = f"Abierto 24/5 hasta el viernes 17:00 Nueva York ({reopen_utc})"
 
     return ForexSessionStatus(
         is_market_open=not is_weekend_closed,

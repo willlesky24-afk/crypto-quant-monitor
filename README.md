@@ -7,6 +7,18 @@ Streamlit.
 
 ## Versión actual
 
+### v2.3 — Simulador completo (Tag: `v2.3`)
+
+- Mercado `MARGIN_1X` (forex y metales, sin apalancamiento) con LONG, SHORT y BOTH; SHORT es
+  espejo exacto de LONG (gaps, SL primero, TP límite, trailing, MFE/MAE, R verificado).
+  Cripto SPOT sigue siendo solo LONG; PERP sigue bloqueado.
+- Spread bid/ask real por vela (OANDA `price=MBA`): compra al ask, venta al bid.
+- Eliminado el ATR mínimo implícito del 0,5 %: un ATR no positivo es un error explícito.
+- Cierre semanal y sesiones forex en hora de Nueva York con cambio de horario.
+- Límites: sin swap/financiación nocturna; sin modelo de liquidación (pérdida SHORT mayor
+  que el margen 1x se rechaza).
+
+
 ### v2.2 — Datos multiproveedor (Tag: `v2.2`)
 
 - Proveedores enchufables vía `FOREX_PROVIDER`: `oanda` (recomendado: precio de broker y

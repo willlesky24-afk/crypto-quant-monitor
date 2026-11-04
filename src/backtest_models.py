@@ -27,6 +27,7 @@ class ExecutionPolicyVersion(str, Enum):
     """Simulation policy tag; it does not certify real-market execution."""
 
     SPOT_LONG_C1 = "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
+    MARGIN_1X_C1 = "MARGIN_1X_C1_OPEN_PRIORITY_TP_LIMIT"
 
 
 class ExcursionObservability(str, Enum):
@@ -49,6 +50,7 @@ class PositionSide(str, Enum):
 class MarketType(str, Enum):
     SPOT = "SPOT"
     PERP = "PERP"
+    MARGIN_1X = "MARGIN_1X"
 
 
 class BacktestValidationError(ValueError):

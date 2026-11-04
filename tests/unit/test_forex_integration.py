@@ -187,3 +187,21 @@ def test_forex_sessions_logic():
     assert "Solapamiento" in status_tue.status_headline
     assert "🇬🇧 Sesión Londres" in status_tue.active_sessions
     assert "🇺🇸 Sesión Nueva York" in status_tue.active_sessions
+
+
+@pytest.mark.parametrize(
+    "utc,is_open",
+    [
+        # US DST ends 2026-11-01: winter close/reopen at 22:00 UTC (17:00 New York).
+        (datetime(2026, 11, 6, 21, 30, tzinfo=timezone.utc), True),  # Fri winter
+        (datetime(2026, 11, 6, 22, 0, tzinfo=timezone.utc), False),
+        (datetime(2026, 11, 8, 21, 30, tzinfo=timezone.utc), False),  # Sun winter
+        (datetime(2026, 11, 8, 22, 0, tzinfo=timezone.utc), True),
+        # Summer (EDT): 21:00 UTC.
+        (datetime(2026, 10, 30, 21, 0, tzinfo=timezone.utc), False),  # Fri summer
+        (datetime(2026, 10, 25, 21, 0, tzinfo=timezone.utc), True),  # Sun summer
+    ],
+)
+def test_weekly_closure_follows_new_york_dst(utc, is_open):
+    status = get_forex_session_status(utc)
+    assert status.is_market_open is is_open

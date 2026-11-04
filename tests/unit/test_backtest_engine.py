@@ -823,7 +823,7 @@ def test_backtest_engine_zero_initial_risk_rejected():
         }
     )
 
-    sig = make_test_signal("2024-01-01 00:00:00", price=100.0, atr=0.0)
+    sig = make_test_signal("2024-01-01 00:00:00", price=100.0, atr=1.0)
     cfg = BacktestConfig(sl_atr_multiple=0.0, max_holding_bars=1)
     engine = BacktestEngine(config=cfg)
     with pytest.raises(BacktestValidationError, match="Stop inicial"):
@@ -1137,7 +1137,27 @@ def test_exit_trace_does_not_change_financial_aggregates():
     assert current == without_trace
 
 
-def test_atr_floor_and_entry_slippage_are_in_initial_risk():
+@pytest.mark.parametrize("atr", [0.0, -1.0, float("nan"), float("inf")])
+def test_non_positive_or_non_finite_atr_is_rejected_without_floor(atr):
+    """v2.3 D3: no hidden 0.5% ATR floor; an unusable ATR is an explicit error."""
+    with pytest.raises(BacktestValidationError, match="ATR"):
+        BacktestEngine(BacktestConfig(max_holding_bars=2)).run(
+            _flat_spot_bars(), signals=[make_test_signal(atr=atr)]
+        )
+
+
+def test_small_real_atr_is_used_as_is():
+    """Forex-like ATR (0.1% of price) must set levels at 0.1%, not 0.5%."""
+    cfg = BacktestConfig(
+        taker_fee_pct=0.0, slippage_pct=0.0, tp_atr_multiple=2.0, sl_atr_multiple=1.0
+    )
+    trades, _ = BacktestEngine(cfg).run(
+        _flat_spot_bars(), signals=[make_test_signal(atr=0.1)]
+    )
+    assert trades[0].initial_stop_price == pytest.approx(100.0 - 0.1)
+
+
+def test_explicit_atr_and_entry_slippage_are_in_initial_risk():
     cfg = BacktestConfig(
         initial_capital=1000.0,
         taker_fee_pct=0.001,
@@ -1147,7 +1167,9 @@ def test_atr_floor_and_entry_slippage_are_in_initial_risk():
         max_holding_bars=2,
     )
     trades, _ = BacktestEngine(cfg).run(
-        _flat_spot_bars(), signals=[make_test_signal(atr=0.0)]
+        # 0.505 = the value the removed floor produced (101 * 0.5%); references unchanged.
+        _flat_spot_bars(),
+        signals=[make_test_signal(atr=0.505)],
     )
     trade = trades[0]
     assert trade.entry_price == pytest.approx(101.0)

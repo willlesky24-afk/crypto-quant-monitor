@@ -241,11 +241,13 @@ def _positive_finite_for_ui(value):
 
 
 def _supported_spot_long_for_ui(config):
-    return (
-        config is not None
-        and _trade_field_for_ui(config, "market_type") == "SPOT"
-        and _trade_field_for_ui(config, "direction") == "LONG"
-        and _trade_field_for_ui(config, "leverage") == 1.0
+    """Ledgers the engine validates: SPOT LONG 1x or MARGIN_1X (v2.3)."""
+    if config is None or _trade_field_for_ui(config, "leverage") != 1.0:
+        return False
+    market = _trade_field_for_ui(config, "market_type")
+    direction = _trade_field_for_ui(config, "direction")
+    return (market == "SPOT" and direction == "LONG") or (
+        market == "MARGIN_1X" and direction in ("LONG", "SHORT", "BOTH")
     )
 
 
@@ -257,22 +259,25 @@ def _planned_rr_for_ui(trade, config):
     units = _trade_field_for_ui(trade, "size_units")
     risk = _trade_field_for_ui(trade, "initial_risk_amount")
     per_unit = _trade_field_for_ui(trade, "initial_risk_per_unit")
+    side = _trade_field_for_ui(trade, "side")
+    is_short = side == "SHORT"
     if (
         not _supported_spot_long_for_ui(config)
-        or _trade_field_for_ui(trade, "direction") != "LONG"
-        or _trade_field_for_ui(trade, "side") != "LONG"
+        or _trade_field_for_ui(trade, "direction") != side
+        or side not in ("LONG", "SHORT")
+        or (is_short and _trade_field_for_ui(config, "market_type") != "MARGIN_1X")
         or not all(
             _positive_finite_for_ui(x)
             for x in (entry, stop, target, units, risk, per_unit)
         )
-        or not stop < entry < target
+        or not (target < entry < stop if is_short else stop < entry < target)
     ):
         return None
     if not math.isclose(
-        per_unit, entry - stop, rel_tol=1e-9, abs_tol=1e-10
+        per_unit, abs(entry - stop), rel_tol=1e-9, abs_tol=1e-10
     ) or not math.isclose(risk, units * per_unit, rel_tol=1e-9, abs_tol=1e-10):
         return None
-    ratio = (target - entry) / (entry - stop)
+    ratio = abs(target - entry) / abs(entry - stop)
     return ratio if math.isfinite(ratio) and ratio > 0 else None
 
 
@@ -2000,6 +2005,12 @@ with tab_backtest:
                     slippage_pct=0.0005,
                 )
                 b_cfg.leverage = float(selected_leverage)
+            if is_forex:
+                # Forex/metals presets run on MARGIN_1X: cost = per-candle spread,
+                # not crypto taker fees (v2.3 D1/D2).
+                b_cfg.market_type = "MARGIN_1X"
+                b_cfg.taker_fee_pct = 0.0
+                b_cfg.slippage_pct = 0.0
 
     else:
         st.markdown("##### ⚙️ Parámetros Avanzados de Simulación")
@@ -2018,7 +2029,8 @@ with tab_backtest:
                     "Comisión Taker (%)",
                     min_value=0.0,
                     max_value=1.0,
-                    value=0.05,
+                    # Forex/metals (MARGIN_1X): the cost is the per-candle spread.
+                    value=0.0 if is_forex else 0.05,
                     step=0.01,
                 )
                 / 100.0
@@ -2029,7 +2041,7 @@ with tab_backtest:
                     "Slippage (%)",
                     min_value=0.0,
                     max_value=1.0,
-                    value=0.05,
+                    value=0.0 if is_forex else 0.05,
                     step=0.01,
                 )
                 / 100.0
@@ -2040,9 +2052,15 @@ with tab_backtest:
                 ["LONG", "BOTH", "SHORT"],
                 index=0,
             )
-            if direction_choice != "LONG":
+            if is_forex:
+                st.caption(
+                    "MARGIN_1X (forex/metales, sin apalancamiento). Coste: spread "
+                    "bid/ask real por vela cuando el proveedor lo publica (OANDA)."
+                )
+            elif direction_choice != "LONG":
                 st.warning(
-                    "SPOT SHORT/BOTH están temporalmente deshabilitados para backtesting."
+                    "Cripto SPOT solo admite LONG: SHORT/BOTH requieren MARGIN_1X "
+                    "(forex y metales)."
                 )
 
         run_sim = st.button(
@@ -2057,7 +2075,7 @@ with tab_backtest:
                 taker_fee_pct=taker_fee_pct,
                 slippage_pct=slippage_pct,
                 direction=direction_choice,
-                market_type="SPOT",
+                market_type="MARGIN_1X" if is_forex else "SPOT",
                 leverage=1.0,
             )
 
@@ -2079,7 +2097,8 @@ with tab_backtest:
                     st.error(
                         f"Backtest rechazado ({b_cfg.market_type}, {b_cfg.direction}, "
                         f"{b_cfg.leverage}x): {exc} "
-                        "Configuración disponible: SPOT LONG 1x sin apalancamiento."
+                        "Configuraciones disponibles: SPOT LONG 1x (cripto) o "
+                        "MARGIN_1X LONG/SHORT 1x (forex y metales)."
                     )
                     st.stop()
 
