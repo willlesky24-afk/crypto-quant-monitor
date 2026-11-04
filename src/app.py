@@ -45,7 +45,7 @@ try:
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
     from src.engine import MarketEngine
-    from src.forex_data_loader import FOREX_PAIRS, ForexDataLoader
+    from src.forex_data_loader import FOREX_PAIRS, ForexDataError, ForexDataLoader
     from src.forex_sessions import get_forex_session_status
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
@@ -93,7 +93,7 @@ except ImportError:
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
     from engine import MarketEngine
-    from forex_data_loader import FOREX_PAIRS, ForexDataLoader
+    from forex_data_loader import FOREX_PAIRS, ForexDataError, ForexDataLoader
     from forex_sessions import get_forex_session_status
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
@@ -750,12 +750,17 @@ POPULAR_PAIRS = {
 }
 
 if is_forex:
+    try:
+        forex_pairs = ForexDataLoader().available_pairs()
+    except ForexDataError as exc:
+        st.sidebar.error(f"Proveedor forex no disponible: {exc}")
+        st.stop()
     selected_label = st.sidebar.selectbox(
-        "Par de Divisas Forex",
-        options=list(FOREX_PAIRS.keys()),
+        "Par de Divisas Forex / Metales",
+        options=list(forex_pairs.keys()),
         index=0,
     )
-    symbol = FOREX_PAIRS[selected_label]
+    symbol = forex_pairs[selected_label]
 else:
     selected_label = st.sidebar.selectbox(
         "Par de Criptomoneda",

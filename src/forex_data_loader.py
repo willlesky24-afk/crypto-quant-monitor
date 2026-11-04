@@ -1,11 +1,40 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.request
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+try:
+    from .market_data_providers import (
+        ForexDataError,
+        ForexInvalidDataError,
+        ForexProviderUnavailableError,
+        OandaProvider,
+        TwelveDataProvider,
+        canonical_pair,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from market_data_providers import (
+        ForexDataError,
+        ForexInvalidDataError,
+        ForexProviderUnavailableError,
+        OandaProvider,
+        TwelveDataProvider,
+        canonical_pair,
+    )
+
+__all__ = [
+    "FOREX_PAIRS",
+    "METAL_PAIRS",
+    "ForexDataError",
+    "ForexDataLoader",
+    "ForexInvalidDataError",
+    "ForexProviderUnavailableError",
+]
 
 FOREX_PAIRS: dict[str, str] = {
     "💶 EUR / USD (Euro / Dólar)": "EURUSD=X",
@@ -18,6 +47,17 @@ FOREX_PAIRS: dict[str, str] = {
     "🇬🇧 EUR / GBP (Euro / Libra)": "EURGBP=X",
 }
 
+# Spot metals are only offered by providers that quote them as spot (XAU/USD,
+# XAG/USD). Yahoo only exposes futures (GC=F, SI=F), a different instrument,
+# so metals are not offered through the Yahoo development provider.
+METAL_PAIRS: dict[str, str] = {
+    "🥇 XAU / USD (Oro)": "XAUUSD=X",
+    "🥈 XAG / USD (Plata)": "XAGUSD=X",
+}
+_METAL_CODES = {canonical_pair(s) for s in METAL_PAIRS.values()}
+
+PROVIDERS = ("yahoo", "twelvedata", "oanda")
+
 INTERVAL_MAP: dict[str, str] = {
     "15m": "15m",
     "1h": "1h",
@@ -26,23 +66,42 @@ INTERVAL_MAP: dict[str, str] = {
 }
 
 
-class ForexDataError(RuntimeError):
-    """Forex candles could not be used for operational analysis."""
-
-
-class ForexProviderUnavailableError(ForexDataError):
-    """The Forex price provider could not supply a response."""
-
-
-class ForexInvalidDataError(ForexDataError):
-    """The Forex price provider returned missing or invalid candles."""
-
-
 class ForexDataLoader:
     """Historical and live candle data loader for global foreign exchange (Forex) pairs."""
 
-    def __init__(self, timeout_seconds: float = 10.0) -> None:
+    def __init__(
+        self, timeout_seconds: float = 10.0, provider: str | None = None
+    ) -> None:
+        """Select the provider from ``provider`` or ``FOREX_PROVIDER`` (default yahoo).
+
+        A configured provider without credentials fails here, loudly, instead of
+        silently falling back to another source.
+        """
         self.timeout_seconds = timeout_seconds
+        name = (provider or os.getenv("FOREX_PROVIDER", "yahoo")).strip().lower()
+        if name not in PROVIDERS:
+            raise ForexProviderUnavailableError(
+                f"FOREX_PROVIDER={name!r} no soportado; opciones: {PROVIDERS}."
+            )
+        self.provider_name = name
+        self._provider: TwelveDataProvider | OandaProvider | None = None
+        if name == "twelvedata":
+            self._provider = TwelveDataProvider(
+                api_key=os.getenv("TWELVEDATA_API_KEY", "").strip(),
+                timeout_seconds=timeout_seconds,
+            )
+        elif name == "oanda":
+            self._provider = OandaProvider(
+                token=os.getenv("OANDA_API_TOKEN", "").strip(),
+                environment=os.getenv("OANDA_ENVIRONMENT", "practice"),
+                timeout_seconds=timeout_seconds,
+            )
+
+    def available_pairs(self) -> dict[str, str]:
+        """Pairs this provider can actually serve (metals only with spot quotes)."""
+        if self._provider is not None and self._provider.supports_metals:
+            return {**FOREX_PAIRS, **METAL_PAIRS}
+        return dict(FOREX_PAIRS)
 
     def get_klines(
         self,
@@ -60,7 +119,14 @@ class ForexDataLoader:
         interval: str = "1h",
         limit: int = 300,
     ) -> pd.DataFrame:
-        """Fetch standardized OHLCV candles for a Forex pair via global market API."""
+        """Fetch standardized OHLCV candles for a Forex pair or spot metal."""
+        if self._provider is not None:
+            return self._provider.get_klines(symbol, interval, limit)
+        if canonical_pair(symbol) in _METAL_CODES:
+            raise ForexProviderUnavailableError(
+                f"{symbol}: los metales al contado requieren Twelve Data u OANDA "
+                "(FOREX_PROVIDER). Yahoo solo ofrece futuros."
+            )
         sym = symbol.strip().upper()
         if not sym.endswith("=X") and "/" not in sym and len(sym) == 6:
             sym = f"{sym}=X"
@@ -187,4 +253,7 @@ class ForexDataLoader:
         if len(df) > limit:
             df = df.iloc[-limit:].reset_index(drop=True)
 
+        df.attrs.update(
+            {"provider": "yahoo", "provider_symbol": sym, "volume_kind": "reported"}
+        )
         return df
