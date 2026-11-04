@@ -1,0 +1,439 @@
+{
+  "period": "validation",
+  "criteria": {
+    "min_profit_factor": 1.2,
+    "min_expectancy_ci_low": 0.0,
+    "min_trades": 100,
+    "max_mc_drawdown_pct": 20.0,
+    "min_positive_instruments_pct": 60.0
+  },
+  "aggregate": {
+    "trades": 12496,
+    "net_pnl": -22283.51436487861,
+    "profit_factor": 0.9223721998013421,
+    "expectancy_r": -0.09678270923267773,
+    "win_rate_pct": 34.571062740076826,
+    "r_trades": 12496,
+    "expectancy_ci_low": -0.11997865889872662,
+    "expectancy_ci_high": -0.07341610899942409,
+    "mc_drawdown_p95_pct": 99.99996613606488,
+    "positive_instruments_pct": 17.647058823529413
+  },
+  "passed": false,
+  "failed_reasons": [
+    "profit_factor=0.9223721998013421 no cumple >= 1.2",
+    "expectancy_ci_low=-0.11997865889872662 no cumple > 0.0",
+    "mc_drawdown_p95_pct=99.99996613606488 no cumple <= 20.0",
+    "positive_instruments_pct=17.647058823529413 no cumple >= 60.0"
+  ],
+  "per_series": {
+    "ADAUSDT_BINANCE:1h": {
+      "trades": 586,
+      "net_pnl": -450.7815079823412,
+      "profit_factor": 0.7650938107233992,
+      "expectancy_r": -0.18492227126740782,
+      "win_rate_pct": 32.42320819112628,
+      "r_trades": 586,
+      "sides": {
+        "LONG": 586,
+        "SHORT": 0
+      }
+    },
+    "ADAUSDT_BINANCE:4h": {
+      "trades": 134,
+      "net_pnl": 827.5237914794714,
+      "profit_factor": 1.070785910756966,
+      "expectancy_r": 0.032531412655486584,
+      "win_rate_pct": 38.80597014925373,
+      "r_trades": 134,
+      "sides": {
+        "LONG": 134,
+        "SHORT": 0
+      }
+    },
+    "AUDUSD_OANDA:1h": {
+      "trades": 571,
+      "net_pnl": -1590.5606353319417,
+      "profit_factor": 0.6926264249420381,
+      "expectancy_r": -0.20221792058380367,
+      "win_rate_pct": 29.597197898423815,
+      "r_trades": 571,
+      "sides": {
+        "LONG": 388,
+        "SHORT": 183
+      }
+    },
+    "AUDUSD_OANDA:4h": {
+      "trades": 142,
+      "net_pnl": -1022.0591585603247,
+      "profit_factor": 0.6839236431988809,
+      "expectancy_r": -0.1712530575814779,
+      "win_rate_pct": 31.690140845070424,
+      "r_trades": 142,
+      "sides": {
+        "LONG": 92,
+        "SHORT": 50
+      }
+    },
+    "AVAXUSDT_BINANCE:1h": {
+      "trades": 581,
+      "net_pnl": -717.9149149449902,
+      "profit_factor": 0.7990753803805172,
+      "expectancy_r": -0.0995805787333528,
+      "win_rate_pct": 34.76764199655766,
+      "r_trades": 581,
+      "sides": {
+        "LONG": 581,
+        "SHORT": 0
+      }
+    },
+    "AVAXUSDT_BINANCE:4h": {
+      "trades": 154,
+      "net_pnl": -2828.7690498208112,
+      "profit_factor": 0.9018453097886951,
+      "expectancy_r": -0.006248304156566888,
+      "win_rate_pct": 36.36363636363637,
+      "r_trades": 154,
+      "sides": {
+        "LONG": 154,
+        "SHORT": 0
+      }
+    },
+    "BNBUSDT_BINANCE:1h": {
+      "trades": 665,
+      "net_pnl": -285.98797515301965,
+      "profit_factor": 0.8306123888449607,
+      "expectancy_r": -0.1345455284148139,
+      "win_rate_pct": 36.69172932330827,
+      "r_trades": 665,
+      "sides": {
+        "LONG": 665,
+        "SHORT": 0
+      }
+    },
+    "BNBUSDT_BINANCE:4h": {
+      "trades": 186,
+      "net_pnl": -312.1387578946019,
+      "profit_factor": 0.9869500658796512,
+      "expectancy_r": 0.022679990519180696,
+      "win_rate_pct": 39.247311827956985,
+      "r_trades": 186,
+      "sides": {
+        "LONG": 186,
+        "SHORT": 0
+      }
+    },
+    "BTCUSDT_BINANCE:1h": {
+      "trades": 645,
+      "net_pnl": -430.7869314787478,
+      "profit_factor": 0.8386005191949739,
+      "expectancy_r": -0.0876524521590516,
+      "win_rate_pct": 38.44961240310077,
+      "r_trades": 645,
+      "sides": {
+        "LONG": 645,
+        "SHORT": 0
+      }
+    },
+    "BTCUSDT_BINANCE:4h": {
+      "trades": 172,
+      "net_pnl": 554.968640857544,
+      "profit_factor": 1.023592733673058,
+      "expectancy_r": 0.05363548030817673,
+      "win_rate_pct": 40.116279069767444,
+      "r_trades": 172,
+      "sides": {
+        "LONG": 172,
+        "SHORT": 0
+      }
+    },
+    "ETHUSDT_BINANCE:1h": {
+      "trades": 612,
+      "net_pnl": -454.93065945850924,
+      "profit_factor": 0.805289969145149,
+      "expectancy_r": -0.1267097657894724,
+      "win_rate_pct": 36.60130718954248,
+      "r_trades": 612,
+      "sides": {
+        "LONG": 612,
+        "SHORT": 0
+      }
+    },
+    "ETHUSDT_BINANCE:4h": {
+      "trades": 163,
+      "net_pnl": -2069.744483412198,
+      "profit_factor": 0.8851928772880172,
+      "expectancy_r": -0.09570808254119485,
+      "win_rate_pct": 35.58282208588957,
+      "r_trades": 163,
+      "sides": {
+        "LONG": 163,
+        "SHORT": 0
+      }
+    },
+    "EURUSD_OANDA:1h": {
+      "trades": 569,
+      "net_pnl": -1053.7907644510951,
+      "profit_factor": 0.7628607134869982,
+      "expectancy_r": -0.1229157479241453,
+      "win_rate_pct": 32.33743409490334,
+      "r_trades": 569,
+      "sides": {
+        "LONG": 393,
+        "SHORT": 176
+      }
+    },
+    "EURUSD_OANDA:4h": {
+      "trades": 132,
+      "net_pnl": -693.5763202407185,
+      "profit_factor": 0.7230737584871499,
+      "expectancy_r": -0.17702025099872418,
+      "win_rate_pct": 31.060606060606062,
+      "r_trades": 132,
+      "sides": {
+        "LONG": 94,
+        "SHORT": 38
+      }
+    },
+    "GBPUSD_OANDA:1h": {
+      "trades": 557,
+      "net_pnl": -1130.2611478575889,
+      "profit_factor": 0.7572897602275507,
+      "expectancy_r": -0.1703425726837226,
+      "win_rate_pct": 30.520646319569124,
+      "r_trades": 557,
+      "sides": {
+        "LONG": 398,
+        "SHORT": 159
+      }
+    },
+    "GBPUSD_OANDA:4h": {
+      "trades": 143,
+      "net_pnl": -434.7851196487629,
+      "profit_factor": 0.8571492684031922,
+      "expectancy_r": -0.08398855983066982,
+      "win_rate_pct": 32.16783216783217,
+      "r_trades": 143,
+      "sides": {
+        "LONG": 109,
+        "SHORT": 34
+      }
+    },
+    "LINKUSDT_BINANCE:1h": {
+      "trades": 593,
+      "net_pnl": -875.2822899511862,
+      "profit_factor": 0.7818222670238213,
+      "expectancy_r": -0.12576454985775107,
+      "win_rate_pct": 34.73861720067454,
+      "r_trades": 593,
+      "sides": {
+        "LONG": 593,
+        "SHORT": 0
+      }
+    },
+    "LINKUSDT_BINANCE:4h": {
+      "trades": 147,
+      "net_pnl": -2061.32374209763,
+      "profit_factor": 0.8689986393531345,
+      "expectancy_r": -0.06338899777434905,
+      "win_rate_pct": 35.374149659863946,
+      "r_trades": 147,
+      "sides": {
+        "LONG": 147,
+        "SHORT": 0
+      }
+    },
+    "NZDUSD_OANDA:1h": {
+      "trades": 563,
+      "net_pnl": -1416.058530888036,
+      "profit_factor": 0.6918372628155494,
+      "expectancy_r": -0.19383580896784358,
+      "win_rate_pct": 29.129662522202487,
+      "r_trades": 563,
+      "sides": {
+        "LONG": 368,
+        "SHORT": 195
+      }
+    },
+    "NZDUSD_OANDA:4h": {
+      "trades": 146,
+      "net_pnl": -862.7261700837066,
+      "profit_factor": 0.7612718919411134,
+      "expectancy_r": -0.12203554624541327,
+      "win_rate_pct": 32.19178082191781,
+      "r_trades": 146,
+      "sides": {
+        "LONG": 92,
+        "SHORT": 54
+      }
+    },
+    "SOLUSDT_BINANCE:1h": {
+      "trades": 591,
+      "net_pnl": -1145.8653708771378,
+      "profit_factor": 0.7738670294872971,
+      "expectancy_r": -0.14868200192925654,
+      "win_rate_pct": 34.34856175972927,
+      "r_trades": 591,
+      "sides": {
+        "LONG": 591,
+        "SHORT": 0
+      }
+    },
+    "SOLUSDT_BINANCE:4h": {
+      "trades": 158,
+      "net_pnl": -1935.5157937371323,
+      "profit_factor": 0.9462983956510425,
+      "expectancy_r": -0.014061274596739679,
+      "win_rate_pct": 37.9746835443038,
+      "r_trades": 158,
+      "sides": {
+        "LONG": 158,
+        "SHORT": 0
+      }
+    },
+    "USDCAD_OANDA:1h": {
+      "trades": 589,
+      "net_pnl": -762.3474758668641,
+      "profit_factor": 0.7921097001118923,
+      "expectancy_r": -0.11772129505226255,
+      "win_rate_pct": 31.069609507640067,
+      "r_trades": 589,
+      "sides": {
+        "LONG": 475,
+        "SHORT": 114
+      }
+    },
+    "USDCAD_OANDA:4h": {
+      "trades": 145,
+      "net_pnl": 384.4890065399863,
+      "profit_factor": 1.190547497935291,
+      "expectancy_r": 0.1225977640268514,
+      "win_rate_pct": 40.0,
+      "r_trades": 145,
+      "sides": {
+        "LONG": 131,
+        "SHORT": 14
+      }
+    },
+    "USDCHF_OANDA:1h": {
+      "trades": 562,
+      "net_pnl": -725.4403036487188,
+      "profit_factor": 0.8595297087383396,
+      "expectancy_r": -0.08931421987118661,
+      "win_rate_pct": 33.45195729537366,
+      "r_trades": 562,
+      "sides": {
+        "LONG": 434,
+        "SHORT": 128
+      }
+    },
+    "USDCHF_OANDA:4h": {
+      "trades": 135,
+      "net_pnl": -65.08306935594686,
+      "profit_factor": 0.9790948870289208,
+      "expectancy_r": 0.013879120581839351,
+      "win_rate_pct": 36.2962962962963,
+      "r_trades": 135,
+      "sides": {
+        "LONG": 105,
+        "SHORT": 30
+      }
+    },
+    "USDJPY_OANDA:1h": {
+      "trades": 596,
+      "net_pnl": 750.2123504269152,
+      "profit_factor": 1.0778511112455897,
+      "expectancy_r": 0.05579589430217777,
+      "win_rate_pct": 38.08724832214765,
+      "r_trades": 596,
+      "sides": {
+        "LONG": 474,
+        "SHORT": 122
+      }
+    },
+    "USDJPY_OANDA:4h": {
+      "trades": 141,
+      "net_pnl": 1519.0304386118614,
+      "profit_factor": 1.3253812892205061,
+      "expectancy_r": 0.227699095255306,
+      "win_rate_pct": 43.97163120567376,
+      "r_trades": 141,
+      "sides": {
+        "LONG": 112,
+        "SHORT": 29
+      }
+    },
+    "XAGUSD_OANDA:1h": {
+      "trades": 523,
+      "net_pnl": -1438.6585112991204,
+      "profit_factor": 0.8751620458266948,
+      "expectancy_r": -0.06894280902592843,
+      "win_rate_pct": 34.41682600382409,
+      "r_trades": 523,
+      "sides": {
+        "LONG": 392,
+        "SHORT": 131
+      }
+    },
+    "XAGUSD_OANDA:4h": {
+      "trades": 147,
+      "net_pnl": -1317.9026550198669,
+      "profit_factor": 0.8765424059764502,
+      "expectancy_r": -0.06583681015399492,
+      "win_rate_pct": 32.6530612244898,
+      "r_trades": 147,
+      "sides": {
+        "LONG": 123,
+        "SHORT": 24
+      }
+    },
+    "XAUUSD_OANDA:1h": {
+      "trades": 536,
+      "net_pnl": -573.3279234102815,
+      "profit_factor": 0.9479797037733209,
+      "expectancy_r": -0.0028372288018104117,
+      "win_rate_pct": 36.007462686567166,
+      "r_trades": 536,
+      "sides": {
+        "LONG": 440,
+        "SHORT": 96
+      }
+    },
+    "XAUUSD_OANDA:4h": {
+      "trades": 142,
+      "net_pnl": 717.781147251241,
+      "profit_factor": 1.08665636619934,
+      "expectancy_r": 0.08335357449793866,
+      "win_rate_pct": 38.028169014084504,
+      "r_trades": 142,
+      "sides": {
+        "LONG": 133,
+        "SHORT": 9
+      }
+    },
+    "XRPUSDT_BINANCE:1h": {
+      "trades": 601,
+      "net_pnl": -164.87871613952905,
+      "profit_factor": 0.7644627107574128,
+      "expectancy_r": -0.1648865834040502,
+      "win_rate_pct": 35.108153078202996,
+      "r_trades": 601,
+      "sides": {
+        "LONG": 601,
+        "SHORT": 0
+      }
+    },
+    "XRPUSDT_BINANCE:4h": {
+      "trades": 169,
+      "net_pnl": -217.0217614348229,
+      "profit_factor": 0.9655359500548474,
+      "expectancy_r": -0.06452868475392276,
+      "win_rate_pct": 37.8698224852071,
+      "r_trades": 169,
+      "sides": {
+        "LONG": 169,
+        "SHORT": 0
+      }
+    }
+  }
+}

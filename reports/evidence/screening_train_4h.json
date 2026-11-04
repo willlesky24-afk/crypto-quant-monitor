@@ -1,0 +1,435 @@
+{
+  "interval": "4h",
+  "ci_level": 0.9954545454545455,
+  "candidates": {
+    "trend_ema": {
+      "all": {
+        "trades": 5384,
+        "net_pnl": -34150.99882420201,
+        "profit_factor": 0.8954811425524121,
+        "expectancy_r": -0.05782027670286233,
+        "win_rate_pct": 32.59658246656761,
+        "r_trades": 5384,
+        "ci_low": -0.11117872932905798,
+        "ci_high": -0.005861980222195763,
+        "long": 3593,
+        "short": 1791
+      },
+      "crypto": {
+        "trades": 1792,
+        "net_pnl": -24696.96966651092,
+        "profit_factor": 0.88764422748026,
+        "expectancy_r": -0.06596316215545825,
+        "win_rate_pct": 33.872767857142854,
+        "r_trades": 1792,
+        "ci_low": -0.15828217219737073,
+        "ci_high": 0.031932575273864436,
+        "long": 1792,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 3592,
+        "net_pnl": -9454.029157691097,
+        "profit_factor": 0.9115904120686402,
+        "expectancy_r": -0.053757901777736525,
+        "win_rate_pct": 31.95991091314031,
+        "r_trades": 3592,
+        "ci_low": -0.11676375671817499,
+        "ci_high": 0.01427203000059945,
+        "long": 1801,
+        "short": 1791
+      },
+      "positive_series_pct": 17.647058823529413
+    },
+    "momentum_rsi": {
+      "all": {
+        "trades": 6092,
+        "net_pnl": -38598.38470427333,
+        "profit_factor": 0.9021902711850265,
+        "expectancy_r": -0.059731088120090696,
+        "win_rate_pct": 32.89560078791858,
+        "r_trades": 6092,
+        "ci_low": -0.10953313325164903,
+        "ci_high": -0.007911399626429188,
+        "long": 5634,
+        "short": 458
+      },
+      "crypto": {
+        "trades": 2923,
+        "net_pnl": -31509.62985646314,
+        "profit_factor": 0.8952593696604773,
+        "expectancy_r": -0.08289253359220408,
+        "win_rate_pct": 33.45877523092713,
+        "r_trades": 2923,
+        "ci_low": -0.15637964114745115,
+        "ci_high": -0.00725553450514972,
+        "long": 2923,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 3169,
+        "net_pnl": -7088.754847810193,
+        "profit_factor": 0.9244208152802473,
+        "expectancy_r": -0.03836759644606499,
+        "win_rate_pct": 32.376143893972866,
+        "r_trades": 3169,
+        "ci_low": -0.10764501973415024,
+        "ci_high": 0.029252007401942556,
+        "long": 2711,
+        "short": 458
+      },
+      "positive_series_pct": 17.647058823529413
+    },
+    "volume_direction": {
+      "all": {
+        "trades": 8437,
+        "net_pnl": -56385.6247698176,
+        "profit_factor": 0.9038925604169037,
+        "expectancy_r": -0.06660443688751794,
+        "win_rate_pct": 32.59452411994785,
+        "r_trades": 8437,
+        "ci_low": -0.109508565178956,
+        "ci_high": -0.023714684752499774,
+        "long": 6040,
+        "short": 2397
+      },
+      "crypto": {
+        "trades": 3630,
+        "net_pnl": -40624.040963757885,
+        "profit_factor": 0.9105549214730165,
+        "expectancy_r": -0.05410284640262317,
+        "win_rate_pct": 34.60055096418733,
+        "r_trades": 3630,
+        "ci_low": -0.1180178107769171,
+        "ci_high": 0.012524495228405876,
+        "long": 3630,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 4807,
+        "net_pnl": -15761.583806059716,
+        "profit_factor": 0.8810581586106511,
+        "expectancy_r": -0.07604499720791902,
+        "win_rate_pct": 31.079675473268146,
+        "r_trades": 4807,
+        "ci_low": -0.1293889829622381,
+        "ci_high": -0.017745388481824814,
+        "long": 2410,
+        "short": 2397
+      },
+      "positive_series_pct": 5.882352941176471
+    },
+    "profile_value_area": {
+      "all": {
+        "trades": 3975,
+        "net_pnl": -25486.60289234788,
+        "profit_factor": 0.9116783105539724,
+        "expectancy_r": -0.058993308090481214,
+        "win_rate_pct": 32.503144654088054,
+        "r_trades": 3975,
+        "ci_low": -0.12331089602846598,
+        "ci_high": 0.005871882047805348,
+        "long": 2737,
+        "short": 1238
+      },
+      "crypto": {
+        "trades": 1364,
+        "net_pnl": -17228.396245236116,
+        "profit_factor": 0.9176438663342356,
+        "expectancy_r": -0.07144434963062073,
+        "win_rate_pct": 33.35777126099707,
+        "r_trades": 1364,
+        "ci_low": -0.17560767695852111,
+        "ci_high": 0.03751380693361293,
+        "long": 1364,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 2611,
+        "net_pnl": -8258.206647111761,
+        "profit_factor": 0.8959553715176134,
+        "expectancy_r": -0.05248881913577026,
+        "win_rate_pct": 32.05668326311758,
+        "r_trades": 2611,
+        "ci_low": -0.1281335737462619,
+        "ci_high": 0.023170213156936657,
+        "long": 1373,
+        "short": 1238
+      },
+      "positive_series_pct": 23.529411764705884
+    },
+    "regime": {
+      "all": {
+        "trades": 3467,
+        "net_pnl": -35684.44653675312,
+        "profit_factor": 0.8272212073399168,
+        "expectancy_r": -0.08261549686437145,
+        "win_rate_pct": 31.554658205941738,
+        "r_trades": 3467,
+        "ci_low": -0.14947917636337338,
+        "ci_high": -0.01566787724186295,
+        "long": 2296,
+        "short": 1171
+      },
+      "crypto": {
+        "trades": 1048,
+        "net_pnl": -27526.65859425605,
+        "profit_factor": 0.7939423398383407,
+        "expectancy_r": -0.13259379680069497,
+        "win_rate_pct": 31.297709923664126,
+        "r_trades": 1048,
+        "ci_low": -0.25226411255317965,
+        "ci_high": -0.013950754452734252,
+        "long": 1048,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 2419,
+        "net_pnl": -8157.787942497075,
+        "profit_factor": 0.8881658286950148,
+        "expectancy_r": -0.060963054395058905,
+        "win_rate_pct": 31.66597767672592,
+        "r_trades": 2419,
+        "ci_low": -0.13865768594459277,
+        "ci_high": 0.019489344889697474,
+        "long": 1248,
+        "short": 1171
+      },
+      "positive_series_pct": 11.764705882352942
+    },
+    "predictive": {
+      "all": {
+        "trades": 3801,
+        "net_pnl": -32542.467815876487,
+        "profit_factor": 0.8729143866945571,
+        "expectancy_r": -0.07267542505898338,
+        "win_rate_pct": 31.99158116285188,
+        "r_trades": 3801,
+        "ci_low": -0.13537353794537169,
+        "ci_high": -0.009477659614097933,
+        "long": 2592,
+        "short": 1209
+      },
+      "crypto": {
+        "trades": 1314,
+        "net_pnl": -23886.99112072384,
+        "profit_factor": 0.8672114939886885,
+        "expectancy_r": -0.09216881180184731,
+        "win_rate_pct": 32.64840182648402,
+        "r_trades": 1314,
+        "ci_low": -0.20040926337971365,
+        "ci_high": 0.0231986055476976,
+        "long": 1314,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 2487,
+        "net_pnl": -8655.476695152647,
+        "profit_factor": 0.8863809375123811,
+        "expectancy_r": -0.0623761447292193,
+        "win_rate_pct": 31.644551668677124,
+        "r_trades": 2487,
+        "ci_low": -0.14278650571629958,
+        "ci_high": 0.016390027567186525,
+        "long": 1278,
+        "short": 1209
+      },
+      "positive_series_pct": 11.764705882352942
+    },
+    "donchian_20": {
+      "all": {
+        "trades": 3057,
+        "net_pnl": -44029.67879325656,
+        "profit_factor": 0.7763519558275912,
+        "expectancy_r": -0.12957717168662727,
+        "win_rate_pct": 30.291135099771015,
+        "r_trades": 3057,
+        "ci_low": -0.19879243770797878,
+        "ci_high": -0.05786353810415328,
+        "long": 2143,
+        "short": 914
+      },
+      "crypto": {
+        "trades": 1120,
+        "net_pnl": -32663.38731200686,
+        "profit_factor": 0.7638578432583616,
+        "expectancy_r": -0.11086281051267882,
+        "win_rate_pct": 32.410714285714285,
+        "r_trades": 1120,
+        "ci_low": -0.22999978347952418,
+        "ci_high": 0.004347368537424558,
+        "long": 1120,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 1937,
+        "net_pnl": -11366.2914812497,
+        "profit_factor": 0.8058687844988053,
+        "expectancy_r": -0.1403980723137942,
+        "win_rate_pct": 29.065565307176044,
+        "r_trades": 1937,
+        "ci_low": -0.225669773017946,
+        "ci_high": -0.05157049028529329,
+        "long": 1023,
+        "short": 914
+      },
+      "positive_series_pct": 5.882352941176471
+    },
+    "tsmom_180": {
+      "all": {
+        "trades": 8111,
+        "net_pnl": -60276.84515632326,
+        "profit_factor": 0.8568109655544036,
+        "expectancy_r": -0.07412967444142422,
+        "win_rate_pct": 32.190851929478484,
+        "r_trades": 8111,
+        "ci_low": -0.11843440777188716,
+        "ci_high": -0.030302844670403162,
+        "long": 5529,
+        "short": 2582
+      },
+      "crypto": {
+        "trades": 2874,
+        "net_pnl": -44585.69683319886,
+        "profit_factor": 0.8361152192275981,
+        "expectancy_r": -0.08874026557592675,
+        "win_rate_pct": 33.33333333333333,
+        "r_trades": 2874,
+        "ci_low": -0.1616384865169596,
+        "ci_high": -0.01373951781239308,
+        "long": 2874,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 5237,
+        "net_pnl": -15691.148323124406,
+        "profit_factor": 0.8946229413404619,
+        "expectancy_r": -0.06611156504280666,
+        "win_rate_pct": 31.5638724460569,
+        "r_trades": 5237,
+        "ci_low": -0.11906646380301816,
+        "ci_high": -0.010091786889089021,
+        "long": 2655,
+        "short": 2582
+      },
+      "positive_series_pct": 5.882352941176471
+    },
+    "bollinger_20_2": {
+      "all": {
+        "trades": 3705,
+        "net_pnl": -53252.03273855809,
+        "profit_factor": 0.7766843042294055,
+        "expectancy_r": -0.11898673901439924,
+        "win_rate_pct": 31.01214574898785,
+        "r_trades": 3705,
+        "ci_low": -0.1812910761951745,
+        "ci_high": -0.055152724681666425,
+        "long": 2584,
+        "short": 1121
+      },
+      "crypto": {
+        "trades": 1586,
+        "net_pnl": -49564.22007518109,
+        "profit_factor": 0.7168092400827552,
+        "expectancy_r": -0.23160723758531052,
+        "win_rate_pct": 29.00378310214376,
+        "r_trades": 1586,
+        "ci_low": -0.326494390797859,
+        "ci_high": -0.13318739404579516,
+        "long": 1586,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 2119,
+        "net_pnl": -3687.8126633770057,
+        "profit_factor": 0.9418694281498547,
+        "expectancy_r": -0.034694095912244816,
+        "win_rate_pct": 32.515337423312886,
+        "r_trades": 2119,
+        "ci_low": -0.12342695869208337,
+        "ci_high": 0.053073577212507786,
+        "long": 998,
+        "short": 1121
+      },
+      "positive_series_pct": 23.529411764705884
+    },
+    "reversion_rsi": {
+      "all": {
+        "trades": 2170,
+        "net_pnl": -35265.63121872941,
+        "profit_factor": 0.8155908236433845,
+        "expectancy_r": -0.12071323421822867,
+        "win_rate_pct": 30.691244239631338,
+        "r_trades": 2170,
+        "ci_low": -0.20456313815290322,
+        "ci_high": -0.0358550013188965,
+        "long": 1503,
+        "short": 667
+      },
+      "crypto": {
+        "trades": 884,
+        "net_pnl": -32889.15024932807,
+        "profit_factor": 0.7842709987058415,
+        "expectancy_r": -0.22031151172220992,
+        "win_rate_pct": 29.072398190045252,
+        "r_trades": 884,
+        "ci_low": -0.34323079425057357,
+        "ci_high": -0.0873250958850495,
+        "long": 884,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 1286,
+        "net_pnl": -2376.480969401336,
+        "profit_factor": 0.9387187645916639,
+        "expectancy_r": -0.052249099448773456,
+        "win_rate_pct": 31.804043545878695,
+        "r_trades": 1286,
+        "ci_low": -0.163458998543605,
+        "ci_high": 0.06346235923559193,
+        "long": 619,
+        "short": 667
+      },
+      "positive_series_pct": 29.41176470588235
+    },
+    "control_random": {
+      "all": {
+        "trades": 10394,
+        "net_pnl": -90434.7081154011,
+        "profit_factor": 0.7973354700046417,
+        "expectancy_r": -0.1140087915918731,
+        "win_rate_pct": 31.26803925341543,
+        "r_trades": 10394,
+        "ci_low": -0.15270631964969197,
+        "ci_high": -0.07618909809512164,
+        "long": 7673,
+        "short": 2721
+      },
+      "crypto": {
+        "trades": 5118,
+        "net_pnl": -72235.7321491678,
+        "profit_factor": 0.7616959675393968,
+        "expectancy_r": -0.1456371248714525,
+        "win_rate_pct": 31.672528331379446,
+        "r_trades": 5118,
+        "ci_low": -0.19998385449106296,
+        "ci_high": -0.09124025372270607,
+        "long": 5118,
+        "short": 0
+      },
+      "forex_metals": {
+        "trades": 5276,
+        "net_pnl": -18198.975966233287,
+        "profit_factor": 0.8728272244541445,
+        "expectancy_r": -0.08332762977896803,
+        "win_rate_pct": 30.875663381349504,
+        "r_trades": 5276,
+        "ci_low": -0.13817522308171964,
+        "ci_high": -0.029833105797219577,
+        "long": 2555,
+        "short": 2721
+      },
+      "positive_series_pct": 5.882352941176471
+    }
+  }
+}

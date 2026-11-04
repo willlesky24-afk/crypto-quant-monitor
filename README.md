@@ -251,9 +251,9 @@ Discord Telegram Webhook
 - **v2.2 — Datos multiproveedor**: adaptador de proveedores (Twelve Data, OANDA demo),
   forex mayor y metales (XAU/USD, XAG/USD), procedencia por vela y verificación cruzada.
 - **v2.3 — Simulador completo**: SHORT, spreads y sesiones forex.
-- **v3.0 — Prueba de ventaja**: backtest multianual fuera de muestra sobre un universo fijo.
-- **v3.1 — Ranking de oportunidades** e índices bursátiles.
-- **v3.2 — Agente de IA verificado** contra los cálculos del motor.
+- **v3.0 — Prueba de ventaja (cerrada)**: no se demostró ventaja estadística; ver [el informe](docs/INFORME_EVIDENCIA_V3.md). El producto no promete señales rentables.
+- **v3.1 — Ranking de oportunidades** por contexto de mercado, sin promesa de rentabilidad, e índices bursátiles.
+- **v3.2 — Agente de IA de lectura de mercado**, verificado contra los cálculos del motor.
 - **v4.x — Producto**: usuarios, suscripciones, nube y marco legal.
 
 Los planes de fases anteriores se conservan en `docs/historial/`.
