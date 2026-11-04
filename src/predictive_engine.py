@@ -66,6 +66,7 @@ class PredictiveEngine:
         df: pd.DataFrame,
         current_regime_res: RegimeResult | None = None,
         precomputed_past_regimes: list[RegimeResult] | None = None,
+        precomputed_past_regime_values: np.ndarray | None = None,
     ) -> PredictiveResult:
         """Evaluates causal conditional continuation/reversal probabilities for candle T."""
         if df.empty:
@@ -144,33 +145,41 @@ class PredictiveEngine:
 
         # Fast vectorized matching over past history where outcome is known
         if eligible_end > 25:
-            past_sub = enriched.iloc[:eligible_end]
-            if precomputed_past_regimes is not None:
-                past_regimes = precomputed_past_regimes
+            # Vectorized over numpy arrays (v3.0 D6). Same comparisons as the
+            # former per-row loop, so match/success counts are identical.
+            if precomputed_past_regime_values is not None:
+                regime_values = precomputed_past_regime_values
             else:
-                past_regimes = self.regime_classifier.classify_series(
-                    past_sub, warmup_bars=25
+                if precomputed_past_regimes is not None:
+                    past_regimes = precomputed_past_regimes
+                else:
+                    past_regimes = self.regime_classifier.classify_series(
+                        enriched.iloc[:eligible_end], warmup_bars=25
+                    )
+                regime_values = np.array(
+                    [r.regime.value for r in past_regimes], dtype=object
                 )
 
             start_idx = 24
-            for offset, r in enumerate(past_regimes):
-                idx = start_idx + offset
-                if r.regime == current_regime:
-                    matches += 1
-                    past_close = float(past_sub["close"].iloc[idx])
-                    future_close = float(enriched["close"].iloc[idx + h])
-
-                    if direction_bias == "LONG":
-                        if future_close > past_close:
-                            successes += 1
-                    elif direction_bias == "SHORT":
-                        if future_close < past_close:
-                            successes += 1
-                    else:
-                        # Neutral / Range: continuation means staying inside volatility band
-                        past_atr = float(past_sub["atr"].iloc[idx])
-                        if abs(future_close - past_close) <= max(past_atr, 1e-4):
-                            successes += 1
+            idx = start_idx + np.flatnonzero(regime_values == current_regime.value)
+            matches = int(idx.size)
+            if matches:
+                closes = enriched["close"].to_numpy(dtype=float)
+                past_close = closes[idx]
+                future_close = closes[idx + h]
+                if direction_bias == "LONG":
+                    successes = int(np.count_nonzero(future_close > past_close))
+                elif direction_bias == "SHORT":
+                    successes = int(np.count_nonzero(future_close < past_close))
+                else:
+                    # Neutral / Range: continuation = staying inside the ATR band
+                    past_atr = enriched["atr"].to_numpy(dtype=float)[idx]
+                    successes = int(
+                        np.count_nonzero(
+                            np.abs(future_close - past_close)
+                            <= np.maximum(past_atr, 1e-4)
+                        )
+                    )
 
         # 5. Bayesian Laplace Smoothing for Conditional Probability
         # P(continuation) = (successes + 1) / (matches + 2)

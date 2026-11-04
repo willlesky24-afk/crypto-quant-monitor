@@ -5,6 +5,7 @@ from datetime import datetime
 from numbers import Integral
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .backtest_engine import BacktestEngine
@@ -203,6 +204,9 @@ class BacktestRunner:
         # 2. Enrich indicators across the full causal dataset
         enriched_df = self.indicators.calculate_all(raw_df.copy())
         enriched_df = enriched_df.reset_index(drop=True)
+        # Provenance attrs are deep-copied by pandas on every row access; they
+        # stay on the report via raw_df, not inside the per-bar loop (v3.0 D6).
+        enriched_df.attrs = {}
 
         # 3. Generate Signals Step-by-Step with Strict Look-Ahead Bias Prevention
         signals: list[SignalEvent] = []
@@ -212,6 +216,9 @@ class BacktestRunner:
             all_regimes = self.regime_classifier.classify_series(
                 enriched_df, warmup_bars=25
             )
+        all_regime_values = np.array(
+            [r.regime.value for r in all_regimes], dtype=object
+        )
 
         for t_idx in range(effective_warmup - 1, total_bars):
             sub_df = enriched_df.iloc[: t_idx + 1]
@@ -236,6 +243,9 @@ class BacktestRunner:
                     sub_df,
                     current_regime_res=regime_res,
                     precomputed_past_regimes=past_regimes,
+                    precomputed_past_regime_values=(
+                        all_regime_values[:past_cutoff] if all_regimes else None
+                    ),
                 )
                 opt_param = (
                     calibrated_params.get(regime_res.regime.value)
