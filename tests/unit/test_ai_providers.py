@@ -28,7 +28,10 @@ def _sample_context() -> MarketContext:
 
 
 @pytest.mark.anyio
-async def test_gemini_provider_missing_key_fallback():
+async def test_gemini_provider_missing_key_fallback(monkeypatch):
+    # An empty key falls back to GEMINI_API_KEY; isolate from the local .env
+    # so the test stays offline and exercises the missing-key path.
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     provider = GeminiProvider(api_key="")
     res = await provider.generate_response("Test prompt")
     assert isinstance(res, AIResponse)
@@ -111,7 +114,10 @@ async def test_gemini_provider_retry_and_failure():
 
 
 @pytest.mark.anyio
-async def test_gemini_provider_legacy_interfaces():
+async def test_gemini_provider_legacy_interfaces(monkeypatch):
+    # An empty key falls back to GEMINI_API_KEY; isolate from the local .env
+    # so the test stays offline and exercises the missing-key path.
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     provider = GeminiProvider(api_key="")
     ctx = _sample_context()
     expl = await provider.generate_explanation(ctx)
