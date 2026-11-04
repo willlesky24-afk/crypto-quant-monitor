@@ -163,6 +163,7 @@ class DecisionEngine:
         optimized_params: OptimizedParameters | dict[str, Any] | None = None,
         regime: str | MarketRegime | None = None,
         technical_score: float | None = None,
+        technical_score_short: float | None = None,
         legacy_mode: bool | None = None,
         predictive_mode: bool | None = None,
         calibration_required: bool = False,
@@ -269,6 +270,18 @@ class DecisionEngine:
             )
         )
 
+        # Directional mapping (LONG vs SHORT); the rule itself is unchanged.
+        if pred_dir == "SHORT" and (
+            regime_str in {"TRENDING_BEAR", "HIGH_VOLATILITY_EXPANSION"}
+            or tech_score_val < 50.0
+        ):
+            direction = "SHORT"
+        else:
+            direction = "LONG"
+        # v3.0 D1: a SHORT is scored by the quality of the bearish setup.
+        if direction == "SHORT" and technical_score_short is not None:
+            tech_score_val = float(technical_score_short)
+
         # Adaptive Weighted Confidence: FinalScore = W_tech * TechScore + W_pred * (PredScore * 100)
         pred_confidence = pred_score * 100.0
         final_confidence = (
@@ -282,15 +295,6 @@ class DecisionEngine:
             + self.predictive_weight * pred_confidence
         )
         final_score = max(0.0, min(100.0, final_score))
-
-        # Directional mapping (LONG vs SHORT)
-        if pred_dir == "SHORT" and (
-            regime_str in {"TRENDING_BEAR", "HIGH_VOLATILITY_EXPANSION"}
-            or tech_score_val < 50.0
-        ):
-            direction = "SHORT"
-        else:
-            direction = "LONG"
 
         # Optimized TP and SL parameters
         if optimized_params is not None:

@@ -117,4 +117,24 @@ class QuantScore:
         else:
             label = "Contexto débil"
 
-        return {"score": score, "label": label, "breakdown": breakdown}
+        # v3.0 D1: the same setup measured for a SHORT. Trend, momentum and
+        # value-area position are mirrored; volume and risk are direction-free.
+        short_breakdown = dict(breakdown)
+        short_breakdown["trend"] = -breakdown["trend"]
+        if analysis["momentum"] == MOMENTUM_BEARISH_PRESSURE:
+            short_breakdown["momentum"] = 20
+        elif analysis["momentum"] == MOMENTUM_POSITIVE:
+            short_breakdown["momentum"] = -20
+        if analysis["profile"] == PROFILE_BELOW_VALUE_AREA:
+            short_breakdown["profile"] = 15
+        elif analysis["profile"] == PROFILE_ABOVE_VALUE_AREA:
+            short_breakdown["profile"] = -15
+        score_short = max(0, min(40 + sum(short_breakdown.values()), 100))
+
+        return {
+            "score": score,
+            "label": label,
+            "breakdown": breakdown,
+            "score_short": score_short,
+            "breakdown_short": short_breakdown,
+        }

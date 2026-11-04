@@ -940,6 +940,7 @@ with tab_live:
             optimized_params=opt_params,
             regime=regime_res.regime,
             technical_score=score["score"],
+            technical_score_short=score.get("score_short"),
             predictive_mode=True,
         )
     else:
@@ -957,6 +958,7 @@ with tab_live:
             predictive=pred_res,
             regime=regime_res.regime,
             technical_score=score["score"],
+            technical_score_short=score.get("score_short"),
             predictive_mode=True,
         )
 

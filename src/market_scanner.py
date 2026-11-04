@@ -167,6 +167,7 @@ class MarketScanner:
                     predictive=pred_res,
                     regime=regime_res.regime,
                     technical_score=q_score,
+                    technical_score_short=score_dict.get("score_short"),
                     predictive_mode=True,
                 )
 

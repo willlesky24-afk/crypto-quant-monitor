@@ -175,6 +175,7 @@ class LiveExecutionEngine:
                 calibration_required=self.calibration_required,
                 regime=regime_res.regime,
                 technical_score=score["score"],
+                technical_score_short=score.get("score_short"),
                 predictive_mode=True,
             )
 

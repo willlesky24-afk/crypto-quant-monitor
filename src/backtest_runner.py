@@ -265,6 +265,7 @@ class BacktestRunner:
                     calibration_required=calibration_required,
                     regime=regime_res.regime,
                     technical_score=score["score"],
+                    technical_score_short=score.get("score_short"),
                     predictive_mode=True,
                 )
                 sig_dir = (

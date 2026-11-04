@@ -67,6 +67,15 @@ def test_score_contract_and_limits(analysis_factory):
         {},
         {"level": "Alto"},
     )
-    assert set(strong) == {"score", "label", "breakdown"}
+    # v3.0 D1 extends the contract with the mirrored SHORT score.
+    assert set(strong) == {
+        "score",
+        "label",
+        "breakdown",
+        "score_short",
+        "breakdown_short",
+    }
+    # Weak LONG setup as SHORT: 40 + 25 + 20 + 5 + 15 - 25 = 80
+    assert weak["score_short"] == 80
     assert strong["score"] == 100
     assert weak["score"] == 0

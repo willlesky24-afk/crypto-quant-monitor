@@ -181,6 +181,7 @@ def build_on_demand_context(
             predictive=prd_res,
             regime=reg_res.regime,
             technical_score=sc["score"],
+            technical_score_short=sc.get("score_short"),
             predictive_mode=True,
         )
 
