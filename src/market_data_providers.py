@@ -120,6 +120,34 @@ def build_candle_frame(
     return df
 
 
+# Spot FX and spot metals trade 24/5: the weekly session closes Friday 17:00
+# New York time and reopens Sunday 17:00 New York time (the industry "NY close"
+# rollover convention; it absorbs US daylight-saving changes, i.e. 21:00 UTC in
+# summer and 22:00 UTC in winter). Bars a provider publishes inside that window
+# are not interbank trading and would contaminate ATR/RSI/EMA.
+_NY_TZ = "America/New_York"
+_WEEKLY_CLOSE_HOUR_NY = 17
+
+
+def drop_weekend_closure(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove bars that start inside the weekly closure; count them in attrs."""
+    attrs = dict(df.attrs)
+    if df.empty:
+        out = df.copy()
+        out.attrs.update({**attrs, "weekend_bars_removed": 0})
+        return out
+    ny = df["timestamp"].dt.tz_convert(_NY_TZ)
+    dow, hour = ny.dt.dayofweek, ny.dt.hour
+    closed = (
+        ((dow == 4) & (hour >= _WEEKLY_CLOSE_HOUR_NY))
+        | (dow == 5)
+        | ((dow == 6) & (hour < _WEEKLY_CLOSE_HOUR_NY))
+    )
+    out = df[~closed].reset_index(drop=True)
+    out.attrs.update({**attrs, "weekend_bars_removed": int(closed.sum())})
+    return out
+
+
 def _fetch_json(req: urllib.request.Request, timeout: float, symbol: str) -> Any:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -172,7 +200,8 @@ class TwelveDataProvider:
             {
                 "symbol": sym,
                 "interval": self.INTERVALS[key],
-                "outputsize": min(int(limit) + 1, _MAX_COUNT),
+                # Extra rows absorb the open candle and removed weekend bars.
+                "outputsize": min(int(limit) * 3 // 2 + 50, _MAX_COUNT),
                 "timezone": "UTC",
                 "order": "asc",
                 "apikey": self.api_key,
@@ -207,6 +236,9 @@ class TwelveDataProvider:
         cutoff = pd.Timestamp(self._now()) - INTERVAL_DURATION[key]
         attrs = dict(df.attrs)
         df = df[df["timestamp"] <= cutoff].reset_index(drop=True)
+        df.attrs.update(attrs)
+        df = drop_weekend_closure(df)
+        attrs = dict(df.attrs)
         df = df.iloc[-int(limit) :].reset_index(drop=True)
         df.attrs.update(attrs)
         return df
@@ -283,6 +315,7 @@ class OandaProvider:
         df = build_candle_frame(
             records, symbol, provider=self.name, provider_sym=sym, volume_kind="tick"
         )
+        df = drop_weekend_closure(df)
         attrs = dict(df.attrs)
         df = df.iloc[-int(limit) :].reset_index(drop=True)
         df.attrs.update(attrs)

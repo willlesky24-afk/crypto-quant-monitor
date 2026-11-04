@@ -272,3 +272,62 @@ def test_compare_sources_insufficient_overlap_never_claims_agreement():
 def test_compare_sources_requires_positive_tolerance(tol):
     with pytest.raises(ValueError):
         compare_sources(_frame([1.1]), _frame([1.1]), tolerance_pct=tol, min_overlap=1)
+
+
+# --- Weekly market closure (Fri 17:00 New York -> Sun 17:00 New York) -------
+
+from src.market_data_providers import drop_weekend_closure  # noqa: E402
+
+
+def _hourly(start_utc, hours):
+    ts = pd.date_range(start_utc, periods=hours, freq="1h", tz="UTC")
+    return pd.DataFrame(
+        {
+            "timestamp": ts,
+            "open": 1.1,
+            "high": 1.2,
+            "low": 1.0,
+            "close": 1.1,
+            "volume": 0.0,
+        }
+    )
+
+
+def test_weekend_closure_summer_time_uses_21_utc():
+    # 2026-10-30 is a Friday; New York is on EDT (UTC-4): close 21:00 UTC.
+    df = _hourly("2026-10-30 19:00", 4)  # 19,20,21,22 UTC Friday
+    out = drop_weekend_closure(df)
+    assert list(out["timestamp"].dt.hour) == [19, 20]
+    assert out.attrs["weekend_bars_removed"] == 2
+
+
+def test_weekend_closure_winter_time_reopens_22_utc():
+    # 2026-11-08 is a Sunday; New York on EST (UTC-5): reopen 22:00 UTC.
+    df = _hourly("2026-11-08 20:00", 4)  # 20,21,22,23 UTC Sunday
+    out = drop_weekend_closure(df)
+    assert list(out["timestamp"].dt.hour) == [22, 23]
+
+
+def test_weekend_closure_removes_saturday_and_keeps_weekdays():
+    df = _hourly("2026-10-31 00:00", 24)  # whole Saturday
+    assert drop_weekend_closure(df).empty
+    weekday = _hourly("2026-11-04 00:00", 24)  # Wednesday
+    assert len(drop_weekend_closure(weekday)) == 24
+
+
+def test_twelvedata_drops_weekend_bars(monkeypatch):
+    payload = _twelve_payload(n=3, last_hour=10)
+    sat = {
+        "datetime": "2026-10-31 05:00:00",
+        "open": "1.1",
+        "high": "1.2",
+        "low": "1.0",
+        "close": "1.1",
+    }
+    payload["values"].append(sat)
+    _mock_urlopen(monkeypatch, payload)
+    df = TwelveDataProvider(api_key="k", now=lambda: NOW).get_klines(
+        "EURUSD=X", "1h", 10
+    )
+    assert pd.Timestamp("2026-10-31 05:00", tz="UTC") not in set(df["timestamp"])
+    assert df.attrs["weekend_bars_removed"] == 1
