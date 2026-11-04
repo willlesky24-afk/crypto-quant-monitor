@@ -51,19 +51,19 @@ class SignalHistory:
             "high": high if high is not None else price,
             "low": low if low is not None else price,
             "close": close if close is not None else price,
-            "volume": volume if volume is not None else float(analysis.get("volume_raw", 0.0)),
+            "volume": volume
+            if volume is not None
+            else float(analysis.get("volume_raw", 0.0)),
             "trend": analysis["trend"],
-            "signal": (
-                signal["state"]
-                if signal is not None
-                else decision["decision"]
-            ),
+            "signal": (signal["state"] if signal is not None else decision["decision"]),
             "decision": decision["decision"],
             "quant_score": quant_score["score"],
             "risk": risk["level"],
             "created_at": created_at,
             "is_legacy": is_legacy,
-            "timestamp": str(candle_timestamp),  # for backwards compatibility with v1.6 dict consumers
+            "timestamp": str(
+                candle_timestamp
+            ),  # for backwards compatibility with v1.6 dict consumers
         }
 
         inserted = self.db.insert_signal(data)

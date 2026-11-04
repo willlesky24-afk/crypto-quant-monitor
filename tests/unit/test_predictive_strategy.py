@@ -137,8 +137,12 @@ def test_predictive_strategy_controlled_difference_technical_vs_predictive():
         predictive_score=0.20,
     )
 
-    res_dampened = engine.evaluate(signal_strong, risk_low, intel, predictive=predictive_weak)
-    res_tech_favorable = engine.evaluate(signal_strong, risk_low, intel, legacy_mode=True)
+    res_dampened = engine.evaluate(
+        signal_strong, risk_low, intel, predictive=predictive_weak
+    )
+    res_tech_favorable = engine.evaluate(
+        signal_strong, risk_low, intel, legacy_mode=True
+    )
 
     assert res_tech_favorable.decision == DECISION_FAVORABLE
     assert res_dampened.decision == DECISION_WEAK_CONTEXT
@@ -154,7 +158,9 @@ def test_predictive_strategy_adaptive_weights_formula():
         predictive_score=0.90,  # 90.0
     )
 
-    res = engine.evaluate(signal, risk, intel, predictive=predictive, technical_score=80.0)
+    res = engine.evaluate(
+        signal, risk, intel, predictive=predictive, technical_score=80.0
+    )
     # Expected: 0.70 * 80.0 + 0.30 * 90.0 = 56.0 + 27.0 = 83.0
     assert res.confidence == pytest.approx(83.0)
     assert res.final_score == pytest.approx(83.0)
@@ -225,7 +231,9 @@ def test_predictive_strategy_optimized_parameters_integration():
     assert res.sl_multiplier == 1.75
 
     # Fallback when optimized_params is None
-    res_default = engine.evaluate(signal, risk, intel, predictive=predictive, optimized_params=None)
+    res_default = engine.evaluate(
+        signal, risk, intel, predictive=predictive, optimized_params=None
+    )
     assert res_default.tp_multiplier == 3.0
     assert res_default.sl_multiplier == 1.5
 
@@ -234,13 +242,23 @@ def test_required_calibration_accepts_only_verified_finite_parameters():
     engine = DecisionEngine()
     signal, risk, intel, predictive = make_mock_inputs()
     exact = OptimizedParameters(
-        regime="TRENDING_BULL", volatility_state="NORMAL",
-        atr_tp_multiplier=4.25, atr_sl_multiplier=1.75, expected_rr=2.43,
-        sample_size=20, confidence=0.8, validation_period={},
-        calibration_state="AVAILABLE", excursion_policy_version=EXCURSION_POLICY_VERSION,
+        regime="TRENDING_BULL",
+        volatility_state="NORMAL",
+        atr_tp_multiplier=4.25,
+        atr_sl_multiplier=1.75,
+        expected_rr=2.43,
+        sample_size=20,
+        confidence=0.8,
+        validation_period={},
+        calibration_state="AVAILABLE",
+        excursion_policy_version=EXCURSION_POLICY_VERSION,
     )
     result = engine.evaluate(
-        signal, risk, intel, predictive=predictive, optimized_params=exact,
+        signal,
+        risk,
+        intel,
+        predictive=predictive,
+        optimized_params=exact,
         calibration_required=True,
     )
     assert (result.tp_multiplier, result.sl_multiplier) == (4.25, 1.75)
@@ -250,11 +268,18 @@ def test_required_calibration_accepts_only_verified_finite_parameters():
         replace(exact, excursion_policy_version=None),
         replace(exact, atr_tp_multiplier=math.nan),
         replace(exact, atr_sl_multiplier=0.0),
-        {"calibration_state": "AVAILABLE", "excursion_policy_version": EXCURSION_POLICY_VERSION},
+        {
+            "calibration_state": "AVAILABLE",
+            "excursion_policy_version": EXCURSION_POLICY_VERSION,
+        },
     ):
         with pytest.raises(OptimizationUnavailableError):
             engine.evaluate(
-                signal, risk, intel, predictive=predictive, optimized_params=invalid,
+                signal,
+                risk,
+                intel,
+                predictive=predictive,
+                optimized_params=invalid,
                 calibration_required=True,
             )
     uncalibrated = engine.evaluate(signal, risk, intel, predictive=predictive)
@@ -263,7 +288,9 @@ def test_required_calibration_accepts_only_verified_finite_parameters():
 
 def test_predictive_strategy_determinism_and_serialization():
     engine = DecisionEngine()
-    signal, risk, intel, predictive = make_mock_inputs(confidence=82.0, predictive_score=0.78)
+    signal, risk, intel, predictive = make_mock_inputs(
+        confidence=82.0, predictive_score=0.78
+    )
 
     res1 = engine.evaluate(signal, risk, intel, predictive=predictive)
     res2 = engine.evaluate(signal, risk, intel, predictive=predictive)
@@ -301,7 +328,9 @@ def test_predictive_strategy_invalid_weights_and_edge_cases():
         risk_level=RISK_HIGH,
         predictive_score=0.90,
     )
-    res_high_risk = engine_zero.evaluate(signal, risk_high, intel, predictive=predictive)
+    res_high_risk = engine_zero.evaluate(
+        signal, risk_high, intel, predictive=predictive
+    )
     assert res_high_risk.decision == DECISION_WAIT_CONFIRMATION
     assert res_high_risk.get("decision") == DECISION_WAIT_CONFIRMATION
     assert res_high_risk.get("non_existent", "default") == "default"
@@ -309,11 +338,13 @@ def test_predictive_strategy_invalid_weights_and_edge_cases():
 
     # Legacy branch: tech_confidence between 60 and 80
     signal_mid = {"confidence": 65.0, "positives": [], "risks": []}
-    res_legacy_mid = DecisionEngine().evaluate(signal_mid, {"adjustment": 0, "level": RISK_LOW, "risks": []}, {"state": ""})
+    res_legacy_mid = DecisionEngine().evaluate(
+        signal_mid, {"adjustment": 0, "level": RISK_LOW, "risks": []}, {"state": ""}
+    )
     assert res_legacy_mid.decision == DECISION_WAIT_CONFIRMATION
 
     signal_low = {"confidence": 40.0, "positives": [], "risks": []}
-    res_legacy_low = DecisionEngine().evaluate(signal_low, {"adjustment": 0, "level": RISK_LOW, "risks": []}, {"state": ""})
+    res_legacy_low = DecisionEngine().evaluate(
+        signal_low, {"adjustment": 0, "level": RISK_LOW, "risks": []}, {"state": ""}
+    )
     assert res_legacy_low.decision == DECISION_WEAK_CONTEXT
-
-

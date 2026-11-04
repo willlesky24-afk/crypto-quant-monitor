@@ -110,7 +110,9 @@ class BinanceWebSocketClient:
         self._is_running = True
 
         if self.dry_run:
-            logger.info(f"[{self.symbol} {self.interval}] Dry-run mode: skipping actual WebSocket connection.")
+            logger.info(
+                f"[{self.symbol} {self.interval}] Dry-run mode: skipping actual WebSocket connection."
+            )
             self._is_connected = True
             self._dispatch_connect()
             return
@@ -137,7 +139,6 @@ class BinanceWebSocketClient:
             if self._thread.is_alive():
                 self._thread.join(timeout=2.0)
             self._thread = None
-
 
         self._dispatch_disconnect()
         logger.info(f"[{self.symbol} {self.interval}] WebSocket client stopped.")

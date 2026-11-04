@@ -57,24 +57,29 @@ class GeminiProvider(BaseLLMProvider):
 
         # Multimodal image attachment support (single or multiple images)
         import base64
+
         if images_list and isinstance(images_list, list):
             for im in images_list:
                 b = im.get("bytes")
                 m = im.get("mime_type", "image/png")
                 if b and isinstance(b, (bytes, bytearray)):
-                    current_parts.append({
-                        "inline_data": {
-                            "mime_type": m,
-                            "data": base64.b64encode(b).decode("utf-8"),
+                    current_parts.append(
+                        {
+                            "inline_data": {
+                                "mime_type": m,
+                                "data": base64.b64encode(b).decode("utf-8"),
+                            }
                         }
-                    })
+                    )
         elif image_bytes and isinstance(image_bytes, (bytes, bytearray)):
-            current_parts.append({
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": base64.b64encode(image_bytes).decode("utf-8"),
+            current_parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": mime_type,
+                        "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    }
                 }
-            })
+            )
 
         has_images = len(current_parts) > 1
 
@@ -106,33 +111,45 @@ class GeminiProvider(BaseLLMProvider):
             if fallback_candidate not in models_to_try:
                 models_to_try.append(fallback_candidate)
 
-        timeout = max(self.timeout_seconds, 40.0) if has_images else self.timeout_seconds
+        timeout = (
+            max(self.timeout_seconds, 40.0) if has_images else self.timeout_seconds
+        )
         last_exc: Exception | None = None
         for current_model in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{current_model}:generateContent?key={self.api_key}"
             for attempt in range(self.max_retries + 1):
                 try:
                     from unittest.mock import MagicMock
+
                     is_mocked = isinstance(urllib.request.urlopen, MagicMock)
 
                     if not is_mocked:
                         try:
                             import requests
-                            r = requests.post(url, data=body, headers=headers, timeout=timeout)
+
+                            r = requests.post(
+                                url, data=body, headers=headers, timeout=timeout
+                            )
                             if r.status_code == 200:
                                 resp_data = r.json()
                             else:
                                 if r.status_code in (400, 404, 429, 503):
-                                    last_exc = Exception(f"HTTP {r.status_code}: {r.text[:150]}")
+                                    last_exc = Exception(
+                                        f"HTTP {r.status_code}: {r.text[:150]}"
+                                    )
                                     break
                                 r.raise_for_status()
                                 resp_data = r.json()
                         except ImportError:
-                            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+                            req = urllib.request.Request(
+                                url, data=body, headers=headers, method="POST"
+                            )
                             with urllib.request.urlopen(req, timeout=timeout) as resp:
                                 resp_data = json.loads(resp.read().decode("utf-8"))
                     else:
-                        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+                        req = urllib.request.Request(
+                            url, data=body, headers=headers, method="POST"
+                        )
                         with urllib.request.urlopen(req, timeout=timeout) as resp:
                             resp_data = json.loads(resp.read().decode("utf-8"))
 
@@ -163,7 +180,9 @@ class GeminiProvider(BaseLLMProvider):
                         break
                 except Exception as exc:
                     last_exc = exc
-                    logger.warning(f"Gemini API attempt {attempt+1} on model {current_model} failed: {exc}")
+                    logger.warning(
+                        f"Gemini API attempt {attempt + 1} on model {current_model} failed: {exc}"
+                    )
                     if attempt < self.max_retries:
                         time.sleep(0.5 * (attempt + 1))
                     else:
@@ -235,7 +254,8 @@ class GeminiProvider(BaseLLMProvider):
         return AgentExplanation(
             summary=res.content[:200],
             rationale=res.content,
-            key_drivers=context.signal.positives or (f"Regime: {context.market_regime}",),
+            key_drivers=context.signal.positives
+            or (f"Regime: {context.market_regime}",),
             risk_assessment=f"SL: {context.risk.stop_loss} | TP: {context.risk.take_profit}",
             confidence=context.signal.confidence,
             raw_response=res.content,
@@ -243,7 +263,9 @@ class GeminiProvider(BaseLLMProvider):
 
     async def summarize_market(self, context: MarketContext) -> AgentMarketSummary:
         """Adhere to BaseAIProvider contract for market summaries."""
-        prompt = f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        prompt = (
+            f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        )
         res = await self.generate_response(prompt)
         return AgentMarketSummary(
             title=f"Gemini Market Briefing: {context.symbol}",

@@ -32,7 +32,10 @@ def test_trend_breakdown(analysis_factory, trend, points):
     ],
 )
 def test_momentum_breakdown(analysis_factory, momentum, points):
-    assert calculate(analysis_factory, momentum=momentum)["breakdown"]["momentum"] == points
+    assert (
+        calculate(analysis_factory, momentum=momentum)["breakdown"]["momentum"]
+        == points
+    )
 
 
 def test_below_value_area_is_penalized_regression(analysis_factory):
@@ -67,4 +70,3 @@ def test_score_contract_and_limits(analysis_factory):
     assert set(strong) == {"score", "label", "breakdown"}
     assert strong["score"] == 100
     assert weak["score"] == 0
-

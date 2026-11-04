@@ -71,7 +71,9 @@ class BaseMarketContextRepository(ABC):
         ...
 
     @abstractmethod
-    def count_records(self, symbol: str | None = None, timeframe: str | None = None) -> int:
+    def count_records(
+        self, symbol: str | None = None, timeframe: str | None = None
+    ) -> int:
         """Count the number of stored context records, optionally filtered by symbol and timeframe."""
         ...
 

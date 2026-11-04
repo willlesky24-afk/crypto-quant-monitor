@@ -107,11 +107,15 @@ async def test_operator_assistant_ask_success():
     ctx = _create_sample_context()
     provider.update_context(ctx)
 
-    assistant = OperatorAssistant(context_provider=provider, ai_provider=MockAIProvider())
+    assistant = OperatorAssistant(
+        context_provider=provider, ai_provider=MockAIProvider()
+    )
     assert assistant.context_provider is provider
     assert isinstance(assistant.ai_provider, MockAIProvider)
 
-    query = OperatorQuery(query="What is the current BTC status?", symbol="BTCUSDT", timeframe="1h")
+    query = OperatorQuery(
+        query="What is the current BTC status?", symbol="BTCUSDT", timeframe="1h"
+    )
     response = await assistant.ask(query)
 
     assert response.symbol == "BTCUSDT"
@@ -131,14 +135,19 @@ async def test_operator_assistant_ask_success():
 @pytest.mark.anyio
 async def test_operator_assistant_ask_no_context():
     provider = InMemoryMarketContextProvider()
-    assistant = OperatorAssistant(context_provider=provider, enable_on_demand_context=False)
+    assistant = OperatorAssistant(
+        context_provider=provider, enable_on_demand_context=False
+    )
 
     query = OperatorQuery(query="Analyze SOLUSDT", symbol="SOLUSDT", timeframe="15m")
     response = await assistant.ask(query)
 
     assert response.symbol == "SOLUSDT"
     assert response.market_regime == "UNKNOWN"
-    assert "No closed-candle quantitative context is currently available" in response.answer
+    assert (
+        "No closed-candle quantitative context is currently available"
+        in response.answer
+    )
 
 
 @pytest.mark.anyio
@@ -146,12 +155,19 @@ async def test_operator_assistant_token_extraction_and_scenarios():
     provider = InMemoryMarketContextProvider()
     # Bearish context
     ctx = _create_sample_context(
-        symbol="ETHUSDT", timeframe="4h", regime="TRENDING_BEAR", predictive_score=0.25, action="SELL", direction="SHORT"
+        symbol="ETHUSDT",
+        timeframe="4h",
+        regime="TRENDING_BEAR",
+        predictive_score=0.25,
+        action="SELL",
+        direction="SHORT",
     )
     provider.update_context(ctx)
 
     assistant = OperatorAssistant(context_provider=provider)
-    query = OperatorQuery(query="Tell me about ETHUSDT on 4h", symbol="BTCUSDT", timeframe="1h")
+    query = OperatorQuery(
+        query="Tell me about ETHUSDT on 4h", symbol="BTCUSDT", timeframe="1h"
+    )
     response = await assistant.ask(query)
 
     assert response.symbol == "ETHUSDT"
@@ -163,7 +179,12 @@ async def test_operator_assistant_token_extraction_and_scenarios():
 async def test_operator_assistant_consolidation_scenarios():
     provider = InMemoryMarketContextProvider()
     ctx = _create_sample_context(
-        symbol="ADAUSDT", timeframe="1h", regime="CHOPPY_RANGE", predictive_score=0.50, action="WAIT", direction="NEUTRAL"
+        symbol="ADAUSDT",
+        timeframe="1h",
+        regime="CHOPPY_RANGE",
+        predictive_score=0.50,
+        action="WAIT",
+        direction="NEUTRAL",
     )
     provider.update_context(ctx)
 
@@ -196,28 +217,33 @@ async def test_operator_assistant_no_drivers():
     )
     provider.update_context(ctx)
 
-
     # Test custom AI provider returning empty key_drivers
 
     from src.ai_agent.interfaces import BaseAIProvider
     from src.ai_agent.models import AgentExplanation, AgentMarketSummary
 
     class EmptyDriverAIProvider(BaseAIProvider):
-        async def generate_explanation(self, context: MarketContext) -> AgentExplanation:
+        async def generate_explanation(
+            self, context: MarketContext
+        ) -> AgentExplanation:
             return AgentExplanation(summary="test", rationale="test", key_drivers=())
 
         async def summarize_market(self, context: MarketContext) -> AgentMarketSummary:
-            return AgentMarketSummary(title="t", overview="o", regime_interpretation="r", outlook="out")
+            return AgentMarketSummary(
+                title="t", overview="o", regime_interpretation="r", outlook="out"
+            )
 
         async def health_check(self) -> bool:
             return True
 
-    assistant_custom = OperatorAssistant(context_provider=provider, ai_provider=EmptyDriverAIProvider())
-    res_custom = await assistant_custom.ask(OperatorQuery(query="Analyze DOT", symbol="DOTUSDT"))
+    assistant_custom = OperatorAssistant(
+        context_provider=provider, ai_provider=EmptyDriverAIProvider()
+    )
+    res_custom = await assistant_custom.ask(
+        OperatorQuery(query="Analyze DOT", symbol="DOTUSDT")
+    )
     assert "Regime: CONSOLIDATION" in res_custom.key_drivers
     assert "Quant Score: 50.0" in res_custom.key_drivers
-
-
 
 
 @pytest.mark.anyio
@@ -251,18 +277,24 @@ def test_resolve_mentioned_symbol():
     from src.operator_assistant.on_demand_context import resolve_mentioned_symbol
 
     # Forex tests
-    sym, tf, is_fx = resolve_mentioned_symbol("USDCAD, me conviene entrar a comprar?", "EURUSD=X", "1h")
+    sym, tf, is_fx = resolve_mentioned_symbol(
+        "USDCAD, me conviene entrar a comprar?", "EURUSD=X", "1h"
+    )
     assert sym == "USDCAD=X"
     assert tf == "1h"
     assert is_fx is True
 
-    sym, tf, is_fx = resolve_mentioned_symbol("Que opinas de USD/JPY en 15m?", "BTCUSDT", "1h")
+    sym, tf, is_fx = resolve_mentioned_symbol(
+        "Que opinas de USD/JPY en 15m?", "BTCUSDT", "1h"
+    )
     assert sym == "USDJPY=X"
     assert tf == "15m"
     assert is_fx is True
 
     # Crypto tests
-    sym, tf, is_fx = resolve_mentioned_symbol("Cual es la proyeccion de SOL?", "BTCUSDT", "1h")
+    sym, tf, is_fx = resolve_mentioned_symbol(
+        "Cual es la proyeccion de SOL?", "BTCUSDT", "1h"
+    )
     assert sym == "SOLUSDT"
     assert is_fx is False
 
@@ -272,7 +304,9 @@ def test_resolve_mentioned_symbol():
     assert is_fx is False
 
     # Fallback test
-    sym, tf, is_fx = resolve_mentioned_symbol("Cual es el riesgo general?", "EURUSD=X", "1h")
+    sym, tf, is_fx = resolve_mentioned_symbol(
+        "Cual es el riesgo general?", "EURUSD=X", "1h"
+    )
     assert sym == "EURUSD=X"
     assert is_fx is True
 
@@ -304,8 +338,12 @@ async def test_operator_assistant_conclusive_verdict_coherence_wait_signal():
     )
     provider.update_context(ctx)
 
-    assistant = OperatorAssistant(context_provider=provider, ai_provider=MockAIProvider())
-    query = OperatorQuery(query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h")
+    assistant = OperatorAssistant(
+        context_provider=provider, ai_provider=MockAIProvider()
+    )
+    query = OperatorQuery(
+        query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h"
+    )
     res = await assistant.ask(query)
 
     # Coherence check: MUST NOT say 'Sí, el sesgo matemático favorece las compras'
@@ -345,8 +383,12 @@ async def test_operator_assistant_conclusive_verdict_spanish_esperar_confirmacio
     )
     provider.update_context(ctx)
 
-    assistant = OperatorAssistant(context_provider=provider, ai_provider=MockAIProvider())
-    query = OperatorQuery(query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h")
+    assistant = OperatorAssistant(
+        context_provider=provider, ai_provider=MockAIProvider()
+    )
+    query = OperatorQuery(
+        query="USDCAD, me conviene entrar a comprar?", symbol="USDCAD=X", timeframe="1h"
+    )
     res = await assistant.ask(query)
 
     # Coherence check: MUST NOT say 'Sí, el sesgo matemático favorece las compras'
@@ -368,7 +410,9 @@ async def test_operator_assistant_multiple_images():
             self.last_prompt = ""
             self.last_metadata = None
 
-        async def generate_response(self, prompt: str, metadata: dict | None = None) -> AIResponse:
+        async def generate_response(
+            self, prompt: str, metadata: dict | None = None
+        ) -> AIResponse:
             self.last_prompt = prompt
             self.last_metadata = metadata
             return AIResponse(
@@ -408,7 +452,10 @@ async def test_operator_assistant_multiple_images():
     res = await assistant.ask(query)
 
     # Narrative must reflect multiple images
-    assert "### 🤖 Copilot Intelligence — Análisis Visual de Gráficos / Señales Adjuntas (2 imágenes)" in res.answer
+    assert (
+        "### 🤖 Copilot Intelligence — Análisis Visual de Gráficos / Señales Adjuntas (2 imágenes)"
+        in res.answer
+    )
     assert "Activos: ETHUSDT y SOLUSDT" in res.answer
     # Prompt must have received num_images=2 directive
     assert "(2 imágenes adjuntas)" in mock_llm.last_prompt
@@ -428,8 +475,10 @@ async def test_assistant_uses_only_validated_candidate_levels(direction, stop, t
         signal=replace(base.signal, action="WAIT", direction=direction),
         risk=RiskMetrics(stop_loss=stop, take_profit=target, risk_ratio=2.0, atr=2.0),
         metadata={
-            "entry_price": 100.0, "signal_status": "CANDIDATA",
-            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+            "entry_price": 100.0,
+            "signal_status": "CANDIDATA",
+            "entry_confirmed": False,
+            "risk_reward_ratio": 2.0,
         },
     )
     provider = InMemoryMarketContextProvider()
@@ -469,7 +518,9 @@ async def test_assistant_without_plan_never_fabricates_levels_from_atr(atr):
     assert response.metadata["stop_loss"] is None
     assert response.metadata["take_profit"] is None
     assert response.metadata["gross_risk_reward"] is None
-    verified_block = response.answer.split("Parámetros de Riesgo Sugeridos — contrato RiskEngine", 1)[1]
+    verified_block = response.answer.split(
+        "Parámetros de Riesgo Sugeridos — contrato RiskEngine", 1
+    )[1]
     assert "Stop Loss (Corte de pérdida):** N/A" in verified_block
     assert "Take Profit (Toma de beneficio):** N/A" in verified_block
     assert "R bruto:** N/A" in verified_block
@@ -486,7 +537,9 @@ async def test_image_levels_remain_unverified_and_do_not_replace_engine_plan():
         async def generate_response(self, prompt, metadata=None):
             return AIResponse(
                 content="En la imagen observo SL $61,000 y TP $70,000.",
-                provider="fixture-vision", model="fixture", latency_ms=1.0,
+                provider="fixture-vision",
+                model="fixture",
+                latency_ms=1.0,
             )
 
         async def generate_explanation(self, context):
@@ -505,22 +558,28 @@ async def test_image_levels_remain_unverified_and_do_not_replace_engine_plan():
         signal=replace(base.signal, action="WAIT"),
         risk=RiskMetrics(stop_loss=63000.0, take_profit=67500.0, risk_ratio=2.0),
         metadata={
-            "entry_price": 64500.0, "signal_status": "CANDIDATA",
-            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+            "entry_price": 64500.0,
+            "signal_status": "CANDIDATA",
+            "entry_confirmed": False,
+            "risk_reward_ratio": 2.0,
         },
     )
     provider = InMemoryMarketContextProvider()
     provider.update_context(ctx)
     response = await OperatorAssistant(provider, ai_provider=ObservedLevelsLLM()).ask(
         OperatorQuery(
-            query="Analiza esta imagen", symbol="BTCUSDT",
+            query="Analiza esta imagen",
+            symbol="BTCUSDT",
             metadata={"images": [{"bytes": b"fixture", "mime_type": "image/png"}]},
         )
     )
     observation, verified = response.answer.split(
         "Parámetros de Riesgo Sugeridos — contrato RiskEngine", 1
     )
-    assert "Observaciones visuales generadas por IA: no son niveles verificados" in observation
+    assert (
+        "Observaciones visuales generadas por IA: no son niveles verificados"
+        in observation
+    )
     assert "$61,000" in observation and "$70,000" in observation
     assert "$61,000" not in verified and "$70,000" not in verified
     assert "$63,000.00" in verified and "$67,500.00" in verified
@@ -532,8 +591,7 @@ async def test_image_levels_remain_unverified_and_do_not_replace_engine_plan():
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     ("stop", "target", "reported"),
-    [(105.0, 110.0, 2.0), (95.0, 90.0, 2.0), (100.0, 110.0, 2.0),
-     (95.0, 110.0, 3.0)],
+    [(105.0, 110.0, 2.0), (95.0, 90.0, 2.0), (100.0, 110.0, 2.0), (95.0, 110.0, 3.0)],
 )
 async def test_assistant_rejects_inverted_zero_or_inconsistent_plan(
     stop, target, reported

@@ -111,7 +111,11 @@ class BacktestRunner:
         - BacktestReport containing trade log, performance metrics, and equity curve.
         """
         self.engine.validate_config()
-        if isinstance(warmup_bars, bool) or not isinstance(warmup_bars, Integral) or warmup_bars < 1:
+        if (
+            isinstance(warmup_bars, bool)
+            or not isinstance(warmup_bars, Integral)
+            or warmup_bars < 1
+        ):
             raise BacktestValidationError("warmup_bars debe ser un entero positivo.")
         sym = symbol.strip().upper()
         inv = interval.strip().lower()
@@ -120,9 +124,15 @@ class BacktestRunner:
             predictive_mode if predictive_mode is not None else self.predictive_mode
         )
         if calibration_required and not use_predictive:
-            raise OptimizationUnavailableError("Optimización no disponible: modo predictivo desactivado.")
-        if calibration_required and (not isinstance(calibrated_params, dict) or not calibrated_params):
-            raise OptimizationUnavailableError("Optimización no disponible: no hay parámetros calibrados.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: modo predictivo desactivado."
+            )
+        if calibration_required and (
+            not isinstance(calibrated_params, dict) or not calibrated_params
+        ):
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: no hay parámetros calibrados."
+            )
         if calibration_required:
             for params in calibrated_params.values():
                 DecisionEngine.validate_calibration_params(params, required=True)
@@ -149,7 +159,10 @@ class BacktestRunner:
                 start_time=start_time,
                 end_time=end_time,
             )
-            if type(self.dataset_manager) is HistoricalDatasetManager and type(self.dataset_manager.store) is ParquetStore:
+            if (
+                type(self.dataset_manager) is HistoricalDatasetManager
+                and type(self.dataset_manager.store) is ParquetStore
+            ):
                 candidate = raw_df.attrs.get("_controlled_provenance")
                 if isinstance(candidate, DatasetProvenance):
                     provenance = candidate
@@ -166,7 +179,9 @@ class BacktestRunner:
                 effective_warmup,
             )
             empty_metrics = BacktestMetricsCalculator.calculate_metrics(
-                [], [], self.config.initial_capital,
+                [],
+                [],
+                self.config.initial_capital,
                 sharpe_unavailable_reason=provenance.reason,
             )
             return self._build_report(
@@ -179,7 +194,8 @@ class BacktestRunner:
                 metrics=empty_metrics,
                 provenance=provenance,
                 calibration_state=(
-                    CalibrationState.AVAILABLE.value if calibration_required
+                    CalibrationState.AVAILABLE.value
+                    if calibration_required
                     else CalibrationState.NOT_REQUESTED.value
                 ),
             )
@@ -193,7 +209,9 @@ class BacktestRunner:
         total_bars = len(enriched_df)
         all_regimes = []
         if use_predictive and total_bars >= 25:
-            all_regimes = self.regime_classifier.classify_series(enriched_df, warmup_bars=25)
+            all_regimes = self.regime_classifier.classify_series(
+                enriched_df, warmup_bars=25
+            )
 
         for t_idx in range(effective_warmup - 1, total_bars):
             sub_df = enriched_df.iloc[: t_idx + 1]
@@ -206,7 +224,11 @@ class BacktestRunner:
 
             if use_predictive:
                 reg_offset = t_idx - 24
-                regime_res = all_regimes[reg_offset] if (all_regimes and 0 <= reg_offset < len(all_regimes)) else self.regime_classifier.classify(sub_df)
+                regime_res = (
+                    all_regimes[reg_offset]
+                    if (all_regimes and 0 <= reg_offset < len(all_regimes))
+                    else self.regime_classifier.classify(sub_df)
+                )
                 h = self.predictive_engine.horizon_bars
                 past_cutoff = max(0, reg_offset - h + 1)
                 past_regimes = all_regimes[:past_cutoff] if all_regimes else None
@@ -292,9 +314,9 @@ class BacktestRunner:
             initial_capital=self.config.initial_capital,
             periods_per_year=CRYPTO_24_7_PERIODS[inv] if sharpe_eligible else None,
             expected_interval=INTERVAL_TIMEDELTAS[inv] if sharpe_eligible else None,
-            sharpe_unavailable_reason=None if sharpe_eligible else (
-                provenance.reason or "Procedencia o calendario no acreditado."
-            ),
+            sharpe_unavailable_reason=None
+            if sharpe_eligible
+            else (provenance.reason or "Procedencia o calendario no acreditado."),
         )
 
         return self._build_report(
@@ -307,7 +329,8 @@ class BacktestRunner:
             metrics=metrics,
             provenance=provenance,
             calibration_state=(
-                CalibrationState.AVAILABLE.value if calibration_required
+                CalibrationState.AVAILABLE.value
+                if calibration_required
                 else CalibrationState.NOT_REQUESTED.value
             ),
         )

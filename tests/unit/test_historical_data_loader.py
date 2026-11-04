@@ -20,7 +20,9 @@ class FakeResponse:
         return self.payload
 
 
-def generate_raw_candle_chunk(start_ts_ms: int, count: int, interval_ms: int = 3_600_000) -> list:
+def generate_raw_candle_chunk(
+    start_ts_ms: int, count: int, interval_ms: int = 3_600_000
+) -> list:
     chunk = []
     for i in range(count):
         open_time = start_ts_ms + i * interval_ms
@@ -123,7 +125,9 @@ def test_historical_loader_exhausted_retries_raises_error(monkeypatch):
 
     monkeypatch.setattr(
         "src.historical_data_loader.requests.get",
-        lambda *args, **kwargs: FakeResponse(error=requests.HTTPError("Fatal network error")),
+        lambda *args, **kwargs: FakeResponse(
+            error=requests.HTTPError("Fatal network error")
+        ),
     )
     monkeypatch.setattr("src.historical_data_loader.time.sleep", lambda s: None)
 
@@ -134,7 +138,9 @@ def test_historical_loader_exhausted_retries_raises_error(monkeypatch):
 def test_historical_loader_invalid_date_range_raises_value_error():
     loader = HistoricalDataLoader()
     with pytest.raises(ValueError, match="no puede ser posterior"):
-        loader.get_historical_klines("BTCUSDT", "1h", start_time="2025-01-01", end_time="2024-01-01")
+        loader.get_historical_klines(
+            "BTCUSDT", "1h", start_time="2025-01-01", end_time="2024-01-01"
+        )
 
 
 def test_historical_loader_invalid_interval_raises_value_error():
@@ -179,13 +185,16 @@ def test_historical_loader_weight_throttling(monkeypatch):
 
     monkeypatch.setattr(
         "src.historical_data_loader.requests.get",
-        lambda *args, **kwargs: FakeResponse(chunk, headers={"x-mbx-used-weight-1m": "1150"}),
+        lambda *args, **kwargs: FakeResponse(
+            chunk, headers={"x-mbx-used-weight-1m": "1150"}
+        ),
     )
     monkeypatch.setattr("src.historical_data_loader.time.sleep", mock_sleep)
 
     df = loader.get_historical_klines("BTCUSDT", "1h", start_time=1_700_000_000_000)
     assert throttled
     assert len(df) == 2
+
 
 def test_historical_loader_seconds_epoch_conversion(monkeypatch):
     loader = HistoricalDataLoader(chunk_size=10, request_delay=0.0)
@@ -212,7 +221,9 @@ def test_historical_loader_only_open_candle_filtered_returns_empty(monkeypatch):
     )
     monkeypatch.setattr("src.historical_data_loader.time.time", lambda: 1_800_000_000.0)
 
-    df = loader.get_historical_klines("BTCUSDT", "1h", start_time=1_700_000_000_000, include_open_candle=False)
+    df = loader.get_historical_klines(
+        "BTCUSDT", "1h", start_time=1_700_000_000_000, include_open_candle=False
+    )
     assert df.empty
 
 
@@ -232,9 +243,13 @@ def test_historical_loader_with_request_delay(monkeypatch):
 
     sleeps = []
     monkeypatch.setattr("src.historical_data_loader.requests.get", mock_get)
-    monkeypatch.setattr("src.historical_data_loader.time.sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(
+        "src.historical_data_loader.time.sleep", lambda s: sleeps.append(s)
+    )
 
-    df = loader.get_historical_klines("BTCUSDT", "1h", start_time=start_ms, include_open_candle=True)
+    df = loader.get_historical_klines(
+        "BTCUSDT", "1h", start_time=start_ms, include_open_candle=True
+    )
     assert len(df) == 7
     assert 0.05 in sleeps
 
@@ -253,8 +268,12 @@ def test_raw_batch_preserves_original_order_and_page_boundaries(monkeypatch):
 
     monkeypatch.setattr("src.historical_data_loader.requests.get", mock_get)
     batch = loader.get_historical_klines(
-        "BTCUSDT", "1h", start_time=start, end_time=start + 2 * 3_600_000,
-        include_open_candle=True, return_raw_batch=True,
+        "BTCUSDT",
+        "1h",
+        start_time=start,
+        end_time=start + 2 * 3_600_000,
+        include_open_candle=True,
+        return_raw_batch=True,
     )
     assert isinstance(batch, RawHistoricalBatch)
     assert batch.page_sizes == (2, 2)
@@ -263,9 +282,11 @@ def test_raw_batch_preserves_original_order_and_page_boundaries(monkeypatch):
 
     calls = 0
     legacy = loader.get_historical_klines(
-        "BTCUSDT", "1h", start_time=start, end_time=start + 2 * 3_600_000,
+        "BTCUSDT",
+        "1h",
+        start_time=start,
+        end_time=start + 2 * 3_600_000,
         include_open_candle=True,
     )
     assert len(legacy) == 3
     assert legacy["timestamp"].is_monotonic_increasing
-

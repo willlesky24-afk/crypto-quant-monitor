@@ -33,7 +33,9 @@ class PredictiveResult:
             "regime_context": self.regime_context,
             "direction_bias": self.direction_bias,
             "features_used": {
-                k: round(float(v), 6) if isinstance(v, (int, float, np.floating, np.integer)) else v
+                k: round(float(v), 6)
+                if isinstance(v, (int, float, np.floating, np.integer))
+                else v
                 for k, v in self.features_used.items()
             },
         }
@@ -73,7 +75,9 @@ class PredictiveEngine:
         missing = required_cols.difference(set(df.columns))
         if missing:
             missing_str = ", ".join(sorted(missing))
-            raise ValueError(f"Faltan columnas requeridas para evaluación predictiva: {missing_str}")
+            raise ValueError(
+                f"Faltan columnas requeridas para evaluación predictiva: {missing_str}"
+            )
 
         if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
             candles = df.copy()
@@ -102,7 +106,9 @@ class PredictiveEngine:
             )
 
         # 1. Causal Indicator Enrichment
-        if not {"rsi", "atr", "ema_50", "ema_200", "volume_average"}.issubset(set(candles.columns)):
+        if not {"rsi", "atr", "ema_50", "ema_200", "volume_average"}.issubset(
+            set(candles.columns)
+        ):
             enriched = self.indicators.calculate_all(candles)
         else:
             enriched = candles
@@ -142,7 +148,9 @@ class PredictiveEngine:
             if precomputed_past_regimes is not None:
                 past_regimes = precomputed_past_regimes
             else:
-                past_regimes = self.regime_classifier.classify_series(past_sub, warmup_bars=25)
+                past_regimes = self.regime_classifier.classify_series(
+                    past_sub, warmup_bars=25
+                )
 
             start_idx = 24
             for offset, r in enumerate(past_regimes):
@@ -200,12 +208,19 @@ class PredictiveEngine:
         w_mom = 0.20
         w_trend = 0.15
 
-        predictive_score = (w_prob * f_prob) + (w_conf * f_conf) + (w_mom * f_mom) + (w_trend * f_trend)
+        predictive_score = (
+            (w_prob * f_prob)
+            + (w_conf * f_conf)
+            + (w_mom * f_mom)
+            + (w_trend * f_trend)
+        )
         predictive_score = min(1.0, max(0.0, float(predictive_score)))
 
         # Overall estimation confidence combining regime confidence and sample statistical depth
         sample_depth_factor = min(1.0, matches / 15.0)
-        est_confidence = min(1.0, max(0.0, (0.5 * f_conf) + (0.5 * sample_depth_factor)))
+        est_confidence = min(
+            1.0, max(0.0, (0.5 * f_conf) + (0.5 * sample_depth_factor))
+        )
 
         features_used = {
             "matched_historical_samples": float(matches),
@@ -232,12 +247,16 @@ class PredictiveEngine:
             probability_reversal=p_reversal,
             predictive_score=predictive_score,
             confidence=est_confidence,
-            regime_context=current_regime.value if isinstance(current_regime, MarketRegime) else str(current_regime),
+            regime_context=current_regime.value
+            if isinstance(current_regime, MarketRegime)
+            else str(current_regime),
             direction_bias=direction_bias,
             features_used=features_used,
         )
 
-    def evaluate_series(self, df: pd.DataFrame, warmup_bars: int = 40) -> list[PredictiveResult]:
+    def evaluate_series(
+        self, df: pd.DataFrame, warmup_bars: int = 40
+    ) -> list[PredictiveResult]:
         """Evaluates predictive probability results sequentially bar-by-bar across a dataset.
 
         Parameters:

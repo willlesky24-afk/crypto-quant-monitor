@@ -72,37 +72,101 @@ class DiscordWebhookChannel(BaseNotificationChannel):
             title_emoji = "⏳"
 
         embed_fields: list[dict[str, Any]] = [
-            {"name": "Action / Direction", "value": f"{_discord_text(payload.action)} ({_discord_text(payload.direction)})", "inline": True},
-            {"name": "Entrada validada" if tracked else "Price", "value": f"${payload.price}" if tracked else f"${payload.price:,.2f}", "inline": True},
-            {"name": "Market Regime", "value": _discord_text(payload.regime), "inline": True},
-            {"name": "Confidence", "value": f"{payload.confidence * 100:.1f}%", "inline": True},
-            {"name": "Predictive Score", "value": f"{payload.predictive_score:.2f}", "inline": True},
-            {"name": "Quant Score", "value": f"{payload.quant_score:.1f}", "inline": True},
+            {
+                "name": "Action / Direction",
+                "value": f"{_discord_text(payload.action)} ({_discord_text(payload.direction)})",
+                "inline": True,
+            },
+            {
+                "name": "Entrada validada" if tracked else "Price",
+                "value": f"${payload.price}" if tracked else f"${payload.price:,.2f}",
+                "inline": True,
+            },
+            {
+                "name": "Market Regime",
+                "value": _discord_text(payload.regime),
+                "inline": True,
+            },
+            {
+                "name": "Confidence",
+                "value": f"{payload.confidence * 100:.1f}%",
+                "inline": True,
+            },
+            {
+                "name": "Predictive Score",
+                "value": f"{payload.predictive_score:.2f}",
+                "inline": True,
+            },
+            {
+                "name": "Quant Score",
+                "value": f"{payload.quant_score:.1f}",
+                "inline": True,
+            },
         ]
 
         if tracked:
-            embed_fields.extend([
-                {"name": "ID de seguimiento", "value": _discord_text(payload.metadata["tracking_id"]), "inline": True},
-                {"name": "Registro (UTC)", "value": _discord_text(payload.metadata["tracking_recorded_at"]), "inline": True},
-                {"name": "Estado de señal", "value": _discord_text(payload.metadata["signal_status"]), "inline": True},
-            ])
+            embed_fields.extend(
+                [
+                    {
+                        "name": "ID de seguimiento",
+                        "value": _discord_text(payload.metadata["tracking_id"]),
+                        "inline": True,
+                    },
+                    {
+                        "name": "Registro (UTC)",
+                        "value": _discord_text(
+                            payload.metadata["tracking_recorded_at"]
+                        ),
+                        "inline": True,
+                    },
+                    {
+                        "name": "Estado de señal",
+                        "value": _discord_text(payload.metadata["signal_status"]),
+                        "inline": True,
+                    },
+                ]
+            )
 
         if payload.stop_loss is not None:
-            embed_fields.append({"name": "Stop Loss", "value": f"${payload.stop_loss}" if tracked else f"${payload.stop_loss:,.2f}", "inline": True})
+            embed_fields.append(
+                {
+                    "name": "Stop Loss",
+                    "value": f"${payload.stop_loss}"
+                    if tracked
+                    else f"${payload.stop_loss:,.2f}",
+                    "inline": True,
+                }
+            )
         if payload.take_profit is not None:
-            embed_fields.append({"name": "Take Profit", "value": f"${payload.take_profit}" if tracked else f"${payload.take_profit:,.2f}", "inline": True})
+            embed_fields.append(
+                {
+                    "name": "Take Profit",
+                    "value": f"${payload.take_profit}"
+                    if tracked
+                    else f"${payload.take_profit:,.2f}",
+                    "inline": True,
+                }
+            )
         if payload.risk_reward_ratio is not None:
-            embed_fields.append({
-                "name": "R:R bruto (sin costes)" if tracked else "R:R Ratio",
-                "value": str(payload.risk_reward_ratio) if tracked else f"{payload.risk_reward_ratio:.2f}",
-                "inline": True,
-            })
+            embed_fields.append(
+                {
+                    "name": "R:R bruto (sin costes)" if tracked else "R:R Ratio",
+                    "value": str(payload.risk_reward_ratio)
+                    if tracked
+                    else f"{payload.risk_reward_ratio:.2f}",
+                    "inline": True,
+                }
+            )
 
-        embed_fields.append({
-            "name": "Reasoning & Context",
-            "value": _discord_text(payload.reasoning or "No additional reasoning provided."),
-            "inline": False,
-        })
+        embed_fields.append(
+            {
+                "name": "Reasoning & Context",
+                "value": _discord_text(
+                    payload.reasoning or "No additional reasoning provided."
+                ),
+                "inline": False,
+            }
+        )
 
         embed = {
             "title": f"{title_emoji} SIGNAL ALERT: {_discord_text(payload.symbol)} [{_discord_text(payload.timeframe.upper())}]",
@@ -137,13 +201,15 @@ class DiscordWebhookChannel(BaseNotificationChannel):
             )
 
         message_body = self.format_message(payload)
-        success, status_code, error_msg, retries, latency_ms = self.http_post_with_retry(
-            url=self.webhook_url,
-            json_data=message_body,
-            headers={"Content-Type": "application/json"},
-            timeout=self.timeout,
-            max_retries=self.max_retries,
-            base_backoff_sec=self.base_backoff_sec,
+        success, status_code, error_msg, retries, latency_ms = (
+            self.http_post_with_retry(
+                url=self.webhook_url,
+                json_data=message_body,
+                headers={"Content-Type": "application/json"},
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                base_backoff_sec=self.base_backoff_sec,
+            )
         )
 
         return NotificationResult(

@@ -63,7 +63,8 @@ class Database:
 
         timeframe = data.get("timeframe", "1h")
         candle_timestamp = data.get(
-            "candle_timestamp", data.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            "candle_timestamp",
+            data.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
         price = float(data["price"])
         open_p = float(data.get("open", price))
@@ -71,7 +72,9 @@ class Database:
         low_p = float(data.get("low", price))
         close_p = float(data.get("close", price))
         volume = float(data.get("volume", 0.0))
-        created_at = data.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        created_at = data.get(
+            "created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
         is_legacy = int(data.get("is_legacy", 0))
 
         cursor.execute(

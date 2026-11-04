@@ -48,7 +48,11 @@ class ScannedPairResult:
 
     def is_operable(self) -> bool:
         """A scanner candidate cannot be dispatched as an activated trade."""
-        if self.status != "ACTIVADA" or not self.entry_confirmed or not self.risk_methodology:
+        if (
+            self.status != "ACTIVADA"
+            or not self.entry_confirmed
+            or not self.risk_methodology
+        ):
             return False
         levels = RiskEngine().calculate_levels(
             self.entry_price, self.stop_loss, self.take_profit, self.direction
@@ -58,9 +62,13 @@ class ScannedPairResult:
             and self.risk_reward is not None
             and self.risk_distance is not None
             and self.reward_distance is not None
-            and math.isclose(self.risk_reward, levels["gross_risk_reward"], rel_tol=1e-9)
+            and math.isclose(
+                self.risk_reward, levels["gross_risk_reward"], rel_tol=1e-9
+            )
             and math.isclose(self.risk_distance, levels["risk_distance"], rel_tol=1e-9)
-            and math.isclose(self.reward_distance, levels["reward_distance"], rel_tol=1e-9)
+            and math.isclose(
+                self.reward_distance, levels["reward_distance"], rel_tol=1e-9
+            )
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,7 +87,9 @@ class ScannedPairResult:
             "predictive_score": round(self.predictive_score, 2),
             "confidence": round(self.confidence * 100, 1),
             "risk_reward": self.risk_reward,
-            "risk_reward_basis": "bruto_sin_costes" if self.risk_reward is not None else None,
+            "risk_reward_basis": "bruto_sin_costes"
+            if self.risk_reward is not None
+            else None,
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
             "risk_distance": self.risk_distance,
@@ -131,7 +141,9 @@ class MarketScanner:
 
         for sym in symbols:
             try:
-                df_raw = self.loader.get_klines(sym, interval=timeframe, limit=limit, include_open_candle=False)
+                df_raw = self.loader.get_klines(
+                    sym, interval=timeframe, limit=limit, include_open_candle=False
+                )
                 if df_raw.empty or len(df_raw) < 35:
                     continue
                 df = self.indicators.calculate_all(df_raw)
@@ -142,7 +154,9 @@ class MarketScanner:
                 intel = self.intel_engine.evaluate(analysis)
                 score_dict = self.quant_score_engine.calculate(analysis, signal, risk)
                 regime_res = self.regime_classifier.classify(df)
-                pred_res = self.predictive_engine.evaluate(df, current_regime_res=regime_res)
+                pred_res = self.predictive_engine.evaluate(
+                    df, current_regime_res=regime_res
+                )
 
                 q_score = float(score_dict.get("score", 50.0))
                 decision = self.decision_engine.evaluate(
@@ -177,7 +191,11 @@ class MarketScanner:
                     1,
                 )
 
-                pos_list = signal.get("positives", []) if isinstance(signal, dict) else getattr(signal, "positives", [])
+                pos_list = (
+                    signal.get("positives", [])
+                    if isinstance(signal, dict)
+                    else getattr(signal, "positives", [])
+                )
                 pos = pos_list[0] if pos_list else f"Régimen {regime_res.regime.value}"
 
                 results.append(
@@ -209,7 +227,9 @@ class MarketScanner:
                 logger.warning(f"Error scanning {sym}: {exc}")
                 continue
 
-        results.sort(key=lambda x: (x.status == "CANDIDATA", x.ranking_score), reverse=True)
+        results.sort(
+            key=lambda x: (x.status == "CANDIDATA", x.ranking_score), reverse=True
+        )
         return results
 
     def format_scanner_summary_es(self, results: list[ScannedPairResult]) -> str:
@@ -236,7 +256,9 @@ class MarketScanner:
             None,
         )
         if top is None:
-            narrative = ["No hay oportunidades con niveles técnicos completos en este escaneo."]
+            narrative = [
+                "No hay oportunidades con niveles técnicos completos en este escaneo."
+            ]
         else:
             narrative = [
                 f"**Escenario técnico destacado: {top.symbol} ({top.timeframe}) — CANDIDATA, entrada no confirmada.**",
@@ -250,9 +272,15 @@ class MarketScanner:
 
         narrative.append("\n**Pares evaluados:**")
         for item in results[:5]:
-            ratio = f"1:{item.risk_reward:.2f} bruto" if item.risk_reward is not None else "No disponible"
+            ratio = (
+                f"1:{item.risk_reward:.2f} bruto"
+                if item.risk_reward is not None
+                else "No disponible"
+            )
             narrative.append(
                 f"- {item.symbol} ({item.timeframe}): {item.status}; dirección {item.direction}; R {ratio}. {item.risk_reason or item.primary_reason}"
             )
-        narrative.append("\n*Una candidata no confirma ejecución ni constituye una señal activada.*")
+        narrative.append(
+            "\n*Una candidata no confirma ejecución ni constituye una señal activada.*"
+        )
         return "\n".join(narrative)

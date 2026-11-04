@@ -11,7 +11,9 @@ class HealthResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     status: str = Field(..., description="Operational status of the API gateway")
-    available_symbols: list[str] = Field(default_factory=list, description="Symbols with active context")
+    available_symbols: list[str] = Field(
+        default_factory=list, description="Symbols with active context"
+    )
     timestamp: str = Field(..., description="UTC ISO timestamp of the response")
 
 
@@ -22,11 +24,17 @@ class ExplanationDTO(BaseModel):
 
     summary: str = Field(..., description="Executive narrative summary of the setup")
     rationale: str = Field(..., description="Detailed quantitative rationale")
-    key_drivers: list[str] = Field(default_factory=list, description="Primary positive or negative factors")
-    risk_assessment: str = Field(..., description="Risk boundaries, SL, TP, and R:R evaluation")
+    key_drivers: list[str] = Field(
+        default_factory=list, description="Primary positive or negative factors"
+    )
+    risk_assessment: str = Field(
+        ..., description="Risk boundaries, SL, TP, and R:R evaluation"
+    )
     confidence: float = Field(..., description="Confidence score between 0.0 and 1.0")
     raw_response: str = Field(default="", description="Raw LLM/template output string")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Contextual tracking metadata")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Contextual tracking metadata"
+    )
 
 
 class SignalExplanationAPIResponse(BaseModel):
@@ -37,7 +45,9 @@ class SignalExplanationAPIResponse(BaseModel):
     success: bool = Field(..., description="Indicates if the explanation was generated")
     symbol: str = Field(..., description="Market ticker symbol (e.g., BTCUSDT)")
     timeframe: str = Field(..., description="Candle interval (e.g., 1h)")
-    explanation: ExplanationDTO = Field(..., description="Structured explanation object")
+    explanation: ExplanationDTO = Field(
+        ..., description="Structured explanation object"
+    )
     timestamp: str = Field(..., description="UTC ISO timestamp")
 
 
@@ -48,11 +58,17 @@ class MarketSummaryDTO(BaseModel):
 
     title: str = Field(..., description="Title of the briefing")
     overview: str = Field(..., description="Executive market overview")
-    regime_interpretation: str = Field(..., description="Structural regime and volume profile context")
+    regime_interpretation: str = Field(
+        ..., description="Structural regime and volume profile context"
+    )
     outlook: str = Field(..., description="Operational outlook and risk environment")
-    key_levels: dict[str, float] = Field(default_factory=dict, description="Key price, POC, VAH, VAL, and risk levels")
+    key_levels: dict[str, float] = Field(
+        default_factory=dict, description="Key price, POC, VAH, VAL, and risk levels"
+    )
     raw_response: str = Field(default="", description="Raw LLM/template output string")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Contextual tracking metadata")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Contextual tracking metadata"
+    )
 
 
 class MarketSummaryAPIResponse(BaseModel):
@@ -72,11 +88,19 @@ class ReadinessResponse(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    status: str = Field(..., description="Overall readiness status ('READY' or 'NOT_READY')")
-    storage_healthy: bool = Field(..., description="Indicates if context storage is accessible")
-    tracked_symbols_count: int = Field(..., description="Number of active symbols in storage")
+    status: str = Field(
+        ..., description="Overall readiness status ('READY' or 'NOT_READY')"
+    )
+    storage_healthy: bool = Field(
+        ..., description="Indicates if context storage is accessible"
+    )
+    tracked_symbols_count: int = Field(
+        ..., description="Number of active symbols in storage"
+    )
     total_records_count: int = Field(..., description="Total context snapshots stored")
-    details: dict[str, Any] = Field(default_factory=dict, description="Diagnostic details")
+    details: dict[str, Any] = Field(
+        default_factory=dict, description="Diagnostic details"
+    )
     timestamp: str = Field(..., description="UTC ISO timestamp")
 
 
@@ -87,16 +111,28 @@ class StatsResponse(BaseModel):
 
     http_requests_total: int = Field(..., description="Total HTTP requests received")
     http_requests_active: int = Field(..., description="In-flight active requests")
-    rate_limit_rejections_total: int = Field(..., description="Rate limit rejections count")
-    explanation_requests_total: int = Field(..., description="Total signal explanation requests")
+    rate_limit_rejections_total: int = Field(
+        ..., description="Rate limit rejections count"
+    )
+    explanation_requests_total: int = Field(
+        ..., description="Total signal explanation requests"
+    )
     explanation_errors_total: int = Field(..., description="Explanation errors count")
-    summary_requests_total: int = Field(..., description="Total market summary requests")
+    summary_requests_total: int = Field(
+        ..., description="Total market summary requests"
+    )
     summary_errors_total: int = Field(..., description="Summary errors count")
-    bridge_events_processed_total: int = Field(..., description="Bridge events processed")
-    stored_records_count: int = Field(..., description="Context records count in storage")
+    bridge_events_processed_total: int = Field(
+        ..., description="Bridge events processed"
+    )
+    stored_records_count: int = Field(
+        ..., description="Context records count in storage"
+    )
     active_symbols_count: int = Field(..., description="Active symbols count")
     latency_stats: dict[str, float] = Field(..., description="Latency statistics in ms")
-    requests_by_route: list[dict[str, Any]] = Field(default_factory=list, description="Request breakdown")
+    requests_by_route: list[dict[str, Any]] = Field(
+        default_factory=list, description="Request breakdown"
+    )
     timestamp: str = Field(..., description="UTC ISO timestamp")
 
 
@@ -105,10 +141,14 @@ class CopilotQueryRequest(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    query: str = Field(..., description="Natural language question or command from the operator")
+    query: str = Field(
+        ..., description="Natural language question or command from the operator"
+    )
     symbol: str = Field(default="BTCUSDT", description="Target market symbol")
     timeframe: str = Field(default="1h", description="Candle interval")
-    operator_id: str = Field(default="default_operator", description="Identifier of the operator")
+    operator_id: str = Field(
+        default="default_operator", description="Identifier of the operator"
+    )
 
 
 class CopilotQueryDTO(BaseModel):
@@ -124,8 +164,12 @@ class CopilotQueryDTO(BaseModel):
     predictive_score: float = Field(..., description="Predictive score (0-1.0)")
     confidence: float = Field(..., description="Signal confidence")
     key_drivers: list[str] = Field(default_factory=list, description="Primary drivers")
-    risk_factors: list[str] = Field(default_factory=list, description="Identified risk factors")
-    scenarios: list[str] = Field(default_factory=list, description="Possible scenario frameworks")
+    risk_factors: list[str] = Field(
+        default_factory=list, description="Identified risk factors"
+    )
+    scenarios: list[str] = Field(
+        default_factory=list, description="Possible scenario frameworks"
+    )
     disclaimer: str = Field(..., description="Decision support disclaimer")
 
 
@@ -194,4 +238,3 @@ class MarketAlertDTO(BaseModel):
     reference_value: float
     timestamp: str
     disclaimer: str
-

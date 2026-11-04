@@ -7,7 +7,9 @@ from src.operator_memory.sqlite_memory import SQLiteOperatorMemory
 
 
 def test_memory_entry_credential_sanitization():
-    raw_text = "Checking BTC key api_key: 'abcdef1234567890' with secret: 'super_secret_value'"
+    raw_text = (
+        "Checking BTC key api_key: 'abcdef1234567890' with secret: 'super_secret_value'"
+    )
     sanitized = MemoryEntry.sanitize_content(raw_text)
 
     assert "abcdef1234567890" not in sanitized
@@ -45,7 +47,9 @@ async def test_sqlite_memory_lifecycle():
     assert len(btc_entries) == 2
 
     # Filter by entry_type
-    note_entries = await mem.get_recent_entries(entry_type="note", operator_id="trader_1")
+    note_entries = await mem.get_recent_entries(
+        entry_type="note", operator_id="trader_1"
+    )
     assert len(note_entries) == 1
 
     # Search keyword
@@ -63,4 +67,3 @@ async def test_sqlite_memory_lifecycle():
     await mem.add_entry(entry_type="note", symbol="ETHUSDT", content="Test note")
     all_deleted = await mem.clear(operator_id=None)
     assert all_deleted == 1
-

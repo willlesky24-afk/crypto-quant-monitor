@@ -3,6 +3,7 @@ Script de diagnóstico y profiling para VolumeProfile.
 Mide el tiempo de ejecución, uso de memoria y cuellos de botella en el cálculo
 del perfil de volumen sobre datasets de diversos tamaños (100, 1000, 10000, 50000 velas).
 """
+
 from __future__ import annotations
 
 import cProfile
@@ -66,7 +67,9 @@ def run_profiling():
         print(f"\n--- Dataset: {n:,} velas (Promedio de {iterations} iteraciones) ---")
         print(f"  Tiempo por cálculo:  {elapsed * 1000:.3f} ms ({elapsed:.6f} s)")
         print(f"  Memoria pico:        {peak_mem / 1024:.2f} KB")
-        print(f"  Resultado obtenido:  POC={result['poc']}, VAH={result['vah']}, VAL={result['val']}")
+        print(
+            f"  Resultado obtenido:  POC={result['poc']}, VAH={result['vah']}, VAL={result['val']}"
+        )
 
     # cProfile detallado sobre 10,000 velas
     print("\n" + "=" * 70)

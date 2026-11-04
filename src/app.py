@@ -123,8 +123,14 @@ except ImportError:
 
 
 def _run_backtest_for_ui(
-    config, candles, symbol, interval, session_state,
-    *, calibrated_params=None, calibration_required=False,
+    config,
+    candles,
+    symbol,
+    interval,
+    session_state,
+    *,
+    calibrated_params=None,
+    calibration_required=False,
 ):
     """Replace the displayed report only after a successful validated run."""
     session_state.pop("backtest_report", None)
@@ -168,8 +174,10 @@ def _r_coverage_for_ui(metrics):
         total = metrics.get("total_trades", verified + excluded)
         coverage = f"{verified} verificables, {excluded} excluidas, {total} en total"
         if status == "PARTIAL":
-            return (f"Cobertura R: PARTIAL — {coverage}. "
-                    "Expectativa calculada únicamente sobre operaciones verificables.")
+            return (
+                f"Cobertura R: PARTIAL — {coverage}. "
+                "Expectativa calculada únicamente sobre operaciones verificables."
+            )
         return f"Cobertura R: COMPLETE — {coverage}."
     return "Cobertura R: UNKNOWN — No hay evidencia suficiente para presentar expectativa R verificada."
 
@@ -180,19 +188,32 @@ def _trade_field_for_ui(trade, field):
 
 def _excursion_for_ui(trade, name):
     """Show exact values or justified intervals, never a legacy point proxy."""
-    if _trade_field_for_ui(trade, "excursion_policy_version") != EXCURSION_POLICY_VERSION:
+    if (
+        _trade_field_for_ui(trade, "excursion_policy_version")
+        != EXCURSION_POLICY_VERSION
+    ):
         return "N/A (proxy heredado; observabilidad no acreditada)"
     status = _trade_field_for_ui(trade, f"{name}_observability")
     if status == "EXACT_OHLC":
         value = _trade_field_for_ui(trade, f"{name}_exact_pct")
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
             return f"{value:.2f}% (exacta OHLC)"
     if status == "BOUNDED_OHLC":
         lower = _trade_field_for_ui(trade, f"{name}_lower_bound_pct")
         upper = _trade_field_for_ui(trade, f"{name}_upper_bound_pct")
-        if (isinstance(lower, (int, float)) and isinstance(upper, (int, float))
-                and not isinstance(lower, bool) and not isinstance(upper, bool)
-                and math.isfinite(lower) and math.isfinite(upper) and 0 <= lower <= upper):
+        if (
+            isinstance(lower, (int, float))
+            and isinstance(upper, (int, float))
+            and not isinstance(lower, bool)
+            and not isinstance(upper, bool)
+            and math.isfinite(lower)
+            and math.isfinite(upper)
+            and 0 <= lower <= upper
+        ):
             return f"[{lower:.2f}%, {upper:.2f}%] (cota OHLC)"
     return "N/A (indeterminada)"
 
@@ -204,7 +225,11 @@ def _excursion_coverage_for_ui(metrics, name):
     count = metrics.get(f"{name}_exact_trades", 0)
     total = metrics.get(f"{name}_total_trades", metrics.get("total_trades", 0))
     average = metrics.get(f"{name}_exact_avg_pct")
-    displayed = f"{average:.2f}%" if isinstance(average, (int, float)) and math.isfinite(average) else "N/A"
+    displayed = (
+        f"{average:.2f}%"
+        if isinstance(average, (int, float)) and math.isfinite(average)
+        else "N/A"
+    )
     return f"{name.upper()} exacta OHLC: {displayed}; cobertura {status} ({count}/{total} operaciones)."
 
 
@@ -216,10 +241,12 @@ def _positive_finite_for_ui(value):
 
 
 def _supported_spot_long_for_ui(config):
-    return (config is not None
-            and _trade_field_for_ui(config, "market_type") == "SPOT"
-            and _trade_field_for_ui(config, "direction") == "LONG"
-            and _trade_field_for_ui(config, "leverage") == 1.0)
+    return (
+        config is not None
+        and _trade_field_for_ui(config, "market_type") == "SPOT"
+        and _trade_field_for_ui(config, "direction") == "LONG"
+        and _trade_field_for_ui(config, "leverage") == 1.0
+    )
 
 
 def _planned_rr_for_ui(trade, config):
@@ -230,22 +257,31 @@ def _planned_rr_for_ui(trade, config):
     units = _trade_field_for_ui(trade, "size_units")
     risk = _trade_field_for_ui(trade, "initial_risk_amount")
     per_unit = _trade_field_for_ui(trade, "initial_risk_per_unit")
-    if (not _supported_spot_long_for_ui(config)
-            or _trade_field_for_ui(trade, "direction") != "LONG"
-            or _trade_field_for_ui(trade, "side") != "LONG"
-            or not all(_positive_finite_for_ui(x) for x in (entry, stop, target, units, risk, per_unit))
-            or not stop < entry < target):
+    if (
+        not _supported_spot_long_for_ui(config)
+        or _trade_field_for_ui(trade, "direction") != "LONG"
+        or _trade_field_for_ui(trade, "side") != "LONG"
+        or not all(
+            _positive_finite_for_ui(x)
+            for x in (entry, stop, target, units, risk, per_unit)
+        )
+        or not stop < entry < target
+    ):
         return None
-    if (not math.isclose(per_unit, entry - stop, rel_tol=1e-9, abs_tol=1e-10)
-            or not math.isclose(risk, units * per_unit, rel_tol=1e-9, abs_tol=1e-10)):
+    if not math.isclose(
+        per_unit, entry - stop, rel_tol=1e-9, abs_tol=1e-10
+    ) or not math.isclose(risk, units * per_unit, rel_tol=1e-9, abs_tol=1e-10):
         return None
     ratio = (target - entry) / (entry - stop)
     return ratio if math.isfinite(ratio) and ratio > 0 else None
 
 
 def _planned_rr_summary_for_ui(trades, config):
-    ratios = [ratio for trade in trades
-              if (ratio := _planned_rr_for_ui(trade, config)) is not None]
+    ratios = [
+        ratio
+        for trade in trades
+        if (ratio := _planned_rr_for_ui(trade, config)) is not None
+    ]
     return (sum(ratios) / len(ratios) if ratios else None, len(ratios))
 
 
@@ -262,9 +298,14 @@ def _execution_trace_for_ui(trade):
     """An absent/unknown status never proves that an old fill was unambiguous."""
     status = _trade_field_for_ui(trade, "execution_trace_status")
     if status == ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value:
-        if _trade_field_for_ui(trade, "execution_policy_version") == ExecutionPolicyVersion.SPOT_LONG_C1.value:
+        if (
+            _trade_field_for_ui(trade, "execution_policy_version")
+            == ExecutionPolicyVersion.SPOT_LONG_C1.value
+        ):
             return "Apertura/gap: fill simulado C1 (no verificado)"
-        return "Apertura/gap: fill pendiente de revisión (política anterior o desconocida)"
+        return (
+            "Apertura/gap: fill pendiente de revisión (política anterior o desconocida)"
+        )
     labels = {
         ExecutionTraceStatus.INTRABAR_SL_FIRST.value: "Conflicto intrabar: SL primero (simulado)",
         ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value: "Sin conflicto identificado (no verificado)",
@@ -274,54 +315,74 @@ def _execution_trace_for_ui(trade):
 
 
 def _execution_policy_for_ui(trade):
-    if _trade_field_for_ui(trade, "execution_policy_version") == ExecutionPolicyVersion.SPOT_LONG_C1.value:
+    if (
+        _trade_field_for_ui(trade, "execution_policy_version")
+        == ExecutionPolicyVersion.SPOT_LONG_C1.value
+    ):
         return "C1: apertura prioritaria; TP limit simulado"
     return "N/A (metodología histórica no identificada)"
 
 
 def _execution_trace_summary_for_ui(trades):
-    statuses = [_trade_field_for_ui(trade, "execution_trace_status") for trade in trades]
+    statuses = [
+        _trade_field_for_ui(trade, "execution_trace_status") for trade in trades
+    ]
     conflicts = statuses.count(ExecutionTraceStatus.INTRABAR_SL_FIRST.value)
     openings = statuses.count(ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value)
-    unknown = sum(status not in {
-        ExecutionTraceStatus.INTRABAR_SL_FIRST.value,
-        ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value,
-        ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value,
-    } for status in statuses)
-    c1_count = sum(_trade_field_for_ui(trade, "execution_policy_version") ==
-                   ExecutionPolicyVersion.SPOT_LONG_C1.value for trade in trades)
-    return (f"Trazabilidad de salidas: {conflicts} conflictos intrabar (SL primero), "
-            f"{openings} aperturas/gaps, {unknown} estados desconocidos; "
-            f"con política C1: {c1_count}; sin versión acreditada: {len(trades) - c1_count}. "
-            "SL primero es una hipótesis conservadora de simulación; OHLC no revela "
-            "la secuencia real ni verifica los fills.")
+    unknown = sum(
+        status
+        not in {
+            ExecutionTraceStatus.INTRABAR_SL_FIRST.value,
+            ExecutionTraceStatus.OPENING_LEVEL_REVIEW.value,
+            ExecutionTraceStatus.NO_IDENTIFIED_CONFLICT.value,
+        }
+        for status in statuses
+    )
+    c1_count = sum(
+        _trade_field_for_ui(trade, "execution_policy_version")
+        == ExecutionPolicyVersion.SPOT_LONG_C1.value
+        for trade in trades
+    )
+    return (
+        f"Trazabilidad de salidas: {conflicts} conflictos intrabar (SL primero), "
+        f"{openings} aperturas/gaps, {unknown} estados desconocidos; "
+        f"con política C1: {c1_count}; sin versión acreditada: {len(trades) - c1_count}. "
+        "SL primero es una hipótesis conservadora de simulación; OHLC no revela "
+        "la secuencia real ni verifica los fills."
+    )
 
 
 def _backtest_trade_table_for_ui(trades, config):
     """Keep historical missing levels/R explicit; never infer the initial stop."""
+
     def price(value):
         return f"{value:,.2f}" if _positive_finite_for_ui(value) else "N/A"
 
     rows = []
     for trade in trades:
         verified_r = _verified_trade_r_for_ui(trade, config)
-        rows.append({
-            "ID": _trade_field_for_ui(trade, "trade_id"),
-            "Dirección": _trade_field_for_ui(trade, "side") or _trade_field_for_ui(trade, "direction"),
-            "Entrada": _trade_field_for_ui(trade, "entry_timestamp"),
-            "P. entrada ejecutada": price(_trade_field_for_ui(trade, "entry_price")),
-            "SL inicial": price(_trade_field_for_ui(trade, "initial_stop_price")),
-            "SL final": price(_trade_field_for_ui(trade, "sl_price")),
-            "TP planificado": price(_trade_field_for_ui(trade, "tp_price")),
-            "Salida": _trade_field_for_ui(trade, "exit_timestamp"),
-            "P. salida": price(_trade_field_for_ui(trade, "exit_price")),
-            "R bruto simulado": f"{verified_r[0]:.2f}" if verified_r else "N/A",
-            "R neto simulado": f"{verified_r[1]:.2f}" if verified_r else "N/A",
-            "PnL neto ($)": _trade_field_for_ui(trade, "net_pnl"),
-            "Causa cierre": _trade_field_for_ui(trade, "exit_reason"),
-            "Trazabilidad salida": _execution_trace_for_ui(trade),
-            "Política ejecución": _execution_policy_for_ui(trade),
-        })
+        rows.append(
+            {
+                "ID": _trade_field_for_ui(trade, "trade_id"),
+                "Dirección": _trade_field_for_ui(trade, "side")
+                or _trade_field_for_ui(trade, "direction"),
+                "Entrada": _trade_field_for_ui(trade, "entry_timestamp"),
+                "P. entrada ejecutada": price(
+                    _trade_field_for_ui(trade, "entry_price")
+                ),
+                "SL inicial": price(_trade_field_for_ui(trade, "initial_stop_price")),
+                "SL final": price(_trade_field_for_ui(trade, "sl_price")),
+                "TP planificado": price(_trade_field_for_ui(trade, "tp_price")),
+                "Salida": _trade_field_for_ui(trade, "exit_timestamp"),
+                "P. salida": price(_trade_field_for_ui(trade, "exit_price")),
+                "R bruto simulado": f"{verified_r[0]:.2f}" if verified_r else "N/A",
+                "R neto simulado": f"{verified_r[1]:.2f}" if verified_r else "N/A",
+                "PnL neto ($)": _trade_field_for_ui(trade, "net_pnl"),
+                "Causa cierre": _trade_field_for_ui(trade, "exit_reason"),
+                "Trazabilidad salida": _execution_trace_for_ui(trade),
+                "Política ejecución": _execution_policy_for_ui(trade),
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -702,16 +763,28 @@ else:
         index=0,
     )
     if POPULAR_PAIRS[selected_label] == "CUSTOM":
-        symbol = st.sidebar.text_input("Ingresa el símbolo (ej. SUIUSDT)", "BTCUSDT").strip().upper()
+        symbol = (
+            st.sidebar.text_input("Ingresa el símbolo (ej. SUIUSDT)", "BTCUSDT")
+            .strip()
+            .upper()
+        )
     else:
         symbol = POPULAR_PAIRS[selected_label]
 
 interval = st.sidebar.selectbox("Temporalidad", ["15m", "1h", "4h", "1d"], index=1)
-limit = st.sidebar.slider("Velas Históricas", min_value=150, max_value=1000, value=300, step=50)
+limit = st.sidebar.slider(
+    "Velas Históricas", min_value=150, max_value=1000, value=300, step=50
+)
 
 # Caption under title
-market_desc = "💱 Divisas Forex Globales (Interbancario)" if is_forex else "🪙 Criptomonedas (Binance Spot & Futuros)"
-st.caption(f"{market_desc} • Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting")
+market_desc = (
+    "💱 Divisas Forex Globales (Interbancario)"
+    if is_forex
+    else "🪙 Criptomonedas (Binance Spot & Futuros)"
+)
+st.caption(
+    f"{market_desc} • Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting"
+)
 
 # =====================================================================
 # SIDEBAR: MODO DE ANÁLISIS (AUTOMÁTICO VS MANUAL / WHAT-IF)
@@ -732,14 +805,18 @@ if is_manual_mode:
     from src.strategy_optimizer import OptimizedParameters
 
     regime_options = [r.value for r in MarketRegime]
-    manual_regime_str = st.sidebar.selectbox("Régimen de Mercado", regime_options, index=0)
+    manual_regime_str = st.sidebar.selectbox(
+        "Régimen de Mercado", regime_options, index=0
+    )
     manual_regime = MarketRegime(manual_regime_str)
 
     manual_pred_score = st.sidebar.slider("Predictive Score", 0.0, 1.0, 0.65, 0.05)
     manual_prob_cont = st.sidebar.slider("P(Continuación)", 0.0, 1.0, 0.60, 0.05)
     manual_tp_mult = st.sidebar.slider("Target TP (x ATR)", 1.0, 6.0, 3.0, 0.25)
     manual_sl_mult = st.sidebar.slider("Stop Loss SL (x ATR)", 0.5, 4.0, 1.5, 0.25)
-    manual_tech_weight = st.sidebar.slider("Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05)
+    manual_tech_weight = st.sidebar.slider(
+        "Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05
+    )
 
 # Fetch Market Data (Crypto vs Forex)
 try:
@@ -776,14 +853,15 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs([
-    "📡 Live Monitor",
-    "🤖 AI Copilot",
-    "📈 Backtest Analytics",
-    "⚙️ Notification Settings",
-    "📖 Guía & Glosario",
-])
-
+tab_live, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs(
+    [
+        "📡 Live Monitor",
+        "🤖 AI Copilot",
+        "📈 Backtest Analytics",
+        "⚙️ Notification Settings",
+        "📖 Guía & Glosario",
+    ]
+)
 
 
 # =====================================================================
@@ -819,7 +897,11 @@ with tab_live:
             predictive_score=manual_pred_score,
             confidence=0.85,
             regime_context=manual_regime.value,
-            direction_bias="LONG" if manual_regime == MarketRegime.TRENDING_BULL else ("SHORT" if manual_regime == MarketRegime.TRENDING_BEAR else "NEUTRAL"),
+            direction_bias="LONG"
+            if manual_regime == MarketRegime.TRENDING_BULL
+            else (
+                "SHORT" if manual_regime == MarketRegime.TRENDING_BEAR else "NEUTRAL"
+            ),
             features_used={},
         )
         opt_params = OptimizedParameters(
@@ -892,10 +974,16 @@ with tab_live:
     with col2:
         st.metric("Régimen de Mercado", regime_res.regime.value)
     with col3:
-        st.metric("Estado de señal", f"{trade_plan['status']} ({trade_plan['direction']})")
+        st.metric(
+            "Estado de señal", f"{trade_plan['status']} ({trade_plan['direction']})"
+        )
         st.caption(f"Decisión técnica: {decision.decision}")
     with col4:
-        conf_pct = decision.confidence if decision.confidence > 1.0 else decision.confidence * 100.0
+        conf_pct = (
+            decision.confidence
+            if decision.confidence > 1.0
+            else decision.confidence * 100.0
+        )
         st.metric("Confianza", f"{conf_pct:.1f}%")
     with col5:
         st.metric(
@@ -925,9 +1013,23 @@ with tab_live:
 
     # EMAs with Cyan and Magenta
     if "ema_50" in df.columns:
-        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_50"], name="EMA 50", line={"color": "#00E5FF", "width": 2}))
+        fig_live.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["ema_50"],
+                name="EMA 50",
+                line={"color": "#00E5FF", "width": 2},
+            )
+        )
     if "ema_200" in df.columns:
-        fig_live.add_trace(go.Scatter(x=df["timestamp"], y=df["ema_200"], name="EMA 200", line={"color": "#BD00FF", "width": 2}))
+        fig_live.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["ema_200"],
+                name="EMA 200",
+                line={"color": "#BD00FF", "width": 2},
+            )
+        )
 
     # Volume Profile Horizontal Levels with Neon Glow Accents
     if profile.get("poc"):
@@ -959,7 +1061,10 @@ with tab_live:
         template="plotly_dark",
         paper_bgcolor="#07090E",
         plot_bgcolor="#07090E",
-        font={"family": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto", "color": "#E6EDF3"},
+        font={
+            "family": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto",
+            "color": "#E6EDF3",
+        },
         xaxis={
             "gridcolor": "rgba(255, 255, 255, 0.06)",
             "linecolor": "rgba(0, 229, 255, 0.2)",
@@ -972,19 +1077,25 @@ with tab_live:
     st.plotly_chart(fig_live, use_container_width=True)
 
     # 4. Contextual Diagnostics & Modular Layer Navigation
-    c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs([
-        "🧠 Diagnóstico",
-        "📋 Plan de riesgo",
-        "🎯 Niveles",
-        "🔮 Predicción",
-        "🛠️ Datos",
-    ])
+    c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs(
+        [
+            "🧠 Diagnóstico",
+            "📋 Plan de riesgo",
+            "🎯 Niveles",
+            "🔮 Predicción",
+            "🛠️ Datos",
+        ]
+    )
 
     reporter = MarketReport()
     m_report = reporter.generate(symbol, analysis, profile)
 
     with c_layer1:
-        conf_val = decision.confidence if decision.confidence > 1.0 else decision.confidence * 100.0
+        conf_val = (
+            decision.confidence
+            if decision.confidence > 1.0
+            else decision.confidence * 100.0
+        )
         tech_score = getattr(decision, "technical_score", score.get("score", 70.0))
         pred_sc = getattr(decision, "predictive_score", pred_res.predictive_score)
 
@@ -1009,15 +1120,17 @@ with tab_live:
                     <span class="metric-pill metric-pill-green">📊 Técnico: {tech_score:.1f} pts</span>
                     <span class="metric-pill metric-pill-cyan">🔮 Predictivo: {pred_sc:.2f}</span>
                     <span class="metric-pill metric-pill-gold">🎯 Confianza: {conf_val:.1f}%</span>
-                    <span class="metric-pill metric-pill-coral">🛑 SL: {format_risk_level(trade_plan['stop_loss'])}</span>
-                    <span class="metric-pill metric-pill-green">🎯 TP: {format_risk_level(trade_plan['take_profit'])}</span>
+                    <span class="metric-pill metric-pill-coral">🛑 SL: {format_risk_level(trade_plan["stop_loss"])}</span>
+                    <span class="metric-pill metric-pill-green">🎯 TP: {format_risk_level(trade_plan["take_profit"])}</span>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        market_badge_text = "💱 Mercado Forex Global" if is_forex else "🪙 Mercado Criptomonedas 24/7"
+        market_badge_text = (
+            "💱 Mercado Forex Global" if is_forex else "🪙 Mercado Criptomonedas 24/7"
+        )
         strategy_recommendation = (
             "🏛️ <strong>Método Recomendado en Forex:</strong> Reversión a la Media en zonas de valor institucional (VAL/VAH) y Seguimiento de Tendencia macroeconómico."
             if is_forex
@@ -1041,7 +1154,9 @@ with tab_live:
                 for pos in decision.positives:
                     st.markdown(f"- ✅ **{pos}**")
             else:
-                st.caption("Sin confluencias alcistas de alta significancia detectadas.")
+                st.caption(
+                    "Sin confluencias alcistas de alta significancia detectadas."
+                )
 
         with col_warn:
             st.markdown("##### ⚠️ Factores de Riesgo")
@@ -1051,13 +1166,20 @@ with tab_live:
             else:
                 st.caption("No se registran factores de riesgo estructural inmediatos.")
 
-        with st.expander("🔬 Ver fórmula técnica y parámetros detallados", expanded=False):
+        with st.expander(
+            "🔬 Ver fórmula técnica y parámetros detallados", expanded=False
+        ):
             st.code(decision.reasoning, language="text")
-            conclusion = m_report.get("conclusion") or "Evaluación en curso con parámetros de riesgo definidos."
+            conclusion = (
+                m_report.get("conclusion")
+                or "Evaluación en curso con parámetros de riesgo definidos."
+            )
             st.caption(f"📌 Conclusión del Reporte: {conclusion}")
 
     with c_layer2:
-        st.caption(f"{symbol} · {interval} · {trade_plan['status']} · {trade_plan['direction']}")
+        st.caption(
+            f"{symbol} · {interval} · {trade_plan['status']} · {trade_plan['direction']}"
+        )
         p_col1, p_col2, p_col3, p_col4, p_col5 = st.columns(5)
         with p_col1:
             st.metric("Referencia", format_risk_level(trade_plan["reference_price"]))
@@ -1069,7 +1191,10 @@ with tab_live:
             st.metric("Take Profit", format_risk_level(trade_plan["take_profit"]))
         with p_col5:
             gross_rr = trade_plan["gross_risk_reward"]
-            st.metric("R bruto indicativo", f"1 : {gross_rr:.2f}" if gross_rr is not None else "No disponible")
+            st.metric(
+                "R bruto indicativo",
+                f"1 : {gross_rr:.2f}" if gross_rr is not None else "No disponible",
+            )
 
         if trade_plan["risk_distance"] is not None:
             st.caption(
@@ -1102,36 +1227,44 @@ with tab_live:
             pos_text = "por encima del VAH (desequilibrio alcista / premium)"
         elif val_val and curr_price < val_val:
             pos_text = "por debajo del VAL (desequilibrio bajista / descuento)"
-        st.info(f"📊 **Lectura de Liquidez:** El precio actual (${curr_price:,.2f}) se encuentra {pos_text}.")
+        st.info(
+            f"📊 **Lectura de Liquidez:** El precio actual (${curr_price:,.2f}) se encuentra {pos_text}."
+        )
 
     with c_layer4:
         pr_col1, pr_col2, pr_col3 = st.columns(3)
         with pr_col1:
             st.metric("Predictive Score", f"{pred_res.predictive_score:.2f} / 1.00")
         with pr_col2:
-            st.metric("Prob. Continuación", f"{pred_res.probability_continuation * 100:.0f}%")
+            st.metric(
+                "Prob. Continuación", f"{pred_res.probability_continuation * 100:.0f}%"
+            )
         with pr_col3:
             st.metric("Régimen Activo", regime_res.regime.value)
 
-        st.write(f"**Justificación de Régimen:** {regime_res.details.get('reason', 'Clasificación basada en estructura técnica y volatilidad.') if hasattr(regime_res, 'details') else 'Régimen cuantitativo activo.'}")
+        st.write(
+            f"**Justificación de Régimen:** {regime_res.details.get('reason', 'Clasificación basada en estructura técnica y volatilidad.') if hasattr(regime_res, 'details') else 'Régimen cuantitativo activo.'}"
+        )
 
     with c_layer5:
         st.caption("Datos técnicos sin procesar para auditoría o conexión vía API:")
-        st.json({
-            "symbol": symbol,
-            "timeframe": interval,
-            "direction": decision.direction,
-            "action": decision.decision,
-            "quant_score": score["score"],
-            "predictive_score": pred_res.predictive_score,
-            "tp_multiplier": decision.tp_multiplier,
-            "sl_multiplier": decision.sl_multiplier,
-            "risk_plan": trade_plan,
-            "poc": profile.get("poc"),
-            "vah": profile.get("vah"),
-            "val": profile.get("val"),
-            "risk_assessment": m_report.get("conclusion", ""),
-        })
+        st.json(
+            {
+                "symbol": symbol,
+                "timeframe": interval,
+                "direction": decision.direction,
+                "action": decision.decision,
+                "quant_score": score["score"],
+                "predictive_score": pred_res.predictive_score,
+                "tp_multiplier": decision.tp_multiplier,
+                "sl_multiplier": decision.sl_multiplier,
+                "risk_plan": trade_plan,
+                "poc": profile.get("poc"),
+                "vah": profile.get("vah"),
+                "val": profile.get("val"),
+                "risk_assessment": m_report.get("conclusion", ""),
+            }
+        )
 
 
 # =====================================================================
@@ -1139,7 +1272,9 @@ with tab_live:
 # =====================================================================
 with tab_copilot:
     st.subheader("🤖 Institutional AI Quant Copilot")
-    st.caption("Asistente de inteligencia de mercado • Razonamiento contextual con Gemini • Sin ejecución automática")
+    st.caption(
+        "Asistente de inteligencia de mercado • Razonamiento contextual con Gemini • Sin ejecución automática"
+    )
 
     try:
         curr_p = float(df.iloc[-1]["close"])
@@ -1148,9 +1283,13 @@ with tab_copilot:
             timestamp=pd.Timestamp(df.iloc[-1]["timestamp"]),
             symbol=symbol,
             timeframe=interval,
-            action=decision.decision if trade_plan["status"] == "ACTIVADA" and trade_plan["entry_confirmed"] else "WAIT",
+            action=decision.decision
+            if trade_plan["status"] == "ACTIVADA" and trade_plan["entry_confirmed"]
+            else "WAIT",
             direction=trade_plan["direction"],
-            confidence=decision.confidence if decision.confidence <= 1.0 else decision.confidence / 100.0,
+            confidence=decision.confidence
+            if decision.confidence <= 1.0
+            else decision.confidence / 100.0,
             predictive_score=pred_res.predictive_score,
             regime=regime_res.regime.value,
             reasoning=f"{decision.reasoning} Estado: {trade_plan['status']}. {trade_plan['reason']}",
@@ -1161,7 +1300,9 @@ with tab_copilot:
             signal_id=f"live-{symbol}-{interval}",
             metadata={
                 "risk_reward_ratio": trade_plan["gross_risk_reward"],
-                "risk_reward_basis": "bruto_sin_costes" if trade_plan["gross_risk_reward"] is not None else None,
+                "risk_reward_basis": "bruto_sin_costes"
+                if trade_plan["gross_risk_reward"] is not None
+                else None,
                 "signal_status": trade_plan["status"],
                 "entry_confirmed": trade_plan["entry_confirmed"],
                 "atr": trade_plan["atr"],
@@ -1206,7 +1347,9 @@ with tab_copilot:
                 if loop.is_running():
                     import concurrent.futures
 
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=1
+                    ) as executor:
                         return executor.submit(lambda: asyncio.run(coro)).result()
                 else:
                     return loop.run_until_complete(coro)
@@ -1219,7 +1362,9 @@ with tab_copilot:
             pass
 
         # AI Model Configuration Controls (Gemini 3.8 / 3.5 / 3.7)
-        with st.expander("⚙️ Selección de Modelo AI Copilot (Gemini 3.8 / 3.5 / 3.7)", expanded=False):
+        with st.expander(
+            "⚙️ Selección de Modelo AI Copilot (Gemini 3.8 / 3.5 / 3.7)", expanded=False
+        ):
             cfg_col1, cfg_col2 = st.columns([2, 1])
             with cfg_col1:
                 gemini_model_options = [
@@ -1257,15 +1402,19 @@ with tab_copilot:
         anomaly_detector = MarketAnomalyDetector()
 
         # Copilot Modular Layer Sub-tabs
-        cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs([
-            "💬 Chat AI",
-            "📋 Briefing",
-            "🚨 Anomalías",
-            "🕒 Contexto",
-        ])
+        cop_tab1, cop_tab2, cop_tab3, cop_tab4 = st.tabs(
+            [
+                "💬 Chat AI",
+                "📋 Briefing",
+                "🚨 Anomalías",
+                "🕒 Contexto",
+            ]
+        )
 
         with cop_tab1:
-            provider_name = active_llm_provider.__class__.__name__.replace("Provider", "")
+            provider_name = active_llm_provider.__class__.__name__.replace(
+                "Provider", ""
+            )
             model_name = getattr(active_llm_provider, "model", "standard")
 
             # Track active conversation asset in session state to maintain conversation thread across follow-up queries
@@ -1283,7 +1432,9 @@ with tab_copilot:
                 st.session_state["prev_sidebar_symbol"] = symbol
 
             active_sym_display = st.session_state.get("copilot_active_symbol", symbol)
-            active_tf_display = st.session_state.get("copilot_active_timeframe", interval).upper()
+            active_tf_display = st.session_state.get(
+                "copilot_active_timeframe", interval
+            ).upper()
 
             st.caption(
                 f"🧠 Modelo: **{provider_name}** (`{model_name}`) | "
@@ -1296,15 +1447,25 @@ with tab_copilot:
             scan_triggered = False
             explain_triggered = False
 
-            scan_btn_label = "💱 Escanear Divisas Forex" if is_forex else "🚀 Escanear Criptomonedas"
+            scan_btn_label = (
+                "💱 Escanear Divisas Forex" if is_forex else "🚀 Escanear Criptomonedas"
+            )
             with q_col1:
-                if st.button(scan_btn_label, key="btn_scan_market", use_container_width=True):
+                if st.button(
+                    scan_btn_label, key="btn_scan_market", use_container_width=True
+                ):
                     scan_triggered = True
             with q_col2:
-                if st.button(f"🗣️ Explicar {symbol} en Lenguaje Sencillo", key="btn_explain_current", use_container_width=True):
+                if st.button(
+                    f"🗣️ Explicar {symbol} en Lenguaje Sencillo",
+                    key="btn_explain_current",
+                    use_container_width=True,
+                ):
                     explain_triggered = True
             with q_col3:
-                if st.button("🗑️ Limpiar", key="btn_clear_chat", use_container_width=True):
+                if st.button(
+                    "🗑️ Limpiar", key="btn_clear_chat", use_container_width=True
+                ):
                     st.session_state["copilot_chat_history"] = []
                     st.session_state["copilot_active_symbol"] = symbol
                     st.session_state["copilot_active_timeframe"] = interval
@@ -1312,7 +1473,10 @@ with tab_copilot:
                     st.rerun()
 
             # Initialize chat history
-            if "copilot_chat_history" not in st.session_state or not st.session_state["copilot_chat_history"]:
+            if (
+                "copilot_chat_history" not in st.session_state
+                or not st.session_state["copilot_chat_history"]
+            ):
                 market_label = "Divisas Forex Globales" if is_forex else "Criptomonedas"
                 st.session_state["copilot_chat_history"] = [
                     {
@@ -1328,7 +1492,10 @@ with tab_copilot:
                 ]
 
             # File/Image Uploader
-            with st.expander("📎 Adjuntar Gráficos o Archivos para Análisis Multimodal (Fotos, TradingView o CSV)", expanded=False):
+            with st.expander(
+                "📎 Adjuntar Gráficos o Archivos para Análisis Multimodal (Fotos, TradingView o CSV)",
+                expanded=False,
+            ):
                 uploaded_files = st.file_uploader(
                     "Sube una o varias capturas de gráficos (PNG, JPG, WEBP) o archivos de datos:",
                     type=["png", "jpg", "jpeg", "webp", "csv", "txt"],
@@ -1336,13 +1503,21 @@ with tab_copilot:
                     key="copilot_file_uploader",
                 )
                 if uploaded_files:
-                    img_files = [f for f in uploaded_files if f.type.startswith("image/")]
-                    other_files = [f for f in uploaded_files if not f.type.startswith("image/")]
+                    img_files = [
+                        f for f in uploaded_files if f.type.startswith("image/")
+                    ]
+                    other_files = [
+                        f for f in uploaded_files if not f.type.startswith("image/")
+                    ]
                     if img_files:
                         img_cols = st.columns(min(len(img_files), 4))
                         for idx, img_file in enumerate(img_files):
                             with img_cols[idx % len(img_cols)]:
-                                st.image(img_file, caption=f"📷 {img_file.name}", use_container_width=True)
+                                st.image(
+                                    img_file,
+                                    caption=f"📷 {img_file.name}",
+                                    use_container_width=True,
+                                )
                     for of in other_files:
                         st.info(f"📄 Archivo cargado: {of.name} ({of.size} bytes)")
 
@@ -1350,7 +1525,9 @@ with tab_copilot:
             chat_container = st.container()
             with chat_container:
                 for msg in st.session_state["copilot_chat_history"]:
-                    with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
+                    with st.chat_message(
+                        msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"
+                    ):
                         st.markdown(msg["content"])
                         if msg.get("images"):
                             chat_img_cols = st.columns(min(len(msg["images"]), 3))
@@ -1358,7 +1535,9 @@ with tab_copilot:
                                 with chat_img_cols[idx % len(chat_img_cols)]:
                                     st.image(
                                         img_info["bytes"],
-                                        caption=img_info.get("name", f"📷 Gráfico {idx+1}"),
+                                        caption=img_info.get(
+                                            "name", f"📷 Gráfico {idx + 1}"
+                                        ),
                                         use_container_width=True,
                                     )
                         elif msg.get("image_bytes"):
@@ -1366,13 +1545,25 @@ with tab_copilot:
 
             # Handler for Market Scanner Quick Action
             if scan_triggered:
-                scan_market_name = "Forex (EUR/USD, GBP/USD, USD/JPY...)" if is_forex else "Binance (BTC, ETH, SOL, BNB, XRP)"
-                with st.spinner(f"🔍 Analizando y comparando pares principales en {scan_market_name}..."):
+                scan_market_name = (
+                    "Forex (EUR/USD, GBP/USD, USD/JPY...)"
+                    if is_forex
+                    else "Binance (BTC, ETH, SOL, BNB, XRP)"
+                )
+                with st.spinner(
+                    f"🔍 Analizando y comparando pares principales en {scan_market_name}..."
+                ):
                     try:
                         if is_forex:
                             scanner = MarketScanner(data_loader=ForexDataLoader())
-                            forex_symbols = [s for s in FOREX_PAIRS.values() if not s.startswith("CUSTOM")][:6]
-                            scan_results = scanner.scan_market(symbols=forex_symbols, timeframe=interval)
+                            forex_symbols = [
+                                s
+                                for s in FOREX_PAIRS.values()
+                                if not s.startswith("CUSTOM")
+                            ][:6]
+                            scan_results = scanner.scan_market(
+                                symbols=forex_symbols, timeframe=interval
+                            )
                             user_prompt = "¿Puedes analizar el mercado Forex y ver qué par me presenta el mejor escenario para operar hoy considerando las sesiones bancarias? Explícalo con datos y en lenguaje cotidiano."
                         else:
                             scanner = MarketScanner()
@@ -1381,10 +1572,12 @@ with tab_copilot:
 
                         scan_summary = scanner.format_scanner_summary_es(scan_results)
 
-                        st.session_state["copilot_chat_history"].append({
-                            "role": "user",
-                            "content": user_prompt,
-                        })
+                        st.session_state["copilot_chat_history"].append(
+                            {
+                                "role": "user",
+                                "content": user_prompt,
+                            }
+                        )
 
                         query_obj = OperatorQuery(
                             query=f"Basado en este escaneo de mercado cuantitativo en tiempo real ({'Forex' if is_forex else 'Crypto'}):\n\n{scan_summary}\n\nExplica en lenguaje cotidiano al operador cuál es el mejor par para trading, por qué supera a los otros, qué significan sus números y cuáles son los niveles clave de entrada y riesgo.",
@@ -1395,12 +1588,19 @@ with tab_copilot:
                                 "market_type": "Forex" if is_forex else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                    for m in st.session_state["copilot_chat_history"][
+                                        -6:
+                                    ]
                                 ],
                             },
                         )
                         copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                        if "⚠️" in copilot_res.answer or "fallback" in copilot_res.answer.lower() or "503" in copilot_res.answer or "unable to analyze" in copilot_res.answer.lower():
+                        if (
+                            "⚠️" in copilot_res.answer
+                            or "fallback" in copilot_res.answer.lower()
+                            or "503" in copilot_res.answer
+                            or "unable to analyze" in copilot_res.answer.lower()
+                        ):
                             answer_text = (
                                 f"{scan_summary}\n\n---\n"
                                 f"💡 *Nota: Diagnóstico generado directamente por el motor cuantitativo algorítmico local "
@@ -1409,10 +1609,12 @@ with tab_copilot:
                         else:
                             answer_text = f"{copilot_res.answer}\n\n---\n{scan_summary}"
 
-                        st.session_state["copilot_chat_history"].append({
-                            "role": "assistant",
-                            "content": answer_text,
-                        })
+                        st.session_state["copilot_chat_history"].append(
+                            {
+                                "role": "assistant",
+                                "content": answer_text,
+                            }
+                        )
                         st.rerun()
                     except Exception as scan_err:
                         st.error(f"Error ejecutando escaneo de mercado: {scan_err}")
@@ -1421,11 +1623,15 @@ with tab_copilot:
             if explain_triggered:
                 market_label = "Forex" if is_forex else "Cripto"
                 user_prompt = f"Explícame en lenguaje cotidiano la situación actual de {symbol} ({market_label}): qué significa su Quant Score, el régimen de mercado y sus niveles de soporte y riesgo."
-                st.session_state["copilot_chat_history"].append({
-                    "role": "user",
-                    "content": user_prompt,
-                })
-                with st.spinner(f"AI Copilot traduciendo métricas de {symbol} a lenguaje cotidiano..."):
+                st.session_state["copilot_chat_history"].append(
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    }
+                )
+                with st.spinner(
+                    f"AI Copilot traduciendo métricas de {symbol} a lenguaje cotidiano..."
+                ):
                     try:
                         query_obj = OperatorQuery(
                             query=user_prompt,
@@ -1436,21 +1642,27 @@ with tab_copilot:
                                 "market_type": "Forex" if is_forex else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state["copilot_chat_history"][-6:]
+                                    for m in st.session_state["copilot_chat_history"][
+                                        -6:
+                                    ]
                                 ],
                             },
                         )
                         copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                        st.session_state["copilot_chat_history"].append({
-                            "role": "assistant",
-                            "content": copilot_res.answer,
-                        })
+                        st.session_state["copilot_chat_history"].append(
+                            {
+                                "role": "assistant",
+                                "content": copilot_res.answer,
+                            }
+                        )
                         st.rerun()
                     except Exception as exp_err:
                         st.error(f"Error generando explicación: {exp_err}")
 
             # Chat Input Form
-            chat_input_val = st.chat_input("Escribe tu consulta al Copilot (ej. ¿Cuál es el mejor par? o analiza los gráficos adjuntos)...")
+            chat_input_val = st.chat_input(
+                "Escribe tu consulta al Copilot (ej. ¿Cuál es el mejor par? o analiza los gráficos adjuntos)..."
+            )
             if chat_input_val:
                 user_msg = {
                     "role": "user",
@@ -1463,11 +1675,13 @@ with tab_copilot:
                     for f in uploaded_files:
                         if f.type.startswith("image/"):
                             f_bytes = f.getvalue()
-                            images_payload.append({
-                                "bytes": f_bytes,
-                                "mime_type": f.type,
-                                "name": f.name,
-                            })
+                            images_payload.append(
+                                {
+                                    "bytes": f_bytes,
+                                    "mime_type": f.type,
+                                    "name": f.name,
+                                }
+                            )
                     if images_payload:
                         user_msg["images"] = images_payload
                         # Backwards compatibility for single-image consumers
@@ -1479,8 +1693,12 @@ with tab_copilot:
 
                 # Dynamically resolve mentioned symbol using active conversation asset as fallback
                 curr_active_sym = st.session_state.get("copilot_active_symbol", symbol)
-                curr_active_tf = st.session_state.get("copilot_active_timeframe", interval)
-                curr_active_fx = st.session_state.get("copilot_active_is_forex", is_forex)
+                curr_active_tf = st.session_state.get(
+                    "copilot_active_timeframe", interval
+                )
+                curr_active_fx = st.session_state.get(
+                    "copilot_active_is_forex", is_forex
+                )
 
                 target_sym, target_tf, target_is_fx = resolve_mentioned_symbol(
                     chat_input_val, curr_active_sym, curr_active_tf
@@ -1493,15 +1711,21 @@ with tab_copilot:
 
                 # Build on-demand context if target differs from current dashboard context or needs refresh
                 if target_sym != symbol or target_tf != interval:
-                    with st.spinner(f"Analizando métricas cuantitativas en vivo para {target_sym} ({target_tf})..."):
-                        od_ctx = build_on_demand_context(target_sym, target_tf, target_is_fx)
+                    with st.spinner(
+                        f"Analizando métricas cuantitativas en vivo para {target_sym} ({target_tf})..."
+                    ):
+                        od_ctx = build_on_demand_context(
+                            target_sym, target_tf, target_is_fx
+                        )
                         if od_ctx is not None:
                             try:
                                 copilot_provider.update_context(od_ctx)
                             except Exception:
                                 pass
 
-                with st.spinner("AI Copilot razonando y formulando respuesta en español..."):
+                with st.spinner(
+                    "AI Copilot razonando y formulando respuesta en español..."
+                ):
                     try:
                         query_obj = OperatorQuery(
                             query=chat_input_val,
@@ -1515,22 +1739,28 @@ with tab_copilot:
                                 "market_type": "Forex" if target_is_fx else "Crypto",
                                 "conversation_history": [
                                     {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state["copilot_chat_history"][:-1][-6:]
+                                    for m in st.session_state["copilot_chat_history"][
+                                        :-1
+                                    ][-6:]
                                 ],
                             },
                         )
                         copilot_res = _safe_async_run(copilot_assistant.ask(query_obj))
-                        st.session_state["copilot_chat_history"].append({
-                            "role": "assistant",
-                            "content": copilot_res.answer,
-                        })
+                        st.session_state["copilot_chat_history"].append(
+                            {
+                                "role": "assistant",
+                                "content": copilot_res.answer,
+                            }
+                        )
                         st.rerun()
                     except Exception as cop_err:
                         st.error(f"Error procesando la consulta: {cop_err}")
 
         with cop_tab2:
             st.markdown("#### 📋 Briefing Diario del Mercado")
-            daily_rep = market_report_svc.generate_daily_briefing(current_market_context)
+            daily_rep = market_report_svc.generate_daily_briefing(
+                current_market_context
+            )
             st.markdown(f"**Panorama General:** {daily_rep.market_overview}")
             br_c1, br_c2, br_c3 = st.columns(3)
             with br_c1:
@@ -1554,15 +1784,23 @@ with tab_copilot:
             st.markdown("#### 🚨 Detección Pasiva de Anomalías Estructurales")
             detected_anomalies = anomaly_detector.evaluate(current_market_context)
             if not detected_anomalies:
-                st.success("✅ Sin anomalías estructurales ni divergencias severas de volatilidad detectadas en este activo.")
+                st.success(
+                    "✅ Sin anomalías estructurales ni divergencias severas de volatilidad detectadas en este activo."
+                )
             else:
                 for alt in detected_anomalies:
                     if alt.severity.value == "CRITICAL":
-                        st.error(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                        st.error(
+                            f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}"
+                        )
                     elif alt.severity.value == "WARNING":
-                        st.warning(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                        st.warning(
+                            f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}"
+                        )
                     else:
-                        st.info(f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}")
+                        st.info(
+                            f"**[{alt.severity.value}] {alt.headline}**\n\n{alt.reason}"
+                        )
 
         with cop_tab4:
             st.markdown("#### 🕒 Snapshot de Contexto Activo")
@@ -1570,28 +1808,42 @@ with tab_copilot:
             with snap_col1:
                 st.metric("Régimen Activo", current_market_context.market_regime)
             with snap_col2:
-                st.metric("Puntuación Quant", f"{current_market_context.quant_score:.1f}/100")
+                st.metric(
+                    "Puntuación Quant", f"{current_market_context.quant_score:.1f}/100"
+                )
             with snap_col3:
-                st.metric("Predictive Score", f"{current_market_context.predictive_score:.2f}")
+                st.metric(
+                    "Predictive Score", f"{current_market_context.predictive_score:.2f}"
+                )
             with snap_col4:
-                context_status = current_market_context.metadata.get("signal_status", "NO DISPONIBLE")
-                st.metric("Estado de señal", f"{context_status} ({current_market_context.signal.direction})")
+                context_status = current_market_context.metadata.get(
+                    "signal_status", "NO DISPONIBLE"
+                )
+                st.metric(
+                    "Estado de señal",
+                    f"{context_status} ({current_market_context.signal.direction})",
+                )
 
-            with st.expander("🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)", expanded=False):
-                st.json({
-                    "symbol": current_market_context.symbol,
-                    "timeframe": current_market_context.timeframe,
-                    "regime": current_market_context.market_regime,
-                    "quant_score": current_market_context.quant_score,
-                    "predictive_score": current_market_context.predictive_score,
-                    "action": current_market_context.signal.action,
-                    "signal_status": context_status,
-                    "direction": current_market_context.signal.direction,
-                    "confidence": current_market_context.signal.confidence,
-                    "stop_loss": current_market_context.risk.stop_loss,
-                    "take_profit": current_market_context.risk.take_profit,
-                    "atr": current_market_context.risk.atr,
-                })
+            with st.expander(
+                "🛠️ Ver snapshot técnico completo en formato JSON (Avanzado)",
+                expanded=False,
+            ):
+                st.json(
+                    {
+                        "symbol": current_market_context.symbol,
+                        "timeframe": current_market_context.timeframe,
+                        "regime": current_market_context.market_regime,
+                        "quant_score": current_market_context.quant_score,
+                        "predictive_score": current_market_context.predictive_score,
+                        "action": current_market_context.signal.action,
+                        "signal_status": context_status,
+                        "direction": current_market_context.signal.direction,
+                        "confidence": current_market_context.signal.confidence,
+                        "stop_loss": current_market_context.risk.stop_loss,
+                        "take_profit": current_market_context.risk.take_profit,
+                        "atr": current_market_context.risk.atr,
+                    }
+                )
     except Exception as cop_err:
         st.error(f"Error inicializando AI Copilot: {cop_err}")
 
@@ -1601,7 +1853,9 @@ with tab_copilot:
 with tab_backtest:
     market_name_cap = "Divisas Forex" if is_forex else "Criptomonedas"
     st.subheader(f"📈 Simulación Histórica & Backtest Analytics ({market_name_cap})")
-    st.caption("Simulación sobre datos históricos cargados • No ejecuta operaciones ni acredita resultados futuros")
+    st.caption(
+        "Simulación sobre datos históricos cargados • No ejecuta operaciones ni acredita resultados futuros"
+    )
 
     market_advice = (
         "💡 **Forex:** Los enfoques de reversión a la media y seguimiento de tendencia son hipótesis de simulación; sus resultados dependen de la muestra, los costes y la calidad de los datos."
@@ -1639,13 +1893,17 @@ with tab_backtest:
         preset_caps = [25.0, 50.0, 100.0, 250.0, 500.0, 1000.0]
         for col, amt in zip(cap_cols, preset_caps):
             with col:
-                if st.button(f"${int(amt)}", key=f"cap_btn_{int(amt)}", use_container_width=True):
+                if st.button(
+                    f"${int(amt)}", key=f"cap_btn_{int(amt)}", use_container_width=True
+                ):
                     st.session_state["guided_capital"] = float(amt)
                     st.session_state["input_guided_cap"] = float(amt)
                     st.rerun()
 
         if "input_guided_cap" not in st.session_state:
-            st.session_state["input_guided_cap"] = float(st.session_state["guided_capital"])
+            st.session_state["input_guided_cap"] = float(
+                st.session_state["guided_capital"]
+            )
 
         selected_cap = st.number_input(
             "O escribe el monto exacto en dólares ($):",
@@ -1665,9 +1923,15 @@ with tab_backtest:
                 "⚡ Nivel de Apalancamiento:",
                 options=[1.0, 2.0, 3.0, 5.0],
                 format_func=lambda x: (
-                    f"{int(x)}x (Spot • Sin apalancamiento)" if x == 1.0 else (
-                        f"{int(x)}x (Moderado • Doble Retorno / Doble Riesgo)" if x == 2.0 else (
-                            f"{int(x)}x (Avanzado • Triple Exposición)" if x == 3.0 else f"{int(x)}x (Agresivo • Alto Riesgo)"
+                    f"{int(x)}x (Spot • Sin apalancamiento)"
+                    if x == 1.0
+                    else (
+                        f"{int(x)}x (Moderado • Doble Retorno / Doble Riesgo)"
+                        if x == 2.0
+                        else (
+                            f"{int(x)}x (Avanzado • Triple Exposición)"
+                            if x == 3.0
+                            else f"{int(x)}x (Agresivo • Alto Riesgo)"
                         )
                     )
                 ),
@@ -1676,7 +1940,9 @@ with tab_backtest:
             )
         with lev_c2:
             if selected_leverage == 1.0:
-                st.info("**SPOT LONG 1x disponible**: la simulación no utiliza apalancamiento; el capital sigue expuesto a pérdidas de mercado.")
+                st.info(
+                    "**SPOT LONG 1x disponible**: la simulación no utiliza apalancamiento; el capital sigue expuesto a pérdidas de mercado."
+                )
             else:
                 st.warning(
                     f"⚠️ **Apalancamiento {int(selected_leverage)}x no disponible** en "
@@ -1691,20 +1957,26 @@ with tab_backtest:
             options=strategy_labels,
             index=0,
         )
-        chosen_strategy_key = strategy_keys[strategy_labels.index(selected_strategy_label)]
+        chosen_strategy_key = strategy_keys[
+            strategy_labels.index(selected_strategy_label)
+        ]
         chosen_strategy_info = PROVEN_STRATEGIES[chosen_strategy_key]
 
         st.markdown(
             f"""
             <div class="strategy-preset-card">
-                <strong style="color: #00E5FF;">{chosen_strategy_info['name']}</strong><br/>
-                <span style="color: #F0F6FC; font-size: 0.88rem; line-height: 1.5;">{chosen_strategy_info['description']}</span>
+                <strong style="color: #00E5FF;">{chosen_strategy_info["name"]}</strong><br/>
+                <span style="color: #F0F6FC; font-size: 0.88rem; line-height: 1.5;">{chosen_strategy_info["description"]}</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        run_sim = st.button("🚀 Simular Estrategia con Datos Históricos", type="primary", use_container_width=True)
+        run_sim = st.button(
+            "🚀 Simular Estrategia con Datos Históricos",
+            type="primary",
+            use_container_width=True,
+        )
 
         if run_sim:
             try:
@@ -1736,21 +2008,27 @@ with tab_backtest:
                 step=100.0,
             )
         with b_col2:
-            taker_fee_pct = st.number_input(
-                "Comisión Taker (%)",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.05,
-                step=0.01,
-            ) / 100.0
+            taker_fee_pct = (
+                st.number_input(
+                    "Comisión Taker (%)",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.05,
+                    step=0.01,
+                )
+                / 100.0
+            )
         with b_col3:
-            slippage_pct = st.number_input(
-                "Slippage (%)",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.05,
-                step=0.01,
-            ) / 100.0
+            slippage_pct = (
+                st.number_input(
+                    "Slippage (%)",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=0.05,
+                    step=0.01,
+                )
+                / 100.0
+            )
         with b_col4:
             direction_choice = st.selectbox(
                 "Dirección de Operación",
@@ -1758,9 +2036,15 @@ with tab_backtest:
                 index=0,
             )
             if direction_choice != "LONG":
-                st.warning("SPOT SHORT/BOTH están temporalmente deshabilitados para backtesting.")
+                st.warning(
+                    "SPOT SHORT/BOTH están temporalmente deshabilitados para backtesting."
+                )
 
-        run_sim = st.button("🚀 Ejecutar Backtest Personalizado", type="primary", use_container_width=True)
+        run_sim = st.button(
+            "🚀 Ejecutar Backtest Personalizado",
+            type="primary",
+            use_container_width=True,
+        )
 
         if run_sim:
             b_cfg = BacktestConfig(
@@ -1775,7 +2059,9 @@ with tab_backtest:
     if run_sim or "backtest_report" in st.session_state:
         if run_sim and b_cfg is not None:
             source_label = "Forex Global" if is_forex else "Binance"
-            with st.spinner(f"Ejecutando simulación vela por vela sobre datos cargados de {source_label}..."):
+            with st.spinner(
+                f"Ejecutando simulación vela por vela sobre datos cargados de {source_label}..."
+            ):
                 try:
                     _run_backtest_for_ui(
                         config=b_cfg,
@@ -1806,38 +2092,47 @@ with tab_backtest:
         verdict = evaluate_backtest_verdict(metrics)
         st.markdown(
             f"""
-            <div class="verdict-card" style="border: 1px solid {verdict['color']};">
+            <div class="verdict-card" style="border: 1px solid {verdict["color"]};">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="color: {verdict['color']}; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.5px;">{verdict['badge']}</span>
+                    <span style="color: {verdict["color"]}; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.5px;">{verdict["badge"]}</span>
                     <span style="color: #8B949E; font-size: 0.80rem;">{symbol} • {interval}</span>
                 </div>
                 <div style="color: #F0F6FC; font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
-                    {verdict['title']}
+                    {verdict["title"]}
                 </div>
                 <div style="color: #C9D1D9; font-size: 0.88rem; line-height: 1.6;">
-                    {verdict['description']}
+                    {verdict["description"]}
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.caption("Clasificación por umbrales configurados en esta simulación; no es validación prospectiva ni garantía de resultados.")
+        st.caption(
+            "Clasificación por umbrales configurados en esta simulación; no es validación prospectiva ni garantía de resultados."
+        )
         provenance = getattr(report, "data_provenance", None)
         provenance_status = (
-            provenance.get("status") if isinstance(provenance, dict)
+            provenance.get("status")
+            if isinstance(provenance, dict)
             else getattr(provenance, "status", "UNKNOWN")
         )
         if provenance_status == "UNKNOWN":
-            st.warning("Procedencia del dataset: UNKNOWN. La coherencia matemática del R no acredita el origen de los datos históricos.")
+            st.warning(
+                "Procedencia del dataset: UNKNOWN. La coherencia matemática del R no acredita el origen de los datos históricos."
+            )
 
         # AI Copilot Integration Button
         c_consult_btn, _ = st.columns([1.5, 2.0])
         with c_consult_btn:
-            if st.button("🤖 Preguntar al Copilot: ¿Qué significa este resultado para mí?", key="btn_ask_copilot_backtest", use_container_width=True):
+            if st.button(
+                "🤖 Preguntar al Copilot: ¿Qué significa este resultado para mí?",
+                key="btn_ask_copilot_backtest",
+                use_container_width=True,
+            ):
                 backtest_prompt = (
                     f"Acabo de ejecutar un backtest para {symbol} ({interval}) con los siguientes resultados cuantitativos:\n"
                     f"- Total de Trades: {metrics.get('total_trades', 0)}\n"
-                    f"- Win Rate: {metrics.get('win_rate', 0.0)*100:.1f}%\n"
+                    f"- Win Rate: {metrics.get('win_rate', 0.0) * 100:.1f}%\n"
                     f"- Profit Factor: {metrics.get('profit_factor', 0.0):.2f}\n"
                     f"- Caída Máxima (Max Drawdown): {metrics.get('max_drawdown_pct', 0.0):.2f}%\n"
                     f"- Retorno Neto: ${metrics.get('net_pnl', 0.0):,.2f}\n"
@@ -1846,10 +2141,12 @@ with tab_backtest:
                 )
                 if "copilot_chat_history" not in st.session_state:
                     st.session_state["copilot_chat_history"] = []
-                st.session_state["copilot_chat_history"].append({
-                    "role": "user",
-                    "content": backtest_prompt,
-                })
+                st.session_state["copilot_chat_history"].append(
+                    {
+                        "role": "user",
+                        "content": backtest_prompt,
+                    }
+                )
                 try:
                     q_obj = OperatorQuery(
                         query=backtest_prompt,
@@ -1858,11 +2155,15 @@ with tab_backtest:
                         operator_id="dashboard_operator",
                     )
                     cop_res = _safe_async_run(copilot_assistant.ask(q_obj))
-                    st.session_state["copilot_chat_history"].append({
-                        "role": "assistant",
-                        "content": cop_res.answer,
-                    })
-                    st.success("✅ ¡El Copilot ha analizado tu backtest! Ve a la pestaña '🤖 AI Copilot' para leer su recomendación personalizada.")
+                    st.session_state["copilot_chat_history"].append(
+                        {
+                            "role": "assistant",
+                            "content": cop_res.answer,
+                        }
+                    )
+                    st.success(
+                        "✅ ¡El Copilot ha analizado tu backtest! Ve a la pestaña '🤖 AI Copilot' para leer su recomendación personalizada."
+                    )
                 except Exception as exc:
                     st.info(f"Consulta agregada al chat de Copilot: {exc}")
 
@@ -1880,45 +2181,84 @@ with tab_backtest:
             sharpe_value = metrics.get("sharpe_ratio")
             st.metric("Sharpe Ratio", _format_sharpe_for_ui(sharpe_value))
             if sharpe_value is None:
-                st.caption(metrics.get("sharpe_unavailable_reason") or "Datos insuficientes para Sharpe.")
+                st.caption(
+                    metrics.get("sharpe_unavailable_reason")
+                    or "Datos insuficientes para Sharpe."
+                )
             else:
-                st.caption("Anualizado con barras regulares de cripto 24/7; tasa libre de riesgo 0 %.")
+                st.caption(
+                    "Anualizado con barras regulares de cripto 24/7; tasa libre de riesgo 0 %."
+                )
         with m_col6:
             st.metric("Retorno Neto", f"${metrics.get('net_pnl', 0.0):,.2f}")
 
         exp_c1, exp_c2 = st.columns(2)
         with exp_c1:
-            st.metric("Expectativa bruta (R) — Simulación", _format_verified_expectancy_for_ui(metrics, "gross_expectancy_r"))
+            st.metric(
+                "Expectativa bruta (R) — Simulación",
+                _format_verified_expectancy_for_ui(metrics, "gross_expectancy_r"),
+            )
         with exp_c2:
-            st.metric("Expectativa neta (R) — Simulación", _format_verified_expectancy_for_ui(metrics, "net_expectancy_r"))
+            st.metric(
+                "Expectativa neta (R) — Simulación",
+                _format_verified_expectancy_for_ui(metrics, "net_expectancy_r"),
+            )
         st.caption(_r_coverage_for_ui(metrics))
         if metrics.get("r_unavailable_reason"):
             st.caption(metrics["r_unavailable_reason"])
-        st.caption("R bruto/neto: media por operación con riesgo inicial matemáticamente verificable. No certifica la fuente histórica ni predice resultados futuros.")
+        st.caption(
+            "R bruto/neto: media por operación con riesgo inicial matemáticamente verificable. No certifica la fuente histórica ni predice resultados futuros."
+        )
         st.caption(_excursion_coverage_for_ui(metrics, "mfe"))
         st.caption(_excursion_coverage_for_ui(metrics, "mae"))
         calibration_state = metrics.get("calibration_state", "UNKNOWN")
         if calibration_state == "AVAILABLE":
-            st.caption("Optimización disponible: parámetros derivados de excursiones exactas OHLC con cobertura completa.")
+            st.caption(
+                "Optimización disponible: parámetros derivados de excursiones exactas OHLC con cobertura completa."
+            )
         elif calibration_state == "NOT_REQUESTED":
-            st.caption("Optimización no solicitada: parámetros manuales, presets o predeterminados no son calibración empírica.")
+            st.caption(
+                "Optimización no solicitada: parámetros manuales, presets o predeterminados no son calibración empírica."
+            )
         else:
-            st.warning("Optimización no disponible o no acreditada: no se muestran parámetros calibrados.")
+            st.warning(
+                "Optimización no disponible o no acreditada: no se muestran parámetros calibrados."
+            )
 
         # 1.1 Breakdown: LONG vs SHORT
-        long_trades = [t for t in report.trades if str(_trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")).upper() == "LONG"]
-        short_trades = [t for t in report.trades if str(_trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")).upper() == "SHORT"]
+        long_trades = [
+            t
+            for t in report.trades
+            if str(
+                _trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")
+            ).upper()
+            == "LONG"
+        ]
+        short_trades = [
+            t
+            for t in report.trades
+            if str(
+                _trade_field_for_ui(t, "side") or _trade_field_for_ui(t, "direction")
+            ).upper()
+            == "SHORT"
+        ]
 
         long_count = len(long_trades)
         short_count = len(short_trades)
-        long_wins = sum(1 for t in long_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0)
-        short_wins = sum(1 for t in short_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0)
+        long_wins = sum(
+            1 for t in long_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0
+        )
+        short_wins = sum(
+            1 for t in short_trades if (_trade_field_for_ui(t, "net_pnl") or 0) > 0
+        )
         long_wr = (long_wins / long_count * 100) if long_count > 0 else 0.0
         short_wr = (short_wins / short_count * 100) if short_count > 0 else 0.0
         long_pnl = sum(_trade_field_for_ui(t, "net_pnl") or 0 for t in long_trades)
         short_pnl = sum(_trade_field_for_ui(t, "net_pnl") or 0 for t in short_trades)
 
-        st.markdown("##### ⚖️ ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)")
+        st.markdown(
+            "##### ⚖️ ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)"
+        )
         dir_c1, dir_c2 = st.columns(2)
         with dir_c1:
             st.markdown(
@@ -1928,7 +2268,7 @@ with tab_backtest:
                     <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
                         • <strong>{long_count}</strong> operaciones ejecutadas<br/>
                         • Tasa de Acierto: <strong>{long_wr:.1f}%</strong> ({long_wins} ganadas)<br/>
-                        • Retorno Acumulado: <strong style="color: {'#00FF88' if long_pnl >= 0 else '#FF2E63'};">${long_pnl:+,.2f}</strong>
+                        • Retorno Acumulado: <strong style="color: {"#00FF88" if long_pnl >= 0 else "#FF2E63"};">${long_pnl:+,.2f}</strong>
                     </div>
                 </div>
                 """,
@@ -1942,7 +2282,7 @@ with tab_backtest:
                     <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
                         • <strong>{short_count}</strong> operaciones ejecutadas<br/>
                         • Tasa de Acierto: <strong>{short_wr:.1f}%</strong> ({short_wins} ganadas)<br/>
-                        • Retorno Acumulado: <strong style="color: {'#00FF88' if short_pnl >= 0 else '#FF2E63'};">${short_pnl:+,.2f}</strong>
+                        • Retorno Acumulado: <strong style="color: {"#00FF88" if short_pnl >= 0 else "#FF2E63"};">${short_pnl:+,.2f}</strong>
                     </div>
                 </div>
                 """,
@@ -1951,40 +2291,70 @@ with tab_backtest:
 
         if long_count > 0 and short_count > 0:
             if long_pnl > short_pnl:
-                st.caption(f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **COMPRAS (LONG)** (+${long_pnl:,.2f} vs ${short_pnl:,.2f} en Ventas).")
+                st.caption(
+                    f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **COMPRAS (LONG)** (+${long_pnl:,.2f} vs ${short_pnl:,.2f} en Ventas)."
+                )
             elif short_pnl > long_pnl:
-                st.caption(f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **VENTAS (SHORT)** (+${short_pnl:,.2f} vs ${long_pnl:,.2f} en Compras).")
+                st.caption(
+                    f"🏆 **Conclusión Cuantitativa**: En este período el mercado recompensó con mayor fuerza las **VENTAS (SHORT)** (+${short_pnl:,.2f} vs ${long_pnl:,.2f} en Compras)."
+                )
             else:
-                st.caption("⚖️ **Conclusión Cuantitativa**: Compras y Ventas tuvieron rendimientos equivalentes en esta muestra histórica.")
+                st.caption(
+                    "⚖️ **Conclusión Cuantitativa**: Compras y Ventas tuvieron rendimientos equivalentes en esta muestra histórica."
+                )
         elif long_count > 0 and short_count == 0:
-            st.caption(f"**Estrategia Unidireccional**: Esta simulación registró exclusivamente **COMPRAS (LONG)** ({long_count} compras, {long_wr:.1f}% acierto observado).")
+            st.caption(
+                f"**Estrategia Unidireccional**: Esta simulación registró exclusivamente **COMPRAS (LONG)** ({long_count} compras, {long_wr:.1f}% acierto observado)."
+            )
         elif short_count > 0 and long_count == 0:
-            st.caption(f"📉 **Estrategia en Corto**: Esta configuración operó exclusivamente **VENTAS (SHORT)** ({short_count} ventas, {short_wr:.1f}% acierto).")
+            st.caption(
+                f"📉 **Estrategia en Corto**: Esta configuración operó exclusivamente **VENTAS (SHORT)** ({short_count} ventas, {short_wr:.1f}% acierto)."
+            )
 
         # Mean of individual verified plans, not a ratio of average distances.
         avg_planned_rr, planned_count = _planned_rr_summary_for_ui(
             report.trades, getattr(report, "config", None)
         )
 
-        winning_pnls = [_trade_field_for_ui(t, "net_pnl") for t in report.trades
-                        if (_trade_field_for_ui(t, "net_pnl") or 0) > 0]
-        losing_pnls = [abs(_trade_field_for_ui(t, "net_pnl")) for t in report.trades
-                       if (_trade_field_for_ui(t, "net_pnl") or 0) < 0]
+        winning_pnls = [
+            _trade_field_for_ui(t, "net_pnl")
+            for t in report.trades
+            if (_trade_field_for_ui(t, "net_pnl") or 0) > 0
+        ]
+        losing_pnls = [
+            abs(_trade_field_for_ui(t, "net_pnl"))
+            for t in report.trades
+            if (_trade_field_for_ui(t, "net_pnl") or 0) < 0
+        ]
         avg_win_usd = (sum(winning_pnls) / len(winning_pnls)) if winning_pnls else 0.0
         avg_loss_usd = (sum(losing_pnls) / len(losing_pnls)) if losing_pnls else 0.0
 
         st.markdown("##### Planes de riesgo y resultados de la simulación")
         r_col1, r_col2 = st.columns(2)
         with r_col1:
-            st.metric("R:R planificado medio — Simulación", f"1 : {avg_planned_rr:.2f}" if avg_planned_rr is not None else "N/A", help="Media de los ratios individuales TP–entrada / entrada–SL inicial; no es R realizado ni incluye costes.")
+            st.metric(
+                "R:R planificado medio — Simulación",
+                f"1 : {avg_planned_rr:.2f}" if avg_planned_rr is not None else "N/A",
+                help="Media de los ratios individuales TP–entrada / entrada–SL inicial; no es R realizado ni incluye costes.",
+            )
         with r_col2:
-            st.metric("Ganancia Media / Pérdida Media", f"${avg_win_usd:,.2f} / -${avg_loss_usd:,.2f}", help="Promedio de PnL neto positivo y negativo en operaciones cerradas.")
-        st.caption(f"Planes R:R verificables: {planned_count} de {len(report.trades)} operaciones. Los planes incompletos no se estiman.")
+            st.metric(
+                "Ganancia Media / Pérdida Media",
+                f"${avg_win_usd:,.2f} / -${avg_loss_usd:,.2f}",
+                help="Promedio de PnL neto positivo y negativo en operaciones cerradas.",
+            )
+        st.caption(
+            f"Planes R:R verificables: {planned_count} de {len(report.trades)} operaciones. Los planes incompletos no se estiman."
+        )
 
         # 2. Equity Curve & Underwater Drawdown Plot
         if report.equity_curve:
-            eq_df = pd.DataFrame([pt.to_dict() if hasattr(pt, "to_dict") else dict(pt)
-                                  for pt in report.equity_curve])
+            eq_df = pd.DataFrame(
+                [
+                    pt.to_dict() if hasattr(pt, "to_dict") else dict(pt)
+                    for pt in report.equity_curve
+                ]
+            )
             eq_df["timestamp"] = pd.to_datetime(eq_df["timestamp"])
 
             fig_eq = make_subplots(
@@ -1997,7 +2367,12 @@ with tab_backtest:
             )
 
             fig_eq.add_trace(
-                go.Scatter(x=eq_df["timestamp"], y=eq_df["equity"], name="Equity ($)", line={"color": "#00FF88", "width": 2.5}),
+                go.Scatter(
+                    x=eq_df["timestamp"],
+                    y=eq_df["equity"],
+                    name="Equity ($)",
+                    line={"color": "#00FF88", "width": 2.5},
+                ),
                 row=1,
                 col=1,
             )
@@ -2034,44 +2409,75 @@ with tab_backtest:
         with t_left:
             st.subheader("🎯 Distribución MFE vs MAE")
             if report.trades:
-                trade_rows = [t.to_dict() if hasattr(t, "to_dict") else dict(t)
-                              for t in report.trades]
+                trade_rows = [
+                    t.to_dict() if hasattr(t, "to_dict") else dict(t)
+                    for t in report.trades
+                ]
 
-                exact_rows = [t for t in trade_rows if (
-                    t.get("excursion_policy_version") == EXCURSION_POLICY_VERSION
-                    and t.get("mfe_observability") == "EXACT_OHLC"
-                    and t.get("mae_observability") == "EXACT_OHLC"
-                    and isinstance(t.get("mfe_exact_pct"), (int, float))
-                    and isinstance(t.get("mae_exact_pct"), (int, float))
-                    and math.isfinite(t["mfe_exact_pct"])
-                    and math.isfinite(t["mae_exact_pct"])
-                )]
+                exact_rows = [
+                    t
+                    for t in trade_rows
+                    if (
+                        t.get("excursion_policy_version") == EXCURSION_POLICY_VERSION
+                        and t.get("mfe_observability") == "EXACT_OHLC"
+                        and t.get("mae_observability") == "EXACT_OHLC"
+                        and isinstance(t.get("mfe_exact_pct"), (int, float))
+                        and isinstance(t.get("mae_exact_pct"), (int, float))
+                        and math.isfinite(t["mfe_exact_pct"])
+                        and math.isfinite(t["mae_exact_pct"])
+                    )
+                ]
                 if exact_rows:
                     fig_mfe = go.Figure()
-                    fig_mfe.add_trace(go.Scatter(
-                        x=[t["mae_exact_pct"] for t in exact_rows],
-                        y=[t["mfe_exact_pct"] for t in exact_rows],
-                        mode="markers",
-                        marker={"size": 9, "color": ["#00FF88" if t.get("net_pnl", 0) > 0 else "#FF2E63" for t in exact_rows]},
-                        text=[f"Trade {t.get('trade_id', '')}: MAE {t['mae_exact_pct']:.2f}%, MFE {t['mfe_exact_pct']:.2f}% (OHLC)" for t in exact_rows],
-                        hoverinfo="text",
-                    ))
+                    fig_mfe.add_trace(
+                        go.Scatter(
+                            x=[t["mae_exact_pct"] for t in exact_rows],
+                            y=[t["mfe_exact_pct"] for t in exact_rows],
+                            mode="markers",
+                            marker={
+                                "size": 9,
+                                "color": [
+                                    "#00FF88" if t.get("net_pnl", 0) > 0 else "#FF2E63"
+                                    for t in exact_rows
+                                ],
+                            },
+                            text=[
+                                f"Trade {t.get('trade_id', '')}: MAE {t['mae_exact_pct']:.2f}%, MFE {t['mfe_exact_pct']:.2f}% (OHLC)"
+                                for t in exact_rows
+                            ],
+                            hoverinfo="text",
+                        )
+                    )
                     fig_mfe.update_layout(
                         xaxis_title="MAE exacta bajo OHLC (%)",
                         yaxis_title="MFE exacta bajo OHLC (%)",
-                        height=360, template="plotly_dark",
-                        paper_bgcolor="#07090E", plot_bgcolor="#07090E",
+                        height=360,
+                        template="plotly_dark",
+                        paper_bgcolor="#07090E",
+                        plot_bgcolor="#07090E",
                         margin={"l": 20, "r": 20, "t": 30, "b": 20},
                     )
                     st.plotly_chart(fig_mfe, use_container_width=True)
                 else:
-                    st.info("No hay operaciones con MFE y MAE exactas conjuntamente para el gráfico.")
-                st.dataframe(pd.DataFrame([
-                    {"Trade": t.get("trade_id", ""), "MFE": _excursion_for_ui(t, "mfe"),
-                     "MAE": _excursion_for_ui(t, "mae")}
-                    for t in trade_rows
-                ]), use_container_width=True)
-                st.caption("Las cotas OHLC no revelan el orden intrabar ni prueban ejecución real. Los proxies históricos no se muestran como puntos exactos.")
+                    st.info(
+                        "No hay operaciones con MFE y MAE exactas conjuntamente para el gráfico."
+                    )
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Trade": t.get("trade_id", ""),
+                                "MFE": _excursion_for_ui(t, "mfe"),
+                                "MAE": _excursion_for_ui(t, "mae"),
+                            }
+                            for t in trade_rows
+                        ]
+                    ),
+                    use_container_width=True,
+                )
+                st.caption(
+                    "Las cotas OHLC no revelan el orden intrabar ni prueban ejecución real. Los proxies históricos no se muestran como puntos exactos."
+                )
             else:
                 st.info("No se registraron operaciones en este período de simulación.")
 
@@ -2079,7 +2485,13 @@ with tab_backtest:
             st.subheader("📋 Registro de Transacciones")
             if report.trades:
                 st.caption(_execution_trace_summary_for_ui(report.trades))
-                st.dataframe(_backtest_trade_table_for_ui(report.trades, getattr(report, "config", None)), height=350, use_container_width=True)
+                st.dataframe(
+                    _backtest_trade_table_for_ui(
+                        report.trades, getattr(report, "config", None)
+                    ),
+                    height=350,
+                    use_container_width=True,
+                )
             else:
                 st.info("Sin transacciones.")
 
@@ -2094,6 +2506,7 @@ with tab_settings:
 
     with c_cfg1:
         st.markdown("### 📢 Canales de Notificación")
+
         def _get_sec(key: str, default: str = "") -> str:
             try:
                 if key in st.secrets:
@@ -2102,14 +2515,18 @@ with tab_settings:
                 pass
             return os.getenv(key, default)
 
-        enable_discord = st.checkbox("Habilitar Discord Webhook", value=bool(_get_sec("DISCORD_WEBHOOK_URL")))
+        enable_discord = st.checkbox(
+            "Habilitar Discord Webhook", value=bool(_get_sec("DISCORD_WEBHOOK_URL"))
+        )
         discord_url_input = st.text_input(
             "Discord Webhook URL",
             value=_get_sec("DISCORD_WEBHOOK_URL", ""),
             type="password",
         )
 
-        enable_telegram = st.checkbox("Habilitar Telegram Bot", value=bool(_get_sec("TELEGRAM_BOT_TOKEN")))
+        enable_telegram = st.checkbox(
+            "Habilitar Telegram Bot", value=bool(_get_sec("TELEGRAM_BOT_TOKEN"))
+        )
         telegram_token_input = st.text_input(
             "Telegram Bot Token",
             value=_get_sec("TELEGRAM_BOT_TOKEN", ""),
@@ -2120,7 +2537,9 @@ with tab_settings:
             value=_get_sec("TELEGRAM_CHAT_ID", ""),
         )
 
-        enable_webhook = st.checkbox("Habilitar Generic Webhook", value=bool(_get_sec("GENERIC_WEBHOOK_URL")))
+        enable_webhook = st.checkbox(
+            "Habilitar Generic Webhook", value=bool(_get_sec("GENERIC_WEBHOOK_URL"))
+        )
         generic_url_input = st.text_input(
             "Webhook Target URL",
             value=_get_sec("GENERIC_WEBHOOK_URL", ""),
@@ -2128,10 +2547,18 @@ with tab_settings:
 
     with c_cfg2:
         st.markdown("### 🛡️ Filtros y Anti-Spam (Cooldown)")
-        min_pred_score = st.slider("Umbral Mínimo de Predictive Score", 0.0, 1.0, 0.60, 0.05)
+        min_pred_score = st.slider(
+            "Umbral Mínimo de Predictive Score", 0.0, 1.0, 0.60, 0.05
+        )
         min_conf = st.slider("Umbral Mínimo de Confianza", 0.0, 1.0, 0.60, 0.05)
-        cooldown_sec = st.slider("Tiempo de Cooldown Anti-Spam (Segundos)", 0, 1800, 300, 30)
-        dry_run_mode = st.toggle("Modo Simulación (Dry-Run / Sin I/O)", value=False, help="Desactiva esto para que los mensajes lleguen realmente a tu Telegram/Discord.")
+        cooldown_sec = st.slider(
+            "Tiempo de Cooldown Anti-Spam (Segundos)", 0, 1800, 300, 30
+        )
+        dry_run_mode = st.toggle(
+            "Modo Simulación (Dry-Run / Sin I/O)",
+            value=False,
+            help="Desactiva esto para que los mensajes lleguen realmente a tu Telegram/Discord.",
+        )
 
     st.markdown("---")
     st.subheader("⚡ Acciones de Despacho de Señales")
@@ -2140,20 +2567,38 @@ with tab_settings:
 
     with act_col1:
         st.markdown("#### 🧪 1. Prueba de Conexión (Ping)")
-        st.caption("Verifica si tu Bot de Telegram o Webhook de Discord responde correctamente.")
-        if st.button("🔔 Enviar Notificación de Prueba", type="secondary", use_container_width=True):
+        st.caption(
+            "Verifica si tu Bot de Telegram o Webhook de Discord responde correctamente."
+        )
+        if st.button(
+            "🔔 Enviar Notificación de Prueba",
+            type="secondary",
+            use_container_width=True,
+        ):
             test_channels = []
             if enable_discord and discord_url_input:
-                test_channels.append(DiscordWebhookChannel(webhook_url=discord_url_input, dry_run=dry_run_mode))
+                test_channels.append(
+                    DiscordWebhookChannel(
+                        webhook_url=discord_url_input, dry_run=dry_run_mode
+                    )
+                )
             if enable_telegram and telegram_token_input and telegram_chat_id_input:
                 test_channels.append(
-                    TelegramChannel(bot_token=telegram_token_input, chat_id=telegram_chat_id_input, dry_run=dry_run_mode)
+                    TelegramChannel(
+                        bot_token=telegram_token_input,
+                        chat_id=telegram_chat_id_input,
+                        dry_run=dry_run_mode,
+                    )
                 )
             if enable_webhook and generic_url_input:
-                test_channels.append(WebhookChannel(url=generic_url_input, dry_run=dry_run_mode))
+                test_channels.append(
+                    WebhookChannel(url=generic_url_input, dry_run=dry_run_mode)
+                )
 
             if not test_channels:
-                st.warning("⚠️ Configura y activa al menos un canal (Telegram o Discord) arriba.")
+                st.warning(
+                    "⚠️ Configura y activa al menos un canal (Telegram o Discord) arriba."
+                )
             else:
                 dispatcher = NotificationDispatcher(
                     channels=test_channels,
@@ -2177,29 +2622,53 @@ with tab_settings:
                     signal_id="test-ping-01",
                 )
 
-                results = dispatcher.dispatch_signal(test_signal, priority=NotificationPriority.HIGH)
-                st.info(f"Prueba procesada: {len(results)} resultados de canal; consulta éxito o fallo en la tabla.")
+                results = dispatcher.dispatch_signal(
+                    test_signal, priority=NotificationPriority.HIGH
+                )
+                st.info(
+                    f"Prueba procesada: {len(results)} resultados de canal; consulta éxito o fallo en la tabla."
+                )
                 result_rows = [r.to_dict() for r in results]
                 st.table(pd.DataFrame(result_rows))
 
     with act_col2:
         st.markdown("#### 📡 2. Escanear y Despachar Alertas Reales")
-        st.caption("Solo se despachan señales ACTIVADAS con entrada confirmada y niveles válidos. Las candidatas no se envían como operables.")
-        min_quant_thresh = st.slider("Quant Score Mínimo para Alerta Real", 60.0, 95.0, 75.0, 5.0)
+        st.caption(
+            "Solo se despachan señales ACTIVADAS con entrada confirmada y niveles válidos. Las candidatas no se envían como operables."
+        )
+        min_quant_thresh = st.slider(
+            "Quant Score Mínimo para Alerta Real", 60.0, 95.0, 75.0, 5.0
+        )
 
-        if st.button("🚀 Escanear Mercado y Enviar Alertas Reales", type="primary", use_container_width=True):
+        if st.button(
+            "🚀 Escanear Mercado y Enviar Alertas Reales",
+            type="primary",
+            use_container_width=True,
+        ):
             alert_channels = []
             if enable_discord and discord_url_input:
-                alert_channels.append(DiscordWebhookChannel(webhook_url=discord_url_input, dry_run=dry_run_mode))
+                alert_channels.append(
+                    DiscordWebhookChannel(
+                        webhook_url=discord_url_input, dry_run=dry_run_mode
+                    )
+                )
             if enable_telegram and telegram_token_input and telegram_chat_id_input:
                 alert_channels.append(
-                    TelegramChannel(bot_token=telegram_token_input, chat_id=telegram_chat_id_input, dry_run=dry_run_mode)
+                    TelegramChannel(
+                        bot_token=telegram_token_input,
+                        chat_id=telegram_chat_id_input,
+                        dry_run=dry_run_mode,
+                    )
                 )
 
             if not alert_channels:
-                st.warning("⚠️ Debes habilitar y configurar Telegram o Discord para despachar alertas.")
+                st.warning(
+                    "⚠️ Debes habilitar y configurar Telegram o Discord para despachar alertas."
+                )
             else:
-                with st.spinner("Escaneando mercado institucional y evaluando confluencias..."):
+                with st.spinner(
+                    "Escaneando mercado institucional y evaluando confluencias..."
+                ):
                     dispatcher = NotificationDispatcher(
                         channels=alert_channels,
                         min_predictive_score=min_pred_score,
@@ -2210,8 +2679,14 @@ with tab_settings:
                     # Scan pairs based on active market
                     if is_forex:
                         scanner = MarketScanner(data_loader=ForexDataLoader())
-                        f_pairs = [s for s in FOREX_PAIRS.values() if not s.startswith("CUSTOM")][:8]
-                        scan_results = scanner.scan_market(symbols=f_pairs, timeframe=interval)
+                        f_pairs = [
+                            s
+                            for s in FOREX_PAIRS.values()
+                            if not s.startswith("CUSTOM")
+                        ][:8]
+                        scan_results = scanner.scan_market(
+                            symbols=f_pairs, timeframe=interval
+                        )
                     else:
                         scanner = MarketScanner()
                         scan_results = scanner.scan_market(timeframe=interval)
@@ -2225,7 +2700,9 @@ with tab_settings:
                     for cand in scan_results:
                         if cand.quant_score >= min_quant_thresh and cand.is_operable():
                             is_cand_fx = "=X" in cand.symbol
-                            cand_decimals = 5 if is_cand_fx else (6 if cand.entry_price < 1 else 2)
+                            cand_decimals = (
+                                5 if is_cand_fx else (6 if cand.entry_price < 1 else 2)
+                            )
                             sig_ev = SignalEvent(
                                 timestamp=pd.Timestamp.now("UTC"),
                                 symbol=cand.symbol,
@@ -2249,20 +2726,30 @@ with tab_settings:
                                 },
                             )
                             try:
-                                alert_record, delivery_results = dispatcher.dispatch_tracked_signal(
-                                    sig_ev,
-                                    tracker,
-                                    is_forex=is_cand_fx,
-                                    risk_reward=cand.risk_reward,
-                                    priority=NotificationPriority.HIGH,
+                                alert_record, delivery_results = (
+                                    dispatcher.dispatch_tracked_signal(
+                                        sig_ev,
+                                        tracker,
+                                        is_forex=is_cand_fx,
+                                        risk_reward=cand.risk_reward,
+                                        priority=NotificationPriority.HIGH,
+                                    )
                                 )
                             except Exception as alert_error:
-                                st.warning(f"Alerta {cand.symbol} no enviada: registro inválido o no disponible ({alert_error}).")
+                                st.warning(
+                                    f"Alerta {cand.symbol} no enviada: registro inválido o no disponible ({alert_error})."
+                                )
                                 continue
                             if alert_record is None:
                                 continue
-                            accepted_channels = [r.channel.value for r in delivery_results if r.success]
-                            failed_channels = [r.channel.value for r in delivery_results if not r.success]
+                            accepted_channels = [
+                                r.channel.value for r in delivery_results if r.success
+                            ]
+                            failed_channels = [
+                                r.channel.value
+                                for r in delivery_results
+                                if not r.success
+                            ]
                             if not accepted_channels:
                                 failed_count += 1
                                 st.warning(
@@ -2279,22 +2766,24 @@ with tab_settings:
                                 )
                             if "dispatched_signals_history" not in st.session_state:
                                 st.session_state["dispatched_signals_history"] = []
-                            st.session_state["dispatched_signals_history"].append({
-                                "ID de seguimiento": alert_record["id"],
-                                "Fecha (UTC)": str(sig_ev.timestamp)[:19],
-                                "Par": cand.symbol,
-                                "Estado señal": cand.status,
-                                "Resultado inmediato de canales": (
-                                    f"{len(accepted_channels)} {'simulados' if dry_run_mode else 'aceptados'}; "
-                                    f"{len(failed_channels)} fallidos"
-                                ),
-                                "Dirección": cand.direction,
-                                "Precio Entrada": f"${alert_record['entry_price']:,.{cand_decimals}f}",
-                                "Stop Loss": f"${alert_record['stop_loss']:,.{cand_decimals}f}",
-                                "Take Profit": f"${alert_record['take_profit']:,.{cand_decimals}f}",
-                                "Quant Score": f"{cand.quant_score:.1f}",
-                                "R bruto (sin costes)": f"1:{alert_record['risk_reward']:.2f}",
-                            })
+                            st.session_state["dispatched_signals_history"].append(
+                                {
+                                    "ID de seguimiento": alert_record["id"],
+                                    "Fecha (UTC)": str(sig_ev.timestamp)[:19],
+                                    "Par": cand.symbol,
+                                    "Estado señal": cand.status,
+                                    "Resultado inmediato de canales": (
+                                        f"{len(accepted_channels)} {'simulados' if dry_run_mode else 'aceptados'}; "
+                                        f"{len(failed_channels)} fallidos"
+                                    ),
+                                    "Dirección": cand.direction,
+                                    "Precio Entrada": f"${alert_record['entry_price']:,.{cand_decimals}f}",
+                                    "Stop Loss": f"${alert_record['stop_loss']:,.{cand_decimals}f}",
+                                    "Take Profit": f"${alert_record['take_profit']:,.{cand_decimals}f}",
+                                    "Quant Score": f"{cand.quant_score:.1f}",
+                                    "R bruto (sin costes)": f"1:{alert_record['risk_reward']:.2f}",
+                                }
+                            )
 
                     if accepted_count > 0:
                         st.success(
@@ -2307,8 +2796,12 @@ with tab_settings:
                             "pero ningún canal confirmó la aceptación del envío."
                         )
                     else:
-                        candidate_count = sum(cand.status == "CANDIDATA" for cand in scan_results)
-                        st.info(f"No hubo señales activadas aceptadas por canales. Hay {candidate_count} candidatas sin entrada confirmada.")
+                        candidate_count = sum(
+                            cand.status == "CANDIDATA" for cand in scan_results
+                        )
+                        st.info(
+                            f"No hubo señales activadas aceptadas por canales. Hay {candidate_count} candidatas sin entrada confirmada."
+                        )
 
     # Persistent audit log and automated TP/SL outcome tracking
     tracker = AlertOutcomeTracker()
@@ -2322,24 +2815,44 @@ with tab_settings:
     )
 
     if all_alerts:
-        st.caption("Registros anteriores a P0-002 pueden contener niveles aproximados; su R histórico no se ha revalidado.")
+        st.caption(
+            "Registros anteriores a P0-002 pueden contener niveles aproximados; su R histórico no se ha revalidado."
+        )
         stats = tracker.compute_statistics()
 
         stat_c1, stat_c2, stat_c3, stat_c4, stat_c5 = st.columns(5)
-        stat_c1.metric("🎯 Win Rate (Acierto)", f"{stats['win_rate']:.1f}%", help="Porcentaje de operaciones que tocaron Take Profit sobre las cerradas.")
+        stat_c1.metric(
+            "🎯 Win Rate (Acierto)",
+            f"{stats['win_rate']:.1f}%",
+            help="Porcentaje de operaciones que tocaron Take Profit sobre las cerradas.",
+        )
         stat_c2.metric("🟢 Ganadas (TP)", f"{stats['wins']}")
         stat_c3.metric("🔴 En Stop Loss", f"{stats['losses']}")
         stat_c4.metric("🟡 En Curso", f"{stats['open_alerts']}")
-        stat_c5.metric("📈 Retorno R Acumulado", f"{stats['total_r']:+.1f} R", help="Múltiplo de Riesgo acumulado ganado o perdido.")
+        stat_c5.metric(
+            "📈 Retorno R Acumulado",
+            f"{stats['total_r']:+.1f} R",
+            help="Múltiplo de Riesgo acumulado ganado o perdido.",
+        )
 
         btn_c1, btn_c2 = st.columns([1, 2])
         with btn_c1:
-            if st.button("🔄 Actualizar Resultados (Verificar TP / SL)", type="primary", use_container_width=True):
-                with st.spinner("Descargando velas recientes y evaluando TP / SL para cada alerta..."):
+            if st.button(
+                "🔄 Actualizar Resultados (Verificar TP / SL)",
+                type="primary",
+                use_container_width=True,
+            ):
+                with st.spinner(
+                    "Descargando velas recientes y evaluando TP / SL para cada alerta..."
+                ):
                     f_ldr = ForexDataLoader() if is_forex else None
                     c_ldr = BinanceDataLoader() if not is_forex else None
-                    upd = tracker.update_alert_outcomes(forex_loader=f_ldr, crypto_loader=c_ldr)
-                    st.success(f"¡Auditoría actualizada! {upd} alertas verificadas contra el mercado.")
+                    upd = tracker.update_alert_outcomes(
+                        forex_loader=f_ldr, crypto_loader=c_ldr
+                    )
+                    st.success(
+                        f"¡Auditoría actualizada! {upd} alertas verificadas contra el mercado."
+                    )
                     st.rerun()
 
         display_rows = []
@@ -2358,24 +2871,28 @@ with tab_settings:
             exit_p = a["current_or_exit_price"]
             exit_str = f"${exit_p:,.{dec}f}" if exit_p else "-"
 
-            display_rows.append({
-                "Fecha (UTC)": a["timestamp"][:16],
-                "Par": a["symbol"],
-                "Dirección": a["direction"],
-                "Estado de seguimiento": status_str,
-                "Estado de entrega": "No disponible (no persistido)",
-                "Entrada": f"${a['entry_price']:,.{dec}f}",
-                "Stop Loss": f"${a['stop_loss']:,.{dec}f}",
-                "Take Profit": f"${a['take_profit']:,.{dec}f}",
-                "Precio Actual/Salida": exit_str,
-                "PnL (%)": f"{a['pnl_percent']:+.2f}%",
-                "Quant Score": f"{a['quant_score']:.1f}",
-                "R registrado (sin costes)": f"1:{a['risk_reward']:.2f}",
-            })
+            display_rows.append(
+                {
+                    "Fecha (UTC)": a["timestamp"][:16],
+                    "Par": a["symbol"],
+                    "Dirección": a["direction"],
+                    "Estado de seguimiento": status_str,
+                    "Estado de entrega": "No disponible (no persistido)",
+                    "Entrada": f"${a['entry_price']:,.{dec}f}",
+                    "Stop Loss": f"${a['stop_loss']:,.{dec}f}",
+                    "Take Profit": f"${a['take_profit']:,.{dec}f}",
+                    "Precio Actual/Salida": exit_str,
+                    "PnL (%)": f"{a['pnl_percent']:+.2f}%",
+                    "Quant Score": f"{a['quant_score']:.1f}",
+                    "R registrado (sin costes)": f"1:{a['risk_reward']:.2f}",
+                }
+            )
 
         st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
     else:
-        st.info("ℹ️ Aún no hay señales registradas para seguimiento en la base de datos.")
+        st.info(
+            "ℹ️ Aún no hay señales registradas para seguimiento en la base de datos."
+        )
 
 
 # =====================================================================
@@ -2383,12 +2900,16 @@ with tab_settings:
 # =====================================================================
 with tab_guide:
     st.subheader("📖 Guía Rápida & Glosario Cuantitativo")
-    st.caption("Referencia institucional de términos, siglas y manual paso a paso de la plataforma.")
+    st.caption(
+        "Referencia institucional de términos, siglas y manual paso a paso de la plataforma."
+    )
 
-    g_tab1, g_tab2 = st.tabs([
-        "📚 Glosario de Siglas y Métricas",
-        "🕹️ Manual: Si tocas esto, obtienes esto",
-    ])
+    g_tab1, g_tab2 = st.tabs(
+        [
+            "📚 Glosario de Siglas y Métricas",
+            "🕹️ Manual: Si tocas esto, obtienes esto",
+        ]
+    )
 
     with g_tab1:
         st.markdown("### 📚 Diccionario de Siglas Institucionales")

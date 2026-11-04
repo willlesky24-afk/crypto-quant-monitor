@@ -84,4 +84,3 @@ def test_report_keeps_default_history_factory_compatible(monkeypatch):
     sentinel = object()
     monkeypatch.setattr("src.report.SignalHistory", lambda: sentinel)
     assert MarketReport().signal_history is sentinel
-

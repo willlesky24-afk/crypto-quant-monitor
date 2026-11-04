@@ -20,7 +20,12 @@ def make_predictive_candles(
     if pattern == "bull":
         close = base_price + np.arange(n_candles) * 0.4 + rng.normal(0, 0.05, n_candles)
     elif pattern == "bear":
-        close = base_price + 80.0 - np.arange(n_candles) * 0.4 + rng.normal(0, 0.05, n_candles)
+        close = (
+            base_price
+            + 80.0
+            - np.arange(n_candles) * 0.4
+            + rng.normal(0, 0.05, n_candles)
+        )
     elif pattern == "range":
         t = np.linspace(0, 6 * np.pi, n_candles)
         close = base_price + 2.0 * np.sin(t) + rng.normal(0, 0.1, n_candles)
@@ -157,8 +162,12 @@ def test_predictive_engine_causality_and_no_lookahead_bias():
         res_trunc = engine.evaluate(truncated_df)
 
         assert res_full.timestamp == full_df["timestamp"].iloc[k]
-        assert res_full.probability_continuation == pytest.approx(res_trunc.probability_continuation)
-        assert res_full.probability_reversal == pytest.approx(res_trunc.probability_reversal)
+        assert res_full.probability_continuation == pytest.approx(
+            res_trunc.probability_continuation
+        )
+        assert res_full.probability_reversal == pytest.approx(
+            res_trunc.probability_reversal
+        )
         assert res_full.predictive_score == pytest.approx(res_trunc.predictive_score)
         assert res_full.confidence == pytest.approx(res_trunc.confidence)
         assert res_full.direction_bias == res_trunc.direction_bias
@@ -204,5 +213,3 @@ def test_predictive_engine_string_timestamps():
     classifier = RegimeClassifier()
     reg_res = classifier.classify(df_str)
     assert reg_res.regime is not None
-
-

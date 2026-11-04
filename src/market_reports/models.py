@@ -47,7 +47,9 @@ class IntradayUpdateReport:
     regime_shift: str | None = None
     price_delta_pct: float = 0.0
     score_delta: float = 0.0
-    disclaimer: str = "DECISION SUPPORT ONLY: Interpretive delta analysis for operator review."
+    disclaimer: str = (
+        "DECISION SUPPORT ONLY: Interpretive delta analysis for operator review."
+    )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

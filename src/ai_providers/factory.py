@@ -42,5 +42,7 @@ class ProviderFactory:
             logger.info("Initializing Mock AI Provider.")
             return MockAIProvider()
         else:
-            logger.warning(f"Unknown AI_PROVIDER '{name}'. Falling back to MockAIProvider.")
+            logger.warning(
+                f"Unknown AI_PROVIDER '{name}'. Falling back to MockAIProvider."
+            )
             return MockAIProvider()

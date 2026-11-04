@@ -86,14 +86,16 @@ def test_market_scanner_pipeline_integration():
     now = pd.Timestamp.now(tz="UTC")
     dates = [now - pd.Timedelta(hours=50 - i) for i in range(50)]
     closes = 100.0 + np.cumsum(rng.normal(0.1, 0.5, 50))
-    sample_df = pd.DataFrame({
-        "timestamp": dates,
-        "open": closes - 0.2,
-        "high": closes + 0.5,
-        "low": closes - 0.5,
-        "close": closes,
-        "volume": rng.integers(100, 1000, 50),
-    })
+    sample_df = pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": closes - 0.2,
+            "high": closes + 0.5,
+            "low": closes - 0.5,
+            "close": closes,
+            "volume": rng.integers(100, 1000, 50),
+        }
+    )
     mock_loader.get_klines.return_value = sample_df
 
     scanner = MarketScanner(data_loader=mock_loader)
@@ -130,13 +132,15 @@ def test_scanner_reuses_risk_engine_plan_and_exposes_status(
     loader = MagicMock()
     loader.get_klines.return_value = synthetic_ohlcv.copy()
     scanner = MarketScanner(data_loader=loader)
-    scanner.decision_engine.evaluate = MagicMock(return_value=SimpleNamespace(
-        decision=decision_name,
-        direction="SHORT",
-        tp_multiplier=3.0,
-        sl_multiplier=1.5,
-        confidence=80.0,
-    ))
+    scanner.decision_engine.evaluate = MagicMock(
+        return_value=SimpleNamespace(
+            decision=decision_name,
+            direction="SHORT",
+            tp_multiplier=3.0,
+            sl_multiplier=1.5,
+            confidence=80.0,
+        )
+    )
 
     results = scanner.scan_market(symbols=["BTCUSDT"], timeframe="1h")
 
@@ -152,7 +156,9 @@ def test_scanner_reuses_risk_engine_plan_and_exposes_status(
         assert item.risk_reward == pytest.approx(
             (item.entry_price - item.take_profit) / (item.stop_loss - item.entry_price)
         )
-        assert item.risk_reward == pytest.approx(item.reward_distance / item.risk_distance)
+        assert item.risk_reward == pytest.approx(
+            item.reward_distance / item.risk_distance
+        )
         assert "bruto" in scanner.format_scanner_summary_es(results)
     else:
         assert item.direction == "SIN OPERACIÓN"
@@ -165,15 +171,29 @@ def test_scanner_reuses_risk_engine_plan_and_exposes_status(
 
 def test_only_complete_confirmed_activated_result_is_operable():
     base = dict(
-        symbol="BTCUSDT", price=100.0, regime="TRENDING_BULL",
-        action="BUY", direction="LONG", quant_score=85.0,
-        predictive_score=0.8, confidence=0.9, risk_reward=2.0,
-        stop_loss=95.0, take_profit=110.0, primary_reason="ATR",
-        ranking_score=80.0, status="ACTIVADA", entry_price=100.0,
-        entry_confirmed=True, risk_distance=5.0, reward_distance=10.0,
+        symbol="BTCUSDT",
+        price=100.0,
+        regime="TRENDING_BULL",
+        action="BUY",
+        direction="LONG",
+        quant_score=85.0,
+        predictive_score=0.8,
+        confidence=0.9,
+        risk_reward=2.0,
+        stop_loss=95.0,
+        take_profit=110.0,
+        primary_reason="ATR",
+        ranking_score=80.0,
+        status="ACTIVADA",
+        entry_price=100.0,
+        entry_confirmed=True,
+        risk_distance=5.0,
+        reward_distance=10.0,
         risk_methodology="ATR",
     )
     assert ScannedPairResult(**base).is_operable() is True
     assert ScannedPairResult(**{**base, "risk_reward": 1.5}).is_operable() is False
     assert ScannedPairResult(**{**base, "stop_loss": 101.0}).is_operable() is False
-    assert ScannedPairResult(**{**base, "entry_confirmed": False}).is_operable() is False
+    assert (
+        ScannedPairResult(**{**base, "entry_confirmed": False}).is_operable() is False
+    )

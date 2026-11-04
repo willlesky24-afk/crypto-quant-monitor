@@ -6,11 +6,15 @@ import subprocess
 import sys
 
 
-def run_api(host: str = "0.0.0.0", port: int = 8000, reload: bool = False, workers: int = 1) -> int:
+def run_api(
+    host: str = "0.0.0.0", port: int = 8000, reload: bool = False, workers: int = 1
+) -> int:
     """Launch the FastAPI Operator Gateway via Uvicorn."""
     import uvicorn
 
-    print(f"Starting Crypto Quant Operator API Gateway on {host}:{port} (workers={workers})...")
+    print(
+        f"Starting Crypto Quant Operator API Gateway on {host}:{port} (workers={workers})..."
+    )
     uvicorn.run(
         "src.operator_api.app:app",
         host=host,
@@ -51,7 +55,9 @@ def run_worker(
     from src.streaming.live_worker import LiveMarketWorker
 
     sym_list = symbols or ["BTCUSDT"]
-    print(f"Starting Live Market Worker for {sym_list} ({interval}) -> {db_path} (dry_run={dry_run})...")
+    print(
+        f"Starting Live Market Worker for {sym_list} ({interval}) -> {db_path} (dry_run={dry_run})..."
+    )
     worker = LiveMarketWorker(
         symbols=sym_list,
         interval=interval,
@@ -63,7 +69,6 @@ def run_worker(
 
 
 def check_health(url: str = "http://localhost:8000/health/ready") -> int:
-
     """Check readiness status of the Operator API Gateway via HTTP GET."""
     import urllib.error
     import urllib.request
@@ -99,13 +104,27 @@ def main() -> int:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="Operational command to execute")
+    subparsers = parser.add_subparsers(
+        dest="command", help="Operational command to execute"
+    )
 
     # API subcommand
     api_parser = subparsers.add_parser("api", help="Start the FastAPI Operator Gateway")
-    api_parser.add_argument("--host", default=os.getenv("SERVER_HOST", "0.0.0.0"), help="Bind host")
-    api_parser.add_argument("--port", type=int, default=int(os.getenv("SERVER_PORT", "8000")), help="Bind port")
-    api_parser.add_argument("--workers", type=int, default=int(os.getenv("SERVER_WORKERS", "1")), help="Workers")
+    api_parser.add_argument(
+        "--host", default=os.getenv("SERVER_HOST", "0.0.0.0"), help="Bind host"
+    )
+    api_parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("SERVER_PORT", "8000")),
+        help="Bind port",
+    )
+    api_parser.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.getenv("SERVER_WORKERS", "1")),
+        help="Workers",
+    )
     api_parser.add_argument(
         "--reload",
         action="store_true",
@@ -119,7 +138,9 @@ def main() -> int:
     ui_parser.add_argument("--host", default="0.0.0.0", help="Dashboard host")
 
     # Worker subcommand
-    worker_parser = subparsers.add_parser("worker", aliases=["stream"], help="Start the Live Market Worker daemon")
+    worker_parser = subparsers.add_parser(
+        "worker", aliases=["stream"], help="Start the Live Market Worker daemon"
+    )
     worker_parser.add_argument(
         "--symbols",
         default=os.getenv("SYMBOLS", "BTCUSDT"),
@@ -148,7 +169,9 @@ def main() -> int:
     )
 
     # Health subcommand
-    health_parser = subparsers.add_parser("health", help="Check readiness status of the running service")
+    health_parser = subparsers.add_parser(
+        "health", help="Check readiness status of the running service"
+    )
     health_parser.add_argument(
         "--url",
         default=os.getenv("HEALTH_CHECK_URL", "http://localhost:8000/health/ready"),
@@ -159,14 +182,22 @@ def main() -> int:
     cli_parser = subparsers.add_parser("cli", help="Start the Operator AI Copilot CLI")
     cli_parser.add_argument("--symbol", default="BTCUSDT", help="Initial symbol")
     cli_parser.add_argument("--interval", default="1h", help="Initial timeframe")
-    cli_parser.add_argument("--query", default=None, help="One-shot question for Copilot")
-    cli_parser.add_argument("--report", action="store_true", help="Generate market report")
-    cli_parser.add_argument("--status", action="store_true", help="Display market status")
+    cli_parser.add_argument(
+        "--query", default=None, help="One-shot question for Copilot"
+    )
+    cli_parser.add_argument(
+        "--report", action="store_true", help="Generate market report"
+    )
+    cli_parser.add_argument(
+        "--status", action="store_true", help="Display market status"
+    )
 
     args = parser.parse_args()
 
     if args.command == "api":
-        return run_api(host=args.host, port=args.port, reload=args.reload, workers=args.workers)
+        return run_api(
+            host=args.host, port=args.port, reload=args.reload, workers=args.workers
+        )
     elif args.command == "ui":
         return run_ui(port=args.port, host=args.host)
     elif args.command in ("worker", "stream"):
@@ -183,7 +214,11 @@ def main() -> int:
 
         op_cli = OperatorCLI()
         if args.status:
-            print(op_cli.format_status_output(op_cli.get_status(args.symbol, args.interval)))
+            print(
+                op_cli.format_status_output(
+                    op_cli.get_status(args.symbol, args.interval)
+                )
+            )
             return 0
         elif args.report:
             print(op_cli.get_report(args.symbol, args.interval))
@@ -203,5 +238,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

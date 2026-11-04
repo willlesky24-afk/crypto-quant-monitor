@@ -96,7 +96,9 @@ def test_models_normalization_and_serialization():
     assert d_sum["success"] is False
     assert d_sum["summary"] is None
 
-    health = OperatorServiceHealthResponse(status="HEALTHY", available_symbols=["BTCUSDT"])
+    health = OperatorServiceHealthResponse(
+        status="HEALTHY", available_symbols=["BTCUSDT"]
+    )
     d_health = health.to_dict()
     assert d_health["status"] == "HEALTHY"
     assert d_health["available_symbols"] == ["BTCUSDT"]

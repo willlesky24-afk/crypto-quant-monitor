@@ -51,7 +51,14 @@ def test_get_klines_maps_binance_payload_without_network(monkeypatch):
     assert captured["url"].endswith("/klines")
     assert captured["params"] == {"symbol": "ETHUSDT", "interval": "4h", "limit": 1}
     assert captured["timeout"] == 10
-    assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+    assert list(result.columns) == [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
     assert result.loc[0, "close"] == pytest.approx(104.4)
     assert result.loc[0, ["open", "high", "low", "close", "volume"]].dtype.kind == "f"
 
@@ -89,7 +96,14 @@ def test_get_klines_returns_empty_when_all_candles_are_open(monkeypatch):
 
     result = BinanceDataLoader().get_klines("BTCUSDT", "1h", 1)
     assert result.empty
-    assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+    assert list(result.columns) == [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
 
 
 def test_get_klines_returns_empty_when_api_returns_empty_list(monkeypatch):
@@ -100,7 +114,14 @@ def test_get_klines_returns_empty_when_api_returns_empty_list(monkeypatch):
 
     result = BinanceDataLoader().get_klines("BTCUSDT", "1h", 1)
     assert result.empty
-    assert list(result.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+    assert list(result.columns) == [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
 
 
 def test_get_klines_propagates_http_errors(monkeypatch):
@@ -112,5 +133,3 @@ def test_get_klines_propagates_http_errors(monkeypatch):
 
     with pytest.raises(requests.HTTPError, match="rate limited"):
         BinanceDataLoader().get_klines()
-
-

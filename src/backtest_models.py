@@ -142,7 +142,11 @@ class BacktestConfig:
 
     def __post_init__(self):
         if self.trade_direction is not None:
-            self.direction = self.trade_direction.value if hasattr(self.trade_direction, "value") else str(self.trade_direction)
+            self.direction = (
+                self.trade_direction.value
+                if hasattr(self.trade_direction, "value")
+                else str(self.trade_direction)
+            )
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -196,8 +200,16 @@ class Position:
 
     def update_observed_excursions(self, high: float, low: float) -> None:
         """Record market observations attributable to the open position."""
-        self.observed_high_price = high if self.observed_high_price is None else max(self.observed_high_price, high)
-        self.observed_low_price = low if self.observed_low_price is None else min(self.observed_low_price, low)
+        self.observed_high_price = (
+            high
+            if self.observed_high_price is None
+            else max(self.observed_high_price, high)
+        )
+        self.observed_low_price = (
+            low
+            if self.observed_low_price is None
+            else min(self.observed_low_price, low)
+        )
 
 
 @dataclass(frozen=True)

@@ -114,7 +114,9 @@ class StrategyOptimizer:
         self.train_end = pd.to_datetime(train_end, utc=True)
         self.regime_classifier = regime_classifier or RegimeClassifier()
 
-    def _extract_trade_dict(self, trade: TradeResult | dict[str, Any]) -> dict[str, Any]:
+    def _extract_trade_dict(
+        self, trade: TradeResult | dict[str, Any]
+    ) -> dict[str, Any]:
         """Normalizes a TradeResult instance or dictionary into a uniform dictionary."""
         if hasattr(trade, "to_dict"):
             d = trade.to_dict()
@@ -134,7 +136,9 @@ class StrategyOptimizer:
                 "mae_observability": getattr(trade, "mae_observability", None),
                 "mfe_exact_pct": getattr(trade, "mfe_exact_pct", None),
                 "mae_exact_pct": getattr(trade, "mae_exact_pct", None),
-                "excursion_policy_version": getattr(trade, "excursion_policy_version", None),
+                "excursion_policy_version": getattr(
+                    trade, "excursion_policy_version", None
+                ),
                 "is_win": getattr(trade, "is_win", False),
                 "regime": getattr(trade, "regime", ""),
                 "atr_entry": getattr(trade, "atr_entry", 0.0),
@@ -186,9 +190,14 @@ class StrategyOptimizer:
     ) -> tuple[float, float]:
         """Normalize independently exact excursions; never impute ATR or a proxy."""
         if trade.get("excursion_policy_version") != EXCURSION_POLICY_VERSION:
-            raise OptimizationUnavailableError("Optimización no disponible: versión de excursiones heredada o desconocida.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: versión de excursiones heredada o desconocida."
+            )
         for name in ("mfe", "mae"):
-            if trade.get(f"{name}_observability") != ExcursionObservability.EXACT_OHLC.value:
+            if (
+                trade.get(f"{name}_observability")
+                != ExcursionObservability.EXACT_OHLC.value
+            ):
                 raise OptimizationUnavailableError(
                     f"Optimización no disponible: cobertura {name.upper()} no es EXACT_OHLC completa."
                 )
@@ -198,20 +207,32 @@ class StrategyOptimizer:
             mfe_pct = float(trade["mfe_exact_pct"])
             mae_pct = float(trade["mae_exact_pct"])
         except (KeyError, TypeError, ValueError, OverflowError) as exc:
-            raise OptimizationUnavailableError("Optimización no disponible: MFE/MAE exactos o ATR ausentes.") from exc
-        if not all(np.isfinite(value) for value in (entry_price, atr_entry, mfe_pct, mae_pct)):
-            raise OptimizationUnavailableError("Optimización no disponible: excursión o ATR no finito.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: MFE/MAE exactos o ATR ausentes."
+            ) from exc
+        if not all(
+            np.isfinite(value) for value in (entry_price, atr_entry, mfe_pct, mae_pct)
+        ):
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: excursión o ATR no finito."
+            )
         if entry_price <= 0 or atr_entry <= 0 or mfe_pct < 0 or mae_pct < 0:
-            raise OptimizationUnavailableError("Optimización no disponible: precio, ATR o excursión inválidos.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: precio, ATR o excursión inválidos."
+            )
         raw_atr_pct = (atr_entry / entry_price) * 100.0
         if not np.isfinite(raw_atr_pct) or raw_atr_pct <= 0:
-            raise OptimizationUnavailableError("Optimización no disponible: escala ATR no finita.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: escala ATR no finita."
+            )
         atr_pct = max(raw_atr_pct, 1e-4)
         mfe_atr = mfe_pct / atr_pct
         mae_atr = mae_pct / atr_pct
 
         if not all(np.isfinite(value) for value in (mfe_atr, mae_atr)):
-            raise OptimizationUnavailableError("Optimización no disponible: múltiplo ATR no finito.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: múltiplo ATR no finito."
+            )
 
         return mfe_atr, mae_atr
 
@@ -271,7 +292,9 @@ class StrategyOptimizer:
         volatility_state = defaults.get("volatility", "NORMAL")
 
         norm_train = [self._extract_trade_dict(t) for t in train_trades]
-        norm_val = [self._extract_trade_dict(t) for t in val_trades] if val_trades else []
+        norm_val = (
+            [self._extract_trade_dict(t) for t in val_trades] if val_trades else []
+        )
         n_train = len(norm_train)
 
         # 1. Handling small or insufficient sample sizes (Anti-Overfitting Protection)
@@ -382,7 +405,9 @@ class StrategyOptimizer:
                         t["regime"] = regime_map[ts]
 
         # Perform Walk-Forward split: TRAIN vs VALIDATION
-        train_trades, val_trades = self.split_walk_forward(norm_trades, train_end=train_end)
+        train_trades, val_trades = self.split_walk_forward(
+            norm_trades, train_end=train_end
+        )
 
         # Regimes to optimize
         target_regimes = [
@@ -408,7 +433,9 @@ class StrategyOptimizer:
             results[reg] = opt_params
 
         if not results:
-            raise OptimizationUnavailableError("Optimización no disponible: NO_TRADES de entrenamiento por régimen.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: NO_TRADES de entrenamiento por régimen."
+            )
 
         return results
 
@@ -422,4 +449,6 @@ class StrategyOptimizer:
         closed_trades = getattr(report, "trades", None)
         if closed_trades is None:
             closed_trades = getattr(report, "closed_trades", [])
-        return self.optimize_all_regimes(closed_trades, train_end=train_end, candles=candles)
+        return self.optimize_all_regimes(
+            closed_trades, train_end=train_end, candles=candles
+        )

@@ -68,9 +68,13 @@ class SignalExplanationService:
         ]
 
         if context.signal.reasoning:
-            rationale_parts.append(f"Signal engine rationale: {context.signal.reasoning}.")
+            rationale_parts.append(
+                f"Signal engine rationale: {context.signal.reasoning}."
+            )
         else:
-            rationale_parts.append("Signal engine rationale: No explicit qualitative reason provided.")
+            rationale_parts.append(
+                "Signal engine rationale: No explicit qualitative reason provided."
+            )
 
         # Contextual regime explanation
         if regime == "TRENDING_BULL":
@@ -105,7 +109,9 @@ class SignalExplanationService:
                     f"Price is currently trading below the high-volume node (POC at {poc_val:,.2f}), presenting overhead resistance."
                 )
             else:
-                rationale_parts.append(f"Price is trading directly at the Point of Control (POC at {poc_val:,.2f}).")
+                rationale_parts.append(
+                    f"Price is trading directly at the Point of Control (POC at {poc_val:,.2f})."
+                )
 
         rationale = " ".join(rationale_parts)
 
@@ -124,25 +130,34 @@ class SignalExplanationService:
             drivers.append(f"Predictive Score: {pred_score:.2f}")
 
         # 4. Structured Risk Assessment
-        risk_parts = [
-            f"Risk profile: {context.risk.risk_category or 'Standard'}."
-        ]
+        risk_parts = [f"Risk profile: {context.risk.risk_category or 'Standard'}."]
 
         if context.risk.stop_loss is not None:
-            risk_parts.append(f"Protective Stop Loss set at {context.risk.stop_loss:,.2f}.")
+            risk_parts.append(
+                f"Protective Stop Loss set at {context.risk.stop_loss:,.2f}."
+            )
         if context.risk.take_profit is not None:
-            risk_parts.append(f"Target Take Profit set at {context.risk.take_profit:,.2f}.")
+            risk_parts.append(
+                f"Target Take Profit set at {context.risk.take_profit:,.2f}."
+            )
 
         if context.risk.stop_loss is None and context.risk.take_profit is None:
             risk_parts.append("No explicit Stop Loss or Take Profit targets defined.")
 
         if context.risk.risk_ratio is not None:
-            risk_parts.append(f"Risk/Reward ratio is calculated at {context.risk.risk_ratio:.2f}.")
+            risk_parts.append(
+                f"Risk/Reward ratio is calculated at {context.risk.risk_ratio:.2f}."
+            )
 
         if context.risk.atr is not None:
-            risk_parts.append(f"Local volatility measured by ATR is {context.risk.atr:,.2f}.")
+            risk_parts.append(
+                f"Local volatility measured by ATR is {context.risk.atr:,.2f}."
+            )
 
-        if context.risk.tp_multiplier is not None and context.risk.sl_multiplier is not None:
+        if (
+            context.risk.tp_multiplier is not None
+            and context.risk.sl_multiplier is not None
+        ):
             risk_parts.append(
                 f"Dynamic ATR bounds: {context.risk.tp_multiplier:.1f}x TP / {context.risk.sl_multiplier:.1f}x SL."
             )

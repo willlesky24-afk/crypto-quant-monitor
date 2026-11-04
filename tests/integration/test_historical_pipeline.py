@@ -27,11 +27,19 @@ class MultiYearMockLoader:
         include_open_candle: bool = False,
     ) -> pd.DataFrame:
         self.calls.append({"start_time": start_time, "end_time": end_time})
-        start_ts = pd.to_datetime(start_time, utc=True) if isinstance(start_time, str) else pd.to_datetime(start_time, unit="ms", utc=True)
+        start_ts = (
+            pd.to_datetime(start_time, utc=True)
+            if isinstance(start_time, str)
+            else pd.to_datetime(start_time, unit="ms", utc=True)
+        )
         filtered = self.df[self.df["timestamp"] >= start_ts]
 
         if end_time is not None:
-            end_ts = pd.to_datetime(end_time, utc=True) if isinstance(end_time, str) else pd.to_datetime(end_time, unit="ms", utc=True)
+            end_ts = (
+                pd.to_datetime(end_time, utc=True)
+                if isinstance(end_time, str)
+                else pd.to_datetime(end_time, unit="ms", utc=True)
+            )
             filtered = filtered[filtered["timestamp"] <= end_ts]
 
         return filtered.reset_index(drop=True)
@@ -44,16 +52,26 @@ def test_multi_year_historical_pipeline_e2e(tmp_path: Path, make_synthetic_candl
     -> Manifest metadata -> Technical indicators & MarketEngine.
     """
     # 1. Generate 3 years of synthetic hourly data (2023 to 2025)
-    candles_2023 = make_synthetic_candles(start="2023-12-01", periods=500, freq="1h", base_price=30000.0)
-    candles_2024 = make_synthetic_candles(start="2024-01-01", periods=500, freq="1h", base_price=42000.0)
-    candles_2025 = make_synthetic_candles(start="2025-01-01", periods=500, freq="1h", base_price=60000.0)
+    candles_2023 = make_synthetic_candles(
+        start="2023-12-01", periods=500, freq="1h", base_price=30000.0
+    )
+    candles_2024 = make_synthetic_candles(
+        start="2024-01-01", periods=500, freq="1h", base_price=42000.0
+    )
+    candles_2025 = make_synthetic_candles(
+        start="2025-01-01", periods=500, freq="1h", base_price=60000.0
+    )
 
-    combined_synthetic = pd.concat([candles_2023, candles_2024, candles_2025], ignore_index=True)
+    combined_synthetic = pd.concat(
+        [candles_2023, candles_2024, candles_2025], ignore_index=True
+    )
     loader = MultiYearMockLoader(combined_synthetic)
 
     store = ParquetStore(base_dir=tmp_path / "historical_e2e")
     validator = CandleValidator()
-    manager = HistoricalDatasetManager(store=store, data_loader=loader, validator=validator)
+    manager = HistoricalDatasetManager(
+        store=store, data_loader=loader, validator=validator
+    )
 
     # 2. Sync dataset
     synced_df = manager.sync_dataset(
@@ -120,7 +138,9 @@ def test_multi_year_historical_pipeline_e2e(tmp_path: Path, make_synthetic_candl
     assert 0 <= analysis["score"] <= 5
 
 
-def test_multi_year_incremental_sync_preserves_partitions(tmp_path: Path, make_synthetic_candles):
+def test_multi_year_incremental_sync_preserves_partitions(
+    tmp_path: Path, make_synthetic_candles
+):
     """Verifies that an incremental sync adds new data correctly without corrupting prior partitions."""
     store = ParquetStore(base_dir=tmp_path / "historical_incremental")
 
@@ -133,14 +153,18 @@ def test_multi_year_incremental_sync_preserves_partitions(tmp_path: Path, make_s
     manager = HistoricalDatasetManager(store=store, data_loader=loader)
 
     # First sync: 2024 data only
-    manager.sync_dataset("ETHUSDT", "1h", start_time="2024-01-01", end_time="2024-01-09 08:00:00")
+    manager.sync_dataset(
+        "ETHUSDT", "1h", start_time="2024-01-01", end_time="2024-01-09 08:00:00"
+    )
     manifest1 = store.get_manifest("ETHUSDT", "1h")
     assert manifest1["total_candles"] == 200
     assert len(manifest1["partitions"]) == 1
     assert "2024.parquet" in manifest1["partitions"]
 
     # Second sync: incremental into 2025
-    manager.sync_dataset("ETHUSDT", "1h", start_time="2024-01-01", end_time="2025-01-09 08:00:00")
+    manager.sync_dataset(
+        "ETHUSDT", "1h", start_time="2024-01-01", end_time="2025-01-09 08:00:00"
+    )
     manifest2 = store.get_manifest("ETHUSDT", "1h")
     assert manifest2["total_candles"] == 400
     assert len(manifest2["partitions"]) == 2

@@ -41,4 +41,3 @@ def test_canonical_domain_values_are_centralized():
         "🔴 Señal débil",
     }
     assert expected <= _public_values()
-

@@ -65,7 +65,9 @@ async def test_mock_ai_provider_generate_explanation_buy_signal():
     explanation = await provider.generate_explanation(ctx)
 
     assert isinstance(explanation, AgentExplanation)
-    assert "BUY signal identified for BTCUSDT on 1h with LONG bias" in explanation.summary
+    assert (
+        "BUY signal identified for BTCUSDT on 1h with LONG bias" in explanation.summary
+    )
     assert "TRENDING_BULL" in explanation.summary
     assert "Quant Score of 85.0/100" in explanation.rationale
     assert "Predictive Score of 0.80" in explanation.rationale
@@ -93,7 +95,10 @@ async def test_mock_ai_provider_generate_explanation_wait_signal():
 
     explanation = await provider.generate_explanation(ctx)
 
-    assert "Neutral/Wait condition for BTCUSDT on 1h under RANGING_CONSOLIDATION regime" in explanation.summary
+    assert (
+        "Neutral/Wait condition for BTCUSDT on 1h under RANGING_CONSOLIDATION regime"
+        in explanation.summary
+    )
     assert "Quant Score of 50.0/100" in explanation.rationale
     assert "Predictive Score of 0.45" in explanation.rationale
     assert "Regime: RANGING_CONSOLIDATION" in explanation.key_drivers
@@ -109,7 +114,10 @@ async def test_mock_ai_provider_summarize_market():
 
     assert isinstance(summary, AgentMarketSummary)
     assert "BTCUSDT Market Intelligence Briefing (1h)" == summary.title
-    assert "BTCUSDT is trading at 62,000.00 in a TRENDING_BULL environment." in summary.overview
+    assert (
+        "BTCUSDT is trading at 62,000.00 in a TRENDING_BULL environment."
+        in summary.overview
+    )
     assert "Action status: BUY (LONG)" in summary.overview or "BUY" in summary.overview
     assert "TRENDING_BULL" in summary.regime_interpretation
     assert summary.key_levels["POC"] == 61500.0

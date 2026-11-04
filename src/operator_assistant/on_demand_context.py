@@ -138,10 +138,14 @@ def build_on_demand_context(
         is_fx = is_forex if is_forex is not None else ("=X" in symbol or "/" in symbol)
         if is_fx:
             f_loader = ForexDataLoader()
-            raw_df = f_loader.get_forex_klines(symbol=symbol, interval=timeframe, limit=200)
+            raw_df = f_loader.get_forex_klines(
+                symbol=symbol, interval=timeframe, limit=200
+            )
         else:
             b_loader = BinanceDataLoader()
-            raw_df = b_loader.get_klines(symbol=symbol, interval=timeframe, limit=200, include_open_candle=False)
+            raw_df = b_loader.get_klines(
+                symbol=symbol, interval=timeframe, limit=200, include_open_candle=False
+            )
 
         if raw_df.empty or len(raw_df) < 35:
             logger.warning("Datos insuficientes para contexto on-demand de %s", symbol)
@@ -193,7 +197,9 @@ def build_on_demand_context(
             timeframe=timeframe,
             action="WAIT",  # On-demand analysis cannot confirm an entry.
             direction=plan["direction"],
-            confidence=dec.confidence if dec.confidence <= 1.0 else dec.confidence / 100.0,
+            confidence=dec.confidence
+            if dec.confidence <= 1.0
+            else dec.confidence / 100.0,
             predictive_score=prd_res.predictive_score,
             regime=reg_res.regime.value,
             reasoning=f"{dec.reasoning} Estado: {plan['status']}. {plan['reason']}",

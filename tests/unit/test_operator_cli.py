@@ -10,7 +10,9 @@ from src.notifications.models import SignalEvent
 from src.operator_cli.client import OperatorCLI
 
 
-def _create_sample_context(symbol: str = "BTCUSDT", timeframe: str = "1h") -> MarketContext:
+def _create_sample_context(
+    symbol: str = "BTCUSDT", timeframe: str = "1h"
+) -> MarketContext:
     sig = SignalEvent(
         timestamp=pd.Timestamp("2026-03-01 12:00:00", tz="UTC"),
         symbol=symbol,
@@ -30,10 +32,13 @@ def _create_sample_context(symbol: str = "BTCUSDT", timeframe: str = "1h") -> Ma
     )
     return ContextBuilder.build_from_signal_event(
         signal_event=sig,
-        extra_metadata={"source": "test", "poc": 65000.0, "vah": 66000.0, "val": 64500.0},
+        extra_metadata={
+            "source": "test",
+            "poc": 65000.0,
+            "vah": 66000.0,
+            "val": 64500.0,
+        },
     )
-
-
 
 
 def test_operator_cli_status_no_data():
@@ -144,21 +149,40 @@ def test_operator_cli_run_repl_interactive():
 def test_scripts_operator_cli_main_dispatch():
     from scripts.operator_cli import main as cli_main
 
-    with patch("sys.argv", ["operator_cli.py", "--db-path", ":memory:", "status", "--symbol", "BTCUSDT"]):
+    with patch(
+        "sys.argv",
+        ["operator_cli.py", "--db-path", ":memory:", "status", "--symbol", "BTCUSDT"],
+    ):
         rc = cli_main()
         assert rc == 0
 
-    with patch("sys.argv", ["operator_cli.py", "--db-path", ":memory:", "ask", "Explain risks", "--symbol", "BTCUSDT"]):
+    with patch(
+        "sys.argv",
+        [
+            "operator_cli.py",
+            "--db-path",
+            ":memory:",
+            "ask",
+            "Explain risks",
+            "--symbol",
+            "BTCUSDT",
+        ],
+    ):
         rc = cli_main()
         assert rc == 0
 
-    with patch("sys.argv", ["operator_cli.py", "--db-path", ":memory:", "report", "--symbol", "BTCUSDT"]):
+    with patch(
+        "sys.argv",
+        ["operator_cli.py", "--db-path", ":memory:", "report", "--symbol", "BTCUSDT"],
+    ):
         rc = cli_main()
         assert rc == 0
 
-    with patch("sys.argv", ["operator_cli.py", "--db-path", ":memory:", "repl", "--symbol", "BTCUSDT"]):
+    with patch(
+        "sys.argv",
+        ["operator_cli.py", "--db-path", ":memory:", "repl", "--symbol", "BTCUSDT"],
+    ):
         with patch.object(OperatorCLI, "run_repl") as mock_repl:
             rc = cli_main()
             assert rc == 0
             mock_repl.assert_called_once()
-

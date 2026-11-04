@@ -26,10 +26,15 @@ from src.strategy_optimizer import OptimizedParameters
 def _verified_calibration_for_all_regimes():
     return {
         regime.value: OptimizedParameters(
-            regime=regime.value, volatility_state="NORMAL",
-            atr_tp_multiplier=3.0, atr_sl_multiplier=1.5,
-            expected_rr=2.0, sample_size=20, confidence=0.8,
-            validation_period={}, calibration_state="AVAILABLE",
+            regime=regime.value,
+            volatility_state="NORMAL",
+            atr_tp_multiplier=3.0,
+            atr_sl_multiplier=1.5,
+            expected_rr=2.0,
+            sample_size=20,
+            confidence=0.8,
+            validation_period={},
+            calibration_state="AVAILABLE",
             excursion_policy_version=EXCURSION_POLICY_VERSION,
         )
         for regime in MarketRegime
@@ -41,28 +46,48 @@ def test_runner_calibration_intent_is_explicit_and_fails_closed(make_synthetic_c
     candles = make_synthetic_candles(periods=220, freq="1h", base_price=100.0)
     for unavailable in (None, {}):
         with pytest.raises(OptimizationUnavailableError, match="no hay parámetros"):
-            runner.run_backtest(df=candles, predictive_mode=True,
-                                calibrated_params=unavailable, calibration_required=True)
+            runner.run_backtest(
+                df=candles,
+                predictive_mode=True,
+                calibrated_params=unavailable,
+                calibration_required=True,
+            )
     plain = runner.run_backtest(df=candles, predictive_mode=True, calibrated_params={})
     assert plain.calibration_state == "NOT_REQUESTED"
     exact = _verified_calibration_for_all_regimes()
-    report = runner.run_backtest(df=candles, predictive_mode=True,
-                                 calibrated_params=exact, calibration_required=True)
+    report = runner.run_backtest(
+        df=candles,
+        predictive_mode=True,
+        calibrated_params=exact,
+        calibration_required=True,
+    )
     assert report.calibration_state == "AVAILABLE"
     assert report.metrics["calibration_state"] == "AVAILABLE"
     with pytest.raises(OptimizationUnavailableError, match="faltan parámetros"):
-        runner.run_backtest(df=candles, predictive_mode=True,
-                            calibrated_params={"UNSEEN": next(iter(exact.values()))},
-                            calibration_required=True)
+        runner.run_backtest(
+            df=candles,
+            predictive_mode=True,
+            calibrated_params={"UNSEEN": next(iter(exact.values()))},
+            calibration_required=True,
+        )
 
 
-def test_ui_clears_previous_report_when_requested_calibration_is_rejected(make_synthetic_candles):
+def test_ui_clears_previous_report_when_requested_calibration_is_rejected(
+    make_synthetic_candles,
+):
     helper = _load_ui_backtest_helper()
     state = {"backtest_report": object()}
     candles = make_synthetic_candles(periods=220, freq="1h", base_price=100.0)
     with pytest.raises(OptimizationUnavailableError):
-        helper(BacktestConfig(), candles, "BTCUSDT", "1h", state,
-               calibrated_params={}, calibration_required=True)
+        helper(
+            BacktestConfig(),
+            candles,
+            "BTCUSDT",
+            "1h",
+            state,
+            calibrated_params={},
+            calibration_required=True,
+        )
     assert "backtest_report" not in state
 
 
@@ -100,7 +125,9 @@ def test_backtest_runner_empty_and_insufficient_warmup(tmp_path: Path):
 
 def test_backtest_runner_with_synthetic_dataset(make_synthetic_candles):
     # Generate 300 synthetic bars (enough for 200 warm-up + 100 active bars)
-    df = make_synthetic_candles(start="2024-01-01", periods=300, freq="1h", base_price=100.0)
+    df = make_synthetic_candles(
+        start="2024-01-01", periods=300, freq="1h", base_price=100.0
+    )
 
     cfg = BacktestConfig(
         initial_capital=10_000.0,
@@ -125,7 +152,9 @@ def test_backtest_runner_with_synthetic_dataset(make_synthetic_candles):
     assert report.to_dict()["net_expectancy_r"] == report.net_expectancy_r
 
 
-def test_backtest_runner_loads_from_dataset_manager(tmp_path: Path, make_synthetic_candles):
+def test_backtest_runner_loads_from_dataset_manager(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path / "historical")
     df = make_synthetic_candles(start="2024-01-01", periods=250, freq="1h")
     store.write_dataset(df, "ETHUSDT", "1h")
@@ -167,11 +196,16 @@ def _load_ui_backtest_helper():
         if isinstance(node, ast.FunctionDef) and node.name == "_run_backtest_for_ui"
     )
     namespace = {"BacktestRunner": BacktestRunner}
-    exec(compile(ast.Module(body=[helper], type_ignores=[]), str(app_path), "exec"), namespace)
+    exec(
+        compile(ast.Module(body=[helper], type_ignores=[]), str(app_path), "exec"),
+        namespace,
+    )
     return namespace[helper.name]
 
 
-def test_ui_backtest_helper_runs_supported_spot_and_replaces_report(make_synthetic_candles):
+def test_ui_backtest_helper_runs_supported_spot_and_replaces_report(
+    make_synthetic_candles,
+):
     helper = _load_ui_backtest_helper()
     state = {"backtest_report": object()}
     candles = make_synthetic_candles(periods=250, freq="1h", base_price=100.0)
@@ -199,10 +233,16 @@ def test_ui_backtest_helper_rejection_discards_previous_metrics(config, message)
 def test_ui_sharpe_formatter_distinguishes_na_from_real_zero():
     app_path = Path(__file__).parents[2] / "src" / "app.py"
     module = ast.parse(app_path.read_text(encoding="utf-8"), filename=str(app_path))
-    helper = next(node for node in module.body if isinstance(node, ast.FunctionDef)
-                  and node.name == "_format_sharpe_for_ui")
+    helper = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_format_sharpe_for_ui"
+    )
     namespace = {}
-    exec(compile(ast.Module(body=[helper], type_ignores=[]), str(app_path), "exec"), namespace)
+    exec(
+        compile(ast.Module(body=[helper], type_ignores=[]), str(app_path), "exec"),
+        namespace,
+    )
     assert namespace[helper.name](None) == "N/A"
     assert namespace[helper.name](0.0) == "0.00"
 
@@ -210,9 +250,13 @@ def test_ui_sharpe_formatter_distinguishes_na_from_real_zero():
 def test_runner_direct_dataframe_remains_unknown_and_sharpe_na(make_synthetic_candles):
     candles = make_synthetic_candles(periods=250, freq="1h")
     candles.attrs["_controlled_provenance"] = DatasetProvenance(
-        status="CONTROLLED_INGESTION", provider="BINANCE_PUBLIC_SPOT_REST",
-        instrument_type="CRYPTO_SPOT", calendar="24_7", interval="1h",
-        temporal_validation="VALID", content_sha256="arbitrary",
+        status="CONTROLLED_INGESTION",
+        provider="BINANCE_PUBLIC_SPOT_REST",
+        instrument_type="CRYPTO_SPOT",
+        calendar="24_7",
+        interval="1h",
+        temporal_validation="VALID",
+        content_sha256="arbitrary",
     )
     report = BacktestRunner().run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=200)
     assert report.data_provenance.status == "UNKNOWN"
@@ -227,11 +271,22 @@ def test_runner_uses_verified_persisted_calendar_for_annualization(
     raw = []
     for _, row in candles.iterrows():
         opened = int(row["timestamp"].value // 1_000_000)
-        raw.append([
-            opened, str(row["open"]), str(row["high"]), str(row["low"]),
-            str(row["close"]), str(row["volume"]), opened + 3_600_000 - 1,
-            "0", 1, "0", "0", "0",
-        ])
+        raw.append(
+            [
+                opened,
+                str(row["open"]),
+                str(row["high"]),
+                str(row["low"]),
+                str(row["close"]),
+                str(row["volume"]),
+                opened + 3_600_000 - 1,
+                "0",
+                1,
+                "0",
+                "0",
+                "0",
+            ]
+        )
     loader = HistoricalDataLoader(request_delay=0.0)
     monkeypatch.setattr(loader, "_fetch_chunk_with_retry", lambda **kwargs: raw)
     store = ParquetStore(base_dir=tmp_path / "verified")
@@ -246,7 +301,9 @@ def test_runner_uses_verified_persisted_calendar_for_annualization(
         observed_periods.append(kwargs.get("periods_per_year"))
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(BacktestMetricsCalculator, "calculate_metrics", staticmethod(capture_metrics))
+    monkeypatch.setattr(
+        BacktestMetricsCalculator, "calculate_metrics", staticmethod(capture_metrics)
+    )
     report = BacktestRunner(
         config=BacktestConfig(min_quant_score=40.0), dataset_manager=manager
     ).run_backtest("BTCUSDT", "1h", warmup_bars=200)
@@ -273,7 +330,9 @@ def test_runner_rejects_invalid_timestamps_before_indicators_and_signals(
     source = bars.copy(deep=True)
     store = ParquetStore(base_dir=tmp_path / "invalid_chronology")
     runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
-    runner.indicators.calculate_all = Mock(side_effect=AssertionError("Indicadores ejecutados"))
+    runner.indicators.calculate_all = Mock(
+        side_effect=AssertionError("Indicadores ejecutados")
+    )
     runner.signal_engine.evaluate = Mock(side_effect=AssertionError("Señal generada"))
     runner.engine.run = Mock(side_effect=AssertionError("Operaciones ejecutadas"))
 
@@ -293,9 +352,11 @@ def test_runner_rejects_future_row_before_ema_can_be_contaminated(
     store = ParquetStore(base_dir=tmp_path / "future_first")
     runner = BacktestRunner(dataset_manager=HistoricalDatasetManager(store=store))
     valid_ema = runner.indicators.calculate_all(chronological.copy()).iloc[40]["ema_50"]
-    contaminated_ema = runner.indicators.calculate_all(future_first.copy()).sort_values(
-        "timestamp"
-    ).iloc[40]["ema_50"]
+    contaminated_ema = (
+        runner.indicators.calculate_all(future_first.copy())
+        .sort_values("timestamp")
+        .iloc[40]["ema_50"]
+    )
     assert valid_ema != pytest.approx(contaminated_ema)
     runner.indicators.calculate_all = Mock(side_effect=AssertionError("EMA calculada"))
 
@@ -305,7 +366,7 @@ def test_runner_rejects_future_row_before_ema_can_be_contaminated(
 
 
 def test_ui_backtest_helper_clears_old_report_for_invalid_chronology(
-    make_synthetic_candles
+    make_synthetic_candles,
 ):
     helper = _load_ui_backtest_helper()
     state = {"backtest_report": object()}
@@ -365,12 +426,17 @@ def test_requested_short_warmup_respects_component_history(
     runner.engine.run = Mock(return_value=([], []))
 
     runner.run_backtest(
-        "BTCUSDT", "1h", df=candles, warmup_bars=1,
+        "BTCUSDT",
+        "1h",
+        df=candles,
+        warmup_bars=1,
         predictive_mode=predictive_mode,
     )
 
     signals = runner.engine.run.call_args.kwargs["signals"]
-    assert signals[0].candle_timestamp == candles.iloc[expected_first_index]["timestamp"]
+    assert (
+        signals[0].candle_timestamp == candles.iloc[expected_first_index]["timestamp"]
+    )
     assert len(signals) == len(candles) - expected_first_index
 
 
@@ -383,7 +449,9 @@ def test_injected_predictive_history_requirement_is_respected(
     runner.predictive_engine.min_history_bars = 45
     runner.engine.run = Mock(return_value=([], []))
 
-    runner.run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=1, predictive_mode=True)
+    runner.run_backtest(
+        "BTCUSDT", "1h", df=candles, warmup_bars=1, predictive_mode=True
+    )
 
     signals = runner.engine.run.call_args.kwargs["signals"]
     assert len(signals) == 2
@@ -393,4 +461,6 @@ def test_injected_predictive_history_requirement_is_respected(
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "20"])
 def test_invalid_requested_warmup_is_rejected(value):
     with pytest.raises(BacktestValidationError, match="warmup_bars"):
-        BacktestRunner().run_backtest("BTCUSDT", "1h", df=pd.DataFrame(), warmup_bars=value)
+        BacktestRunner().run_backtest(
+            "BTCUSDT", "1h", df=pd.DataFrame(), warmup_bars=value
+        )

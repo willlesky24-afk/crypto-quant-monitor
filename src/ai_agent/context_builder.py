@@ -42,7 +42,10 @@ class ContextBuilder:
 
         entry = meta["entry_price"] if "entry_price" in meta else signal_event.price
         levels = RiskEngine().calculate_levels(
-            entry, signal_event.stop_loss, signal_event.take_profit, signal_event.direction
+            entry,
+            signal_event.stop_loss,
+            signal_event.take_profit,
+            signal_event.direction,
         )
         reported_ratio = meta.get("risk_reward_ratio")
         if levels["reason"] is None and reported_ratio is not None:
@@ -53,16 +56,27 @@ class ContextBuilder:
             if not math.isfinite(reported) or not math.isclose(
                 reported, levels["gross_risk_reward"], rel_tol=1e-6, abs_tol=0.005
             ):
-                levels = {**levels, "reason": "R:R reportado no coincide con niveles efectivos."}
+                levels = {
+                    **levels,
+                    "reason": "R:R reportado no coincide con niveles efectivos.",
+                }
 
         if levels["reason"] is None and meta.get("signal_status") in {
-            "NO DISPONIBLE", "DESCARTADA", "ESPERANDO CONFIRMACIÓN"
+            "NO DISPONIBLE",
+            "DESCARTADA",
+            "ESPERANDO CONFIRMACIÓN",
         }:
-            levels = {**levels, "reason": "El estado de señal no autoriza niveles operativos."}
+            levels = {
+                **levels,
+                "reason": "El estado de señal no autoriza niveles operativos.",
+            }
 
         if levels["reason"] is not None:
             meta["risk_validation_error"] = levels["reason"]
-            if meta.get("signal_status") not in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}:
+            if meta.get("signal_status") not in {
+                "ESPERANDO CONFIRMACIÓN",
+                "DESCARTADA",
+            }:
                 meta["signal_status"] = "NO DISPONIBLE"
             meta["entry_confirmed"] = False
             meta["entry_price"] = None
@@ -88,7 +102,9 @@ class ContextBuilder:
             warnings_raw = market_report.get("decision", {}).get("warnings", [])
 
         signal_info = SignalInfo(
-            action="WAIT" if levels["reason"] is not None or unconfirmed else signal_event.action,
+            action="WAIT"
+            if levels["reason"] is not None or unconfirmed
+            else signal_event.action,
             direction=signal_event.direction,
             confidence=float(signal_event.confidence),
             reasoning=str(signal_event.reasoning),
@@ -116,8 +132,12 @@ class ContextBuilder:
             risk_ratio=risk_ratio,
             risk_category=risk_cat,
             atr=float(atr_val) if atr_val is not None else None,
-            tp_multiplier=float(meta["tp_multiplier"]) if "tp_multiplier" in meta and meta["tp_multiplier"] is not None else None,
-            sl_multiplier=float(meta["sl_multiplier"]) if "sl_multiplier" in meta and meta["sl_multiplier"] is not None else None,
+            tp_multiplier=float(meta["tp_multiplier"])
+            if "tp_multiplier" in meta and meta["tp_multiplier"] is not None
+            else None,
+            sl_multiplier=float(meta["sl_multiplier"])
+            if "sl_multiplier" in meta and meta["sl_multiplier"] is not None
+            else None,
         )
 
         # 3. Volume Profile Snapshot
@@ -126,7 +146,11 @@ class ContextBuilder:
             if key in meta:
                 vol_prof[key] = meta[key]
 
-        if market_report and "profile" in market_report and isinstance(market_report["profile"], dict):
+        if (
+            market_report
+            and "profile" in market_report
+            and isinstance(market_report["profile"], dict)
+        ):
             for k, v in market_report["profile"].items():
                 if k not in vol_prof:
                     vol_prof[k] = v
@@ -140,7 +164,14 @@ class ContextBuilder:
                     tech_indicators[section] = val
 
         for k, v in meta.items():
-            if k in ("rsi", "ema_50", "ema_200", "p_continuation", "p_reversal", "market_state"):
+            if k in (
+                "rsi",
+                "ema_50",
+                "ema_200",
+                "p_continuation",
+                "p_reversal",
+                "market_state",
+            ):
                 tech_indicators[k] = v
 
         return MarketContext(

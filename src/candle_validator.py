@@ -77,7 +77,9 @@ class CandleValidator:
         required_cols = {"timestamp", "open", "high", "low", "close", "volume"}
         missing_cols = required_cols - set(df.columns)
         if missing_cols:
-            raise ValueError(f"Faltan columnas requeridas en el DataFrame: {sorted(missing_cols)}")
+            raise ValueError(
+                f"Faltan columnas requeridas en el DataFrame: {sorted(missing_cols)}"
+            )
 
         data = df.copy()
         data["timestamp"] = pd.to_datetime(data["timestamp"], utc=True)
@@ -93,9 +95,13 @@ class CandleValidator:
         if nan_mask.any():
             nan_count = int(nan_mask.sum())
             report.ohlcv_anomalies_count += nan_count
-            report.details.append(f"{nan_count} filas contienen valores NaN o no numéricos.")
+            report.details.append(
+                f"{nan_count} filas contienen valores NaN o no numéricos."
+            )
             if strict:
-                raise ValidationError(f"Dataset contiene {nan_count} filas con valores NaN.")
+                raise ValidationError(
+                    f"Dataset contiene {nan_count} filas con valores NaN."
+                )
             if repair:
                 data = data[~nan_mask].copy()
 
@@ -105,9 +111,13 @@ class CandleValidator:
 
         if dup_count > 0:
             report.duplicates_dropped = dup_count
-            report.details.append(f"{dup_count} velas duplicadas detectadas y descartadas.")
+            report.details.append(
+                f"{dup_count} velas duplicadas detectadas y descartadas."
+            )
             if strict:
-                raise ValidationError(f"Dataset contiene {dup_count} marcas de tiempo duplicadas.")
+                raise ValidationError(
+                    f"Dataset contiene {dup_count} marcas de tiempo duplicadas."
+                )
             if repair:
                 data = data[~dup_mask].copy()
 
@@ -139,8 +149,12 @@ class CandleValidator:
                     )
                 if repair:
                     # Sanitize bounds
-                    data["high"] = np.maximum(data["high"], np.maximum(data["open"], data["close"]))
-                    data["low"] = np.minimum(data["low"], np.minimum(data["open"], data["close"]))
+                    data["high"] = np.maximum(
+                        data["high"], np.maximum(data["open"], data["close"])
+                    )
+                    data["low"] = np.minimum(
+                        data["low"], np.minimum(data["open"], data["close"])
+                    )
                     data["volume"] = np.maximum(data["volume"], 0.0)
 
         # 4. Gap Detection

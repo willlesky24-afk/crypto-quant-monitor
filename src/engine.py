@@ -41,12 +41,7 @@ except ImportError:  # Streamlit execution with ``src`` on sys.path.
 
 
 class MarketEngine:
-
-    def analyze(
-        self,
-        df: pd.DataFrame,
-        volume_profile: dict = None
-    ):
+    def analyze(self, df: pd.DataFrame, volume_profile: dict = None):
 
         latest = df.iloc[-1]
 
@@ -59,9 +54,7 @@ class MarketEngine:
         ema50 = float(latest["ema_50"])
         ema200 = float(latest["ema_200"])
 
-
         analysis = {}
-
 
         # =========================
         # Tendencia
@@ -76,9 +69,7 @@ class MarketEngine:
         else:
             trend = TREND_SIDEWAYS
 
-
         analysis["trend"] = trend
-
 
         # =========================
         # Momentum RSI
@@ -96,18 +87,13 @@ class MarketEngine:
         else:
             momentum = MOMENTUM_BEARISH_PRESSURE
 
-
         analysis["momentum"] = momentum
-
 
         # =========================
         # Volatilidad
         # =========================
 
-        atr_percent = (
-            atr / price
-        ) * 100
-
+        atr_percent = (atr / price) * 100
 
         if atr_percent > 2:
             volatility = VOLATILITY_HIGH
@@ -118,9 +104,7 @@ class MarketEngine:
         else:
             volatility = VOLATILITY_LOW
 
-
         analysis["volatility"] = volatility
-
 
         # =========================
         # Volumen
@@ -132,9 +116,7 @@ class MarketEngine:
         else:
             volume_state = VOLUME_BELOW_AVERAGE
 
-
         analysis["volume"] = volume_state
-
 
         # =========================
         # Volume Profile
@@ -142,37 +124,25 @@ class MarketEngine:
 
         profile_state = PROFILE_NO_DATA
 
-
         if volume_profile:
-
             poc = volume_profile["poc"]
             vah = volume_profile["vah"]
             val = volume_profile["val"]
 
-
             if price > vah:
-                profile_state = (
-                    PROFILE_ABOVE_VALUE_AREA
-                )
+                profile_state = PROFILE_ABOVE_VALUE_AREA
 
             elif price < val:
-                profile_state = (
-                    PROFILE_BELOW_VALUE_AREA
-                )
+                profile_state = PROFILE_BELOW_VALUE_AREA
 
             else:
-                profile_state = (
-                    PROFILE_INSIDE_VALUE_AREA
-                )
-
+                profile_state = PROFILE_INSIDE_VALUE_AREA
 
             analysis["poc"] = poc
             analysis["vah"] = vah
             analysis["val"] = val
 
-
         analysis["profile"] = profile_state
-
 
         # =========================
         # Score
@@ -180,13 +150,11 @@ class MarketEngine:
 
         score = 0
 
-
         if trend == TREND_BULLISH:
             score += 2
 
         elif trend == TREND_BEARISH:
             score -= 2
-
 
         if rsi >= 50:
             score += 1
@@ -194,56 +162,34 @@ class MarketEngine:
         elif rsi < 30:
             score -= 1
 
-
         if volume > avg_volume:
             score += 1
-
 
         if profile_state == PROFILE_INSIDE_VALUE_AREA:
             score += 1
 
-
         analysis["score"] = score
-
 
         # =========================
         # Interpretación
         # =========================
 
         if score >= 4:
-
-            context = (
-                "Alta confluencia, "
-                "requiere confirmación"
-            )
+            context = "Alta confluencia, requiere confirmación"
 
         elif score >= 2:
-
-            context = (
-                "Contexto interesante, "
-                "esperar confirmación"
-            )
+            context = "Contexto interesante, esperar confirmación"
 
         elif score >= 0:
-
-            context = (
-                "Contexto neutral"
-            )
+            context = "Contexto neutral"
 
         else:
-
-            context = (
-                "Contexto débil"
-            )
-
+            context = "Contexto débil"
 
         analysis["market_context"] = context
-
 
         analysis["price"] = round(price, 2)
         analysis["rsi"] = round(rsi, 2)
         analysis["atr"] = round(atr, 2)
 
-
         return analysis
-

@@ -20,13 +20,23 @@ def main() -> int:
         description="Crypto Quant Monitor — Operator AI Copilot Terminal Interface",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--db-path", default="data/market_contexts.db", help="Path to SQLite context database")
-    parser.add_argument("--provider", default=None, help="Override AI provider (gemini, openai, ollama, mock)")
+    parser.add_argument(
+        "--db-path",
+        default="data/market_contexts.db",
+        help="Path to SQLite context database",
+    )
+    parser.add_argument(
+        "--provider",
+        default=None,
+        help="Override AI provider (gemini, openai, ollama, mock)",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # Status command
-    status_parser = subparsers.add_parser("status", help="Inspect current market status for a symbol")
+    status_parser = subparsers.add_parser(
+        "status", help="Inspect current market status for a symbol"
+    )
     status_parser.add_argument("--symbol", default="BTCUSDT", help="Symbol to inspect")
     status_parser.add_argument("--interval", default="1h", help="Timeframe interval")
 
@@ -37,12 +47,16 @@ def main() -> int:
     ask_parser.add_argument("--interval", default="1h", help="Timeframe interval")
 
     # Report command
-    report_parser = subparsers.add_parser("report", help="Generate institutional market report")
+    report_parser = subparsers.add_parser(
+        "report", help="Generate institutional market report"
+    )
     report_parser.add_argument("--symbol", default="BTCUSDT", help="Symbol context")
     report_parser.add_argument("--interval", default="1h", help="Timeframe interval")
 
     # REPL command
-    repl_parser = subparsers.add_parser("repl", help="Start interactive conversational session")
+    repl_parser = subparsers.add_parser(
+        "repl", help="Start interactive conversational session"
+    )
     repl_parser.add_argument("--symbol", default="BTCUSDT", help="Initial symbol")
     repl_parser.add_argument("--interval", default="1h", help="Initial timeframe")
 

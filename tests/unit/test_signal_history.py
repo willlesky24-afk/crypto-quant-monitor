@@ -106,4 +106,3 @@ def test_history_rejects_database_and_database_name_together(tmp_path):
             raise AssertionError("Debe rechazar dos fuentes de base simultáneas")
     finally:
         database.close()
-

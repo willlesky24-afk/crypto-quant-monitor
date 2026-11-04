@@ -98,19 +98,27 @@ def test_streamlit_reports_registered_signal_when_every_channel_fails(
         status="ACTIVADA",
         entry_confirmed=True,
     )
-    monkeypatch.setattr(MarketScanner, "scan_market", lambda self, *args, **kwargs: [candidate])
-    send_mock = MagicMock(return_value=NotificationResult(
-        success=False,
-        channel=NotificationChannelType.DISCORD,
-        error_message="simulated channel failure",
-        event_id="test-only",
-    ))
+    monkeypatch.setattr(
+        MarketScanner, "scan_market", lambda self, *args, **kwargs: [candidate]
+    )
+    send_mock = MagicMock(
+        return_value=NotificationResult(
+            success=False,
+            channel=NotificationChannelType.DISCORD,
+            error_message="simulated channel failure",
+            event_id="test-only",
+        )
+    )
     monkeypatch.setattr(DiscordWebhookChannel, "send", send_mock)
 
     app_path = Path(__file__).resolve().parents[2] / "src" / "app.py"
     app = AppTest.from_file(str(app_path), default_timeout=30).run()
     assert not app.exception
-    next(button for button in app.button if button.label == "🚀 Escanear Mercado y Enviar Alertas Reales").click()
+    next(
+        button
+        for button in app.button
+        if button.label == "🚀 Escanear Mercado y Enviar Alertas Reales"
+    ).click()
     app.run()
 
     assert not app.exception
@@ -119,7 +127,9 @@ def test_streamlit_reports_registered_signal_when_every_channel_fails(
         "pero ningún canal confirmó la aceptación del envío" in warning.value
         for warning in app.warning
     )
-    alerts = AlertOutcomeTracker(tmp_path / "data" / "dispatched_alerts.db").get_all_alerts()
+    alerts = AlertOutcomeTracker(
+        tmp_path / "data" / "dispatched_alerts.db"
+    ).get_all_alerts()
     assert len(alerts) == 1 and alerts[0]["status"] == "OPEN"
     assert any(
         "OPEN indica seguimiento de mercado, no envío confirmado" in caption.value

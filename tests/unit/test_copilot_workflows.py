@@ -13,7 +13,12 @@ from src.operator_memory.sqlite_memory import SQLiteOperatorMemory
 from src.operator_service.interfaces import InMemoryMarketContextProvider
 
 
-def _create_context(symbol: str = "BTCUSDT", price: float = 65000.0, score: float = 80.0, pred: float = 0.8) -> MarketContext:
+def _create_context(
+    symbol: str = "BTCUSDT",
+    price: float = 65000.0,
+    score: float = 80.0,
+    pred: float = 0.8,
+) -> MarketContext:
     return MarketContext(
         timestamp=pd.Timestamp("2026-09-20 12:00:00", tz="UTC"),
         symbol=symbol,
@@ -50,8 +55,12 @@ async def test_copilot_multi_asset_inquiries():
     assistant = OperatorAssistant(context_provider=provider)
 
     res_btc = await assistant.ask(OperatorQuery(query="Analyze BTC", symbol="BTCUSDT"))
-    res_eth = await assistant.ask(OperatorQuery(query="What about ETH?", symbol="ETHUSDT"))
-    res_sol = await assistant.ask(OperatorQuery(query="Status of SOLUSDT", symbol="SOLUSDT"))
+    res_eth = await assistant.ask(
+        OperatorQuery(query="What about ETH?", symbol="ETHUSDT")
+    )
+    res_sol = await assistant.ask(
+        OperatorQuery(query="Status of SOLUSDT", symbol="SOLUSDT")
+    )
 
     assert res_btc.symbol == "BTCUSDT"
     assert res_eth.symbol == "ETHUSDT"
@@ -62,8 +71,18 @@ async def test_copilot_multi_asset_inquiries():
 async def test_memory_multi_operator_isolation():
     mem = SQLiteOperatorMemory(db_path=":memory:")
 
-    await mem.add_entry(entry_type="note", symbol="BTCUSDT", content="Operator A Note", operator_id="op_A")
-    await mem.add_entry(entry_type="note", symbol="BTCUSDT", content="Operator B Note", operator_id="op_B")
+    await mem.add_entry(
+        entry_type="note",
+        symbol="BTCUSDT",
+        content="Operator A Note",
+        operator_id="op_A",
+    )
+    await mem.add_entry(
+        entry_type="note",
+        symbol="BTCUSDT",
+        content="Operator B Note",
+        operator_id="op_B",
+    )
 
     a_notes = await mem.get_recent_entries(operator_id="op_A")
     b_notes = await mem.get_recent_entries(operator_id="op_B")

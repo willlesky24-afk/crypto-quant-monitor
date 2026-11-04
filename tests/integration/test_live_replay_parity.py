@@ -24,18 +24,30 @@ from src.streaming.websocket_client import BinanceWebSocketClient
 def _parity_calibrations():
     return {
         regime.value: OptimizedParameters(
-            regime=regime.value, volatility_state="NORMAL",
-            atr_tp_multiplier=4.0, atr_sl_multiplier=2.0,
-            expected_rr=2.0, sample_size=20, confidence=0.8,
-            validation_period={}, calibration_state="AVAILABLE",
+            regime=regime.value,
+            volatility_state="NORMAL",
+            atr_tp_multiplier=4.0,
+            atr_sl_multiplier=2.0,
+            expected_rr=2.0,
+            sample_size=20,
+            confidence=0.8,
+            validation_period={},
+            calibration_state="AVAILABLE",
             excursion_policy_version=EXCURSION_POLICY_VERSION,
-        ) for regime in MarketRegime
+        )
+        for regime in MarketRegime
     }
 
 
-@pytest.mark.parametrize("required, expected", [(False, (3.0, 1.5)), (True, (4.0, 2.0))])
-def test_last_closed_bar_parity_for_explicit_calibration_intent(make_synthetic_candles, required, expected):
-    candles = make_synthetic_candles(start="2025-01-01", periods=225, freq="1h", base_price=50000.0)
+@pytest.mark.parametrize(
+    "required, expected", [(False, (3.0, 1.5)), (True, (4.0, 2.0))]
+)
+def test_last_closed_bar_parity_for_explicit_calibration_intent(
+    make_synthetic_candles, required, expected
+):
+    candles = make_synthetic_candles(
+        start="2025-01-01", periods=225, freq="1h", base_price=50000.0
+    )
     params = _parity_calibrations() if required else None
     runner = BacktestRunner(config=BacktestConfig(), predictive_mode=True)
     evaluated = []
@@ -48,22 +60,33 @@ def test_last_closed_bar_parity_for_explicit_calibration_intent(make_synthetic_c
 
     runner.decision_engine.evaluate = capture
     report = runner.run_backtest(
-        df=candles, predictive_mode=True, calibrated_params=params,
-        calibration_required=required, warmup_bars=200,
+        df=candles,
+        predictive_mode=True,
+        calibrated_params=params,
+        calibration_required=required,
+        warmup_bars=200,
     )
     assert report.calibration_state == ("AVAILABLE" if required else "NOT_REQUESTED")
     assert evaluated
     live = LiveExecutionEngine(
-        "BTCUSDT", "1h", calibrated_params=params,
-        calibration_required=required, warm_up_bars=200,
+        "BTCUSDT",
+        "1h",
+        calibrated_params=params,
+        calibration_required=required,
+        warm_up_bars=200,
     )
     last = candles.iloc[-1]
     event = KlineEvent(
-        symbol="BTCUSDT", interval="1h",
+        symbol="BTCUSDT",
+        interval="1h",
         start_time=pd.Timestamp(last["timestamp"]),
         close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
-        open=float(last["open"]), high=float(last["high"]), low=float(last["low"]),
-        close=float(last["close"]), volume=float(last["volume"]), is_closed=True,
+        open=float(last["open"]),
+        high=float(last["high"]),
+        low=float(last["low"]),
+        close=float(last["close"]),
+        volume=float(last["volume"]),
+        is_closed=True,
     )
     signal, decision, notifications = live.on_candle_closed(candles, event)
     assert signal is not None and decision is not None
@@ -73,14 +96,23 @@ def test_last_closed_bar_parity_for_explicit_calibration_intent(make_synthetic_c
     assert decision.direction == evaluated[-1].direction
 
 
-def test_live_and_replay_reject_unavailable_calibration_without_fallback(make_synthetic_candles):
-    candles = make_synthetic_candles(start="2025-01-01", periods=225, freq="1h", base_price=50000.0)
+def test_live_and_replay_reject_unavailable_calibration_without_fallback(
+    make_synthetic_candles,
+):
+    candles = make_synthetic_candles(
+        start="2025-01-01", periods=225, freq="1h", base_price=50000.0
+    )
     with pytest.raises(OptimizationUnavailableError):
         BacktestRunner(predictive_mode=True).run_backtest(
-            df=candles, predictive_mode=True, calibrated_params={}, calibration_required=True
+            df=candles,
+            predictive_mode=True,
+            calibrated_params={},
+            calibration_required=True,
         )
     with pytest.raises(OptimizationUnavailableError):
-        LiveExecutionEngine("BTCUSDT", "1h", calibrated_params={}, calibration_required=True)
+        LiveExecutionEngine(
+            "BTCUSDT", "1h", calibrated_params={}, calibration_required=True
+        )
 
 
 def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
@@ -100,15 +132,22 @@ def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
     - quant scores
     """
     # 1. Generate 225 deterministic synthetic candles
-    candles = make_synthetic_candles(start="2025-01-01", periods=225, freq="1h", base_price=50000.0)
+    candles = make_synthetic_candles(
+        start="2025-01-01", periods=225, freq="1h", base_price=50000.0
+    )
 
     # 2. Run Backtest Mode
     cfg = BacktestConfig(initial_capital=10_000.0)
     runner = BacktestRunner(config=cfg, predictive_mode=True)
-    report = runner.run_backtest(df=candles, symbol="BTCUSDT", interval="1h", warmup_bars=200, predictive_mode=True)
+    report = runner.run_backtest(
+        df=candles,
+        symbol="BTCUSDT",
+        interval="1h",
+        warmup_bars=200,
+        predictive_mode=True,
+    )
     assert report is not None
     assert report.symbol == "BTCUSDT"
-
 
     # Find the signals generated by BacktestRunner
     # BacktestRunner signals are generated from index 200 to 224 (total 25 signals)
@@ -128,7 +167,9 @@ def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
         intel = runner.intelligence.evaluate(analysis)
         score = runner.quant_score.calculate(analysis, signal, risk)
         regime_res = runner.regime_classifier.classify(sub_df)
-        pred_res = runner.predictive_engine.evaluate(sub_df, current_regime_res=regime_res)
+        pred_res = runner.predictive_engine.evaluate(
+            sub_df, current_regime_res=regime_res
+        )
         decision = runner.decision_engine.evaluate(
             signal=signal,
             risk=risk,
@@ -139,15 +180,17 @@ def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
             predictive_mode=True,
         )
         last_b = sub_df.iloc[-1]
-        bt_signals.append({
-            "timestamp": last_b["timestamp"],
-            "price": float(last_b["close"]),
-            "decision": decision.decision,
-            "direction": decision.direction,
-            "confidence": float(decision.confidence),
-            "quant_score": float(score["score"]),
-            "regime": regime_res.regime.value,
-        })
+        bt_signals.append(
+            {
+                "timestamp": last_b["timestamp"],
+                "price": float(last_b["close"]),
+                "decision": decision.decision,
+                "direction": decision.direction,
+                "confidence": float(decision.confidence),
+                "quant_score": float(score["score"]),
+                "regime": regime_res.regime.value,
+            }
+        )
 
     # 3. Run Live Replay Mode
     aggregator = CandleAggregator(symbol="BTCUSDT", interval="1h", max_bars=300)
@@ -204,15 +247,21 @@ def test_live_replay_parity_against_backtest_runner(make_synthetic_candles):
         else:
             assert live_s.direction == "SIN OPERACIÓN"
         # Numerical confidence parity
-        assert abs(live_s.confidence - bt_s["confidence"]) < 1e-4, f"Bar {i}: confidence mismatch"
+        assert abs(live_s.confidence - bt_s["confidence"]) < 1e-4, (
+            f"Bar {i}: confidence mismatch"
+        )
         # Quant score parity
-        assert abs(live_s.quant_score - bt_s["quant_score"]) < 1e-4, f"Bar {i}: quant_score mismatch"
+        assert abs(live_s.quant_score - bt_s["quant_score"]) < 1e-4, (
+            f"Bar {i}: quant_score mismatch"
+        )
         # Market regime parity
         assert live_s.regime == bt_s["regime"], f"Bar {i}: regime mismatch"
 
 
 @patch("requests.post")
-def test_end_to_end_streaming_and_notification_pipeline(mock_post, make_synthetic_candles):
+def test_end_to_end_streaming_and_notification_pipeline(
+    mock_post, make_synthetic_candles
+):
     """End-to-End pipeline integration test:
 
     WebSocket Kline Event
@@ -276,7 +325,9 @@ def test_end_to_end_streaming_and_notification_pipeline(mock_post, make_syntheti
     engine.attach_aggregator(aggregator)
 
     # Seed with 210 historical bars
-    historical_candles = make_synthetic_candles(start="2025-01-01", periods=210, freq="1h", base_price=50000.0)
+    historical_candles = make_synthetic_candles(
+        start="2025-01-01", periods=210, freq="1h", base_price=50000.0
+    )
     aggregator.seed(historical_candles)
 
     # 4. Setup WebSocket Client

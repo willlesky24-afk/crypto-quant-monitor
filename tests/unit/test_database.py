@@ -108,4 +108,3 @@ def test_database_context_manager_closes_connection(tmp_path: Path):
         pass
     else:
         raise AssertionError("Database.__exit__ debe cerrar la conexión")
-

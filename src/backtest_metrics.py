@@ -14,8 +14,12 @@ from .backtest_models import (
 )
 
 CRYPTO_24_7_PERIODS: dict[str, int] = {
-    "1m": 525_600, "5m": 105_120, "15m": 35_040,
-    "1h": 8_760, "4h": 2_190, "1d": 365,
+    "1m": 525_600,
+    "5m": 105_120,
+    "15m": 35_040,
+    "1h": 8_760,
+    "4h": 2_190,
+    "1d": 365,
 }
 
 # Numeric comparisons of stored quote-currency values and dimensionless R.
@@ -31,15 +35,19 @@ class BacktestMetricsCalculator:
     """
 
     @staticmethod
-    def _exact_excursion_summary(trades: list[TradeResult], name: str) -> dict[str, Any]:
+    def _exact_excursion_summary(
+        trades: list[TradeResult], name: str
+    ) -> dict[str, Any]:
         """Average only independently exact observations; never impute missing values."""
         total = len(trades)
         values = []
         for trade in trades:
             value = getattr(trade, f"{name}_exact_pct", None)
             if (
-                getattr(trade, "excursion_policy_version", None) == EXCURSION_POLICY_VERSION
-                and getattr(trade, f"{name}_observability", None) == ExcursionObservability.EXACT_OHLC.value
+                getattr(trade, "excursion_policy_version", None)
+                == EXCURSION_POLICY_VERSION
+                and getattr(trade, f"{name}_observability", None)
+                == ExcursionObservability.EXACT_OHLC.value
                 and isinstance(value, (int, float))
                 and not isinstance(value, bool)
                 and math.isfinite(value)
@@ -48,9 +56,13 @@ class BacktestMetricsCalculator:
                 values.append(float(value))
         count = len(values)
         status = (
-            "NO_TRADES" if total == 0 else
-            "NONE" if count == 0 else
-            "COMPLETE" if count == total else "PARTIAL"
+            "NO_TRADES"
+            if total == 0
+            else "NONE"
+            if count == 0
+            else "COMPLETE"
+            if count == total
+            else "PARTIAL"
         )
         return {
             f"{name}_total_trades": total,
@@ -71,11 +83,20 @@ class BacktestMetricsCalculator:
         if trade.direction != "LONG" or trade.side != "LONG":
             return None
         fields = (
-            trade.entry_price, trade.exit_price, trade.size_units,
-            trade.initial_stop_price, trade.initial_risk_amount,
-            trade.gross_pnl, trade.net_pnl, trade.r_multiple, trade.net_r_multiple,
-            trade.fee_entry, trade.fee_exit, trade.funding_fees,
-            trade.notional_entry, trade.notional_exit,
+            trade.entry_price,
+            trade.exit_price,
+            trade.size_units,
+            trade.initial_stop_price,
+            trade.initial_risk_amount,
+            trade.gross_pnl,
+            trade.net_pnl,
+            trade.r_multiple,
+            trade.net_r_multiple,
+            trade.fee_entry,
+            trade.fee_exit,
+            trade.funding_fees,
+            trade.notional_entry,
+            trade.notional_exit,
         )
         try:
             if any(value is None or not math.isfinite(value) for value in fields):
@@ -86,15 +107,25 @@ class BacktestMetricsCalculator:
         stop = trade.initial_stop_price
         units = trade.size_units
         risk = trade.initial_risk_amount
-        if (entry <= 0 or trade.exit_price <= 0 or units <= 0 or stop <= 0
-                or stop >= entry or risk <= 0 or trade.fee_entry < 0
-                or trade.fee_exit < 0 or trade.funding_fees != 0):
+        if (
+            entry <= 0
+            or trade.exit_price <= 0
+            or units <= 0
+            or stop <= 0
+            or stop >= entry
+            or risk <= 0
+            or trade.fee_entry < 0
+            or trade.fee_exit < 0
+            or trade.funding_fees != 0
+        ):
             return None
         risk_per_unit = entry - stop
+
         def close(actual: float, expected: float) -> bool:
             return math.isclose(
                 actual, expected, rel_tol=R_VERIFY_REL_TOL, abs_tol=R_VERIFY_ABS_TOL
             )
+
         if not close(risk, units * risk_per_unit):
             return None
         if trade.initial_risk_per_unit is not None:
@@ -105,18 +136,24 @@ class BacktestMetricsCalculator:
                     return None
             except (TypeError, ValueError):
                 return None
-        if not all((
-            close(trade.notional_entry, units * entry + trade.fee_entry),
-            close(trade.notional_exit, units * trade.exit_price),
-            close(trade.gross_pnl, units * (trade.exit_price - entry)),
-            close(trade.net_pnl, trade.gross_pnl - trade.fee_entry - trade.fee_exit),
-        )):
+        if not all(
+            (
+                close(trade.notional_entry, units * entry + trade.fee_entry),
+                close(trade.notional_exit, units * trade.exit_price),
+                close(trade.gross_pnl, units * (trade.exit_price - entry)),
+                close(
+                    trade.net_pnl, trade.gross_pnl - trade.fee_entry - trade.fee_exit
+                ),
+            )
+        ):
             return None
         gross_r = trade.gross_pnl / risk
         net_r = trade.net_pnl / risk
         if not all(map(math.isfinite, (gross_r, net_r))):
             return None
-        if not close(trade.r_multiple, gross_r) or not close(trade.net_r_multiple, net_r):
+        if not close(trade.r_multiple, gross_r) or not close(
+            trade.net_r_multiple, net_r
+        ):
             return None
         return gross_r, net_r
 
@@ -124,20 +161,31 @@ class BacktestMetricsCalculator:
     def _verified_r_summary(cls, trades: list[TradeResult]) -> dict[str, Any]:
         """Equal-weight mean R per valid trade, never a capital-weighted return."""
         total = len(trades)
-        verified = [pair for trade in trades if (pair := cls._verified_spot_long_r(trade)) is not None]
+        verified = [
+            pair
+            for trade in trades
+            if (pair := cls._verified_spot_long_r(trade)) is not None
+        ]
         count = len(verified)
         if total == 0:
             status, reason = "NO_TRADES", "No se ejecutaron operaciones."
         elif count == 0:
-            status, reason = "NONE_VERIFIED", "Ninguna operación tiene riesgo inicial verificable."
+            status, reason = (
+                "NONE_VERIFIED",
+                "Ninguna operación tiene riesgo inicial verificable.",
+            )
         elif count < total:
             status = "PARTIAL"
             reason = f"Promedio solo del subconjunto verificable ({count} de {total} operaciones)."
         else:
             status, reason = "COMPLETE", None
         return {
-            "gross_expectancy_r": sum(pair[0] for pair in verified) / count if count else None,
-            "net_expectancy_r": sum(pair[1] for pair in verified) / count if count else None,
+            "gross_expectancy_r": sum(pair[0] for pair in verified) / count
+            if count
+            else None,
+            "net_expectancy_r": sum(pair[1] for pair in verified) / count
+            if count
+            else None,
             "r_verified_trades": count,
             "r_excluded_trades": total - count,
             "r_coverage_status": status,
@@ -162,14 +210,18 @@ class BacktestMetricsCalculator:
             except (TypeError, ValueError):
                 valid_initial = False
             if not valid_initial:
-                raise BacktestValidationError("El capital inicial debe ser positivo y finito.")
+                raise BacktestValidationError(
+                    "El capital inicial debe ser positivo y finito."
+                )
         for eq in equity_values:
             try:
                 valid_equity = math.isfinite(eq) and eq >= 0
             except (TypeError, ValueError):
                 valid_equity = False
             if not valid_equity:
-                raise BacktestValidationError("La equity debe ser no negativa y finita.")
+                raise BacktestValidationError(
+                    "La equity debe ser no negativa y finita."
+                )
         if not equity_values:
             return [], 0.0, 0.0, 0
 
@@ -252,7 +304,8 @@ class BacktestMetricsCalculator:
                 "total_net_pnl": 0.0,
                 "return_on_capital_pct": 0.0,
                 "sharpe_ratio": None,
-                "sharpe_unavailable_reason": sharpe_unavailable_reason or "No hay operaciones suficientes.",
+                "sharpe_unavailable_reason": sharpe_unavailable_reason
+                or "No hay operaciones suficientes.",
                 "calmar_ratio": None,
             }
 
@@ -280,7 +333,11 @@ class BacktestMetricsCalculator:
         avg_win_usd = (gross_wins / n_wins) if n_wins > 0 else 0.0
         avg_loss_usd = (gross_losses / n_losses) if n_losses > 0 else 0.0
 
-        payoff_ratio = (avg_win_usd / avg_loss_usd) if avg_loss_usd > 0 else (math.inf if avg_win_usd > 0 else 0.0)
+        payoff_ratio = (
+            (avg_win_usd / avg_loss_usd)
+            if avg_loss_usd > 0
+            else (math.inf if avg_win_usd > 0 else 0.0)
+        )
 
         # Expectancy USD: (WinRate * AvgWin) - (LossRate * AvgLoss)
         win_prob = n_wins / total_trades
@@ -305,25 +362,37 @@ class BacktestMetricsCalculator:
         total_funding_fees = sum(t.funding_fees for t in trades)
         total_fees = sum(t.fee_entry + t.fee_exit + t.funding_fees for t in trades)
         total_net_pnl = sum(t.net_pnl for t in trades)
-        return_on_capital = (total_net_pnl / initial_capital * 100.0) if initial_capital > 0 else 0.0
+        return_on_capital = (
+            (total_net_pnl / initial_capital * 100.0) if initial_capital > 0 else 0.0
+        )
 
         # Sharpe & Calmar Ratios
         sharpe_ratio: float | None = None
         sharpe_reason = sharpe_unavailable_reason
         calmar_ratio: float | None = None
 
-        if (periods_per_year is None or periods_per_year <= 0
-                or expected_interval is None or expected_interval <= pd.Timedelta(0)):
-            sharpe_reason = sharpe_reason or "Procedencia, calendario o intervalo no acreditado."
+        if (
+            periods_per_year is None
+            or periods_per_year <= 0
+            or expected_interval is None
+            or expected_interval <= pd.Timedelta(0)
+        ):
+            sharpe_reason = (
+                sharpe_reason or "Procedencia, calendario o intervalo no acreditado."
+            )
         elif len(equity_curve) < 4:
             sharpe_reason = "Se requieren al menos tres rendimientos periódicos."
         elif any(not math.isfinite(value) or value <= 0 for value in equity_values):
             sharpe_reason = "Equity no positiva o no finita para calcular rendimientos."
         else:
-            timestamps = pd.to_datetime([point.timestamp for point in equity_curve], utc=True, errors="coerce")
+            timestamps = pd.to_datetime(
+                [point.timestamp for point in equity_curve], utc=True, errors="coerce"
+            )
             steps = timestamps.to_series().diff().iloc[1:]
             if timestamps.isna().any() or not (steps == expected_interval).all():
-                sharpe_reason = "Timestamps duplicados, desordenados o frecuencia irregular."
+                sharpe_reason = (
+                    "Timestamps duplicados, desordenados o frecuencia irregular."
+                )
             else:
                 returns = pd.Series(equity_values).pct_change().iloc[1:]
                 std = float(returns.std(ddof=1))
@@ -331,7 +400,9 @@ class BacktestMetricsCalculator:
                     sharpe_reason = "Variabilidad de rendimientos insuficiente."
                 else:
                     # 0% risk-free rate, sample standard deviation, regular bars.
-                    sharpe_ratio = float((returns.mean() / std) * math.sqrt(periods_per_year))
+                    sharpe_ratio = float(
+                        (returns.mean() / std) * math.sqrt(periods_per_year)
+                    )
                     if not math.isfinite(sharpe_ratio):
                         sharpe_ratio = None
                         sharpe_reason = "Resultado Sharpe no finito."
@@ -347,12 +418,16 @@ class BacktestMetricsCalculator:
             "losing_trades": n_losses,
             "breakeven_trades": len(breakeven_trades),
             "win_rate_pct": round(win_rate, 2),
-            "profit_factor": round(profit_factor, 2) if profit_factor != math.inf else math.inf,
+            "profit_factor": round(profit_factor, 2)
+            if profit_factor != math.inf
+            else math.inf,
             "expectancy": round(expectancy_usd, 2),
             "expectancy_r": round(expectancy_r, 2),
             **verified_r,
             **exact_excursions,
-            "payoff_ratio": round(payoff_ratio, 2) if payoff_ratio != math.inf else math.inf,
+            "payoff_ratio": round(payoff_ratio, 2)
+            if payoff_ratio != math.inf
+            else math.inf,
             "max_drawdown_pct": round(max_dd_pct, 2),
             "max_drawdown_usd": round(max_dd_usd, 2),
             "max_drawdown_duration_bars": max_dd_duration,
@@ -364,7 +439,11 @@ class BacktestMetricsCalculator:
             "total_funding_fees": round(total_funding_fees, 2),
             "total_net_pnl": round(total_net_pnl, 2),
             "return_on_capital_pct": round(return_on_capital, 2),
-            "sharpe_ratio": round(sharpe_ratio, 2) if sharpe_ratio is not None else None,
+            "sharpe_ratio": round(sharpe_ratio, 2)
+            if sharpe_ratio is not None
+            else None,
             "sharpe_unavailable_reason": sharpe_reason,
-            "calmar_ratio": round(calmar_ratio, 2) if calmar_ratio is not None else None,
+            "calmar_ratio": round(calmar_ratio, 2)
+            if calmar_ratio is not None
+            else None,
         }

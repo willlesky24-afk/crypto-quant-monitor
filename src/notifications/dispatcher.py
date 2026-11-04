@@ -39,13 +39,21 @@ class CooldownManager:
         cooldown_seconds: float | None = None,
     ) -> bool:
         """Check if an alert for (symbol, timeframe, action) is currently on cooldown."""
-        key = (symbol.strip().upper(), timeframe.strip().lower(), action.strip().upper())
+        key = (
+            symbol.strip().upper(),
+            timeframe.strip().lower(),
+            action.strip().upper(),
+        )
         if key not in self._last_dispatched:
             return False
 
         current_time = now or pd.Timestamp.now("UTC")
         last_time = self._last_dispatched[key]
-        cd = cooldown_seconds if cooldown_seconds is not None else self.default_cooldown_seconds
+        cd = (
+            cooldown_seconds
+            if cooldown_seconds is not None
+            else self.default_cooldown_seconds
+        )
 
         elapsed = (current_time - last_time).total_seconds()
         return elapsed < cd
@@ -58,7 +66,11 @@ class CooldownManager:
         now: pd.Timestamp | None = None,
     ) -> None:
         """Record the timestamp of an alert dispatch."""
-        key = (symbol.strip().upper(), timeframe.strip().lower(), action.strip().upper())
+        key = (
+            symbol.strip().upper(),
+            timeframe.strip().lower(),
+            action.strip().upper(),
+        )
         self._last_dispatched[key] = now or pd.Timestamp.now("UTC")
 
     def reset(self) -> None:
@@ -81,7 +93,9 @@ class NotificationDispatcher:
         max_workers: int = 4,
     ) -> None:
         self.channels: list[BaseNotificationChannel] = list(channels or [])
-        self.cooldown_manager = cooldown_manager or CooldownManager(default_cooldown_seconds=cooldown_seconds)
+        self.cooldown_manager = cooldown_manager or CooldownManager(
+            default_cooldown_seconds=cooldown_seconds
+        )
         self.min_predictive_score = min_predictive_score
         self.min_confidence = min_confidence
         self.ignore_actions = {a.upper() for a in (ignore_actions or {"WAIT"})}
@@ -94,7 +108,9 @@ class NotificationDispatcher:
     def register_channel(self, channel: BaseNotificationChannel) -> None:
         """Register a notification delivery channel."""
         if any(c.name == channel.name for c in self.channels):
-            logger.warning(f"Channel '{channel.name}' is already registered. Updating registration.")
+            logger.warning(
+                f"Channel '{channel.name}' is already registered. Updating registration."
+            )
             self.unregister_channel(channel.name)
         self.channels.append(channel)
 
@@ -107,11 +123,17 @@ class NotificationDispatcher:
     def should_dispatch(self, payload: NotificationPayload) -> tuple[bool, str | None]:
         """Evaluate whether a payload qualifies for dispatch based on filters and cooldown."""
         # 1. Filter out ignored actions (e.g. routine WAIT states) unless marked CRITICAL
-        if payload.action.upper() in self.ignore_actions and payload.priority != NotificationPriority.CRITICAL:
+        if (
+            payload.action.upper() in self.ignore_actions
+            and payload.priority != NotificationPriority.CRITICAL
+        ):
             return False, f"Action '{payload.action}' is configured to be ignored."
 
         # 2. Check confidence and predictive score thresholds (CRITICAL and HIGH bypass score check)
-        if payload.priority not in (NotificationPriority.CRITICAL, NotificationPriority.HIGH):
+        if payload.priority not in (
+            NotificationPriority.CRITICAL,
+            NotificationPriority.HIGH,
+        ):
             if payload.predictive_score < self.min_predictive_score:
                 return (
                     False,
@@ -124,10 +146,15 @@ class NotificationDispatcher:
                 )
 
         # 3. Check anti-spam cooldown
-        if self.allow_critical_bypass and payload.priority == NotificationPriority.CRITICAL:
+        if (
+            self.allow_critical_bypass
+            and payload.priority == NotificationPriority.CRITICAL
+        ):
             return True, None
 
-        if self.cooldown_manager.is_in_cooldown(payload.symbol, payload.timeframe, payload.action):
+        if self.cooldown_manager.is_in_cooldown(
+            payload.symbol, payload.timeframe, payload.action
+        ):
             return (
                 False,
                 f"Alert for {payload.symbol} [{payload.timeframe}] {payload.action} is currently in cooldown.",
@@ -143,7 +170,10 @@ class NotificationDispatcher:
         self, payload: NotificationPayload, *, grant: object | None = None
     ) -> list[NotificationResult]:
         """Deliver only after the tracked path grants this exact dispatcher call."""
-        if payload.action.upper() in {"BUY", "SELL"} and grant is not self.__registered_dispatch_grant:
+        if (
+            payload.action.upper() in {"BUY", "SELL"}
+            and grant is not self.__registered_dispatch_grant
+        ):
             return [
                 NotificationResult(
                     success=False,
@@ -175,7 +205,10 @@ class NotificationDispatcher:
                 res = channel.send(payload)
                 results.append(res)
             except Exception as exc:
-                logger.error(f"Unexpected exception dispatching to {channel.name}: {exc}", exc_info=True)
+                logger.error(
+                    f"Unexpected exception dispatching to {channel.name}: {exc}",
+                    exc_info=True,
+                )
                 results.append(
                     NotificationResult(
                         success=False,
@@ -187,7 +220,9 @@ class NotificationDispatcher:
 
         # Record cooldown if at least one channel delivered successfully or simulated successfully
         if any(r.success for r in results):
-            self.cooldown_manager.record_dispatch(payload.symbol, payload.timeframe, payload.action)
+            self.cooldown_manager.record_dispatch(
+                payload.symbol, payload.timeframe, payload.action
+            )
 
         return results
 
@@ -240,10 +275,16 @@ class NotificationDispatcher:
             return None, []
         should_send, reason = self.should_dispatch(payload)
         if not should_send:
-            logger.info("Operational alert %s suppressed before registration: %s", signal.signal_id, reason)
+            logger.info(
+                "Operational alert %s suppressed before registration: %s",
+                signal.signal_id,
+                reason,
+            )
             return None, []
 
-        record = tracker.record_alert(signal, is_forex=is_forex, risk_reward=risk_reward)
+        record = tracker.record_alert(
+            signal, is_forex=is_forex, risk_reward=risk_reward
+        )
         if (
             record.get("risk_integrity_status") != "VALIDATED"
             or record.get("id") != signal.signal_id
@@ -258,7 +299,9 @@ class NotificationDispatcher:
             or record.get("take_profit") != payload.take_profit
             or record.get("risk_reward") != payload.risk_reward_ratio
         ):
-            raise ValueError("No se despacha una alerta sin registro operativo validado.")
+            raise ValueError(
+                "No se despacha una alerta sin registro operativo validado."
+            )
 
         payload = replace(
             payload,
@@ -269,12 +312,18 @@ class NotificationDispatcher:
                 "tracking_status": record["status"],
             },
         )
-        return record, self.__dispatch_payload(payload, grant=self.__registered_dispatch_grant)
+        return record, self.__dispatch_payload(
+            payload, grant=self.__registered_dispatch_grant
+        )
 
-    def dispatch_async(self, payload: NotificationPayload) -> Future[list[NotificationResult]]:
+    def dispatch_async(
+        self, payload: NotificationPayload
+    ) -> Future[list[NotificationResult]]:
         """Submit dispatch to a background thread pool to prevent blocking the caller."""
         if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="notif-dispatch")
+            self._executor = ThreadPoolExecutor(
+                max_workers=self.max_workers, thread_name_prefix="notif-dispatch"
+            )
         return self._executor.submit(self.dispatch, payload)
 
     def close(self) -> None:

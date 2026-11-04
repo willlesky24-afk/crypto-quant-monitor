@@ -14,6 +14,7 @@ from src.ai_providers.providers.openai import OpenAIProvider
 
 def _sample_context() -> MarketContext:
     import pandas as pd
+
     return MarketContext(
         timestamp=pd.Timestamp("2026-09-20 12:00:00", tz="UTC"),
         symbol="BTCUSDT",
@@ -22,7 +23,9 @@ def _sample_context() -> MarketContext:
         market_regime="TRENDING_BULL",
         predictive_score=0.80,
         quant_score=85.0,
-        signal=SignalInfo(action="BUY", direction="LONG", confidence=0.88, positives=("Trend",)),
+        signal=SignalInfo(
+            action="BUY", direction="LONG", confidence=0.88, positives=("Trend",)
+        ),
         risk=RiskMetrics(stop_loss=62000.0, take_profit=68000.0),
     )
 
@@ -47,7 +50,9 @@ async def test_gemini_provider_successful_request():
         "candidates": [
             {
                 "content": {
-                    "parts": [{"text": "BTC is in a strong bullish trend above support."}]
+                    "parts": [
+                        {"text": "BTC is in a strong bullish trend above support."}
+                    ]
                 }
             }
         ],
@@ -71,7 +76,11 @@ async def test_gemini_provider_multiple_images():
         "candidates": [
             {
                 "content": {
-                    "parts": [{"text": "Ambos gráficos muestran estructura alcista clara en 1H y 4H."}]
+                    "parts": [
+                        {
+                            "text": "Ambos gráficos muestran estructura alcista clara en 1H y 4H."
+                        }
+                    ]
                 }
             }
         ],
@@ -84,11 +93,21 @@ async def test_gemini_provider_multiple_images():
     with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
         metadata = {
             "images": [
-                {"bytes": b"fake_png_data_1", "mime_type": "image/png", "name": "btc_1h.png"},
-                {"bytes": b"fake_jpg_data_2", "mime_type": "image/jpeg", "name": "btc_4h.jpg"},
+                {
+                    "bytes": b"fake_png_data_1",
+                    "mime_type": "image/png",
+                    "name": "btc_1h.png",
+                },
+                {
+                    "bytes": b"fake_jpg_data_2",
+                    "mime_type": "image/jpeg",
+                    "name": "btc_4h.jpg",
+                },
             ]
         }
-        res = await provider.generate_response("Compara estos dos marcos temporales", metadata=metadata)
+        res = await provider.generate_response(
+            "Compara estos dos marcos temporales", metadata=metadata
+        )
         assert res.provider == "gemini"
         assert "Ambos gráficos muestran estructura alcista" in res.content
 
@@ -141,11 +160,7 @@ async def test_openai_provider_missing_key_fallback():
 async def test_openai_provider_successful_request():
     provider = OpenAIProvider(api_key="valid_key", model="gpt-4o-mini")
     mock_payload = {
-        "choices": [
-            {
-                "message": {"content": "OpenAI: Price is holding above POC."}
-            }
-        ],
+        "choices": [{"message": {"content": "OpenAI: Price is holding above POC."}}],
         "usage": {"total_tokens": 55},
     }
     mock_resp = MagicMock()
@@ -206,13 +221,19 @@ async def test_ollama_provider_failure():
         assert "Local Ollama daemon unreachable" in res.content
 
 
-
 @pytest.mark.anyio
 async def test_ollama_provider_legacy_interfaces():
     provider = OllamaProvider(base_url="http://localhost:11434")
-    with patch.object(provider, "generate_response", return_value=AIResponse(
-        content="Ollama mock content", provider="ollama", model="llama3", latency_ms=10.0
-    )):
+    with patch.object(
+        provider,
+        "generate_response",
+        return_value=AIResponse(
+            content="Ollama mock content",
+            provider="ollama",
+            model="llama3",
+            latency_ms=10.0,
+        ),
+    ):
         ctx = _sample_context()
         expl = await provider.generate_explanation(ctx)
         assert expl.summary == "Ollama mock content"

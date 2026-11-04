@@ -61,14 +61,20 @@ async def test_copilot_query_api_endpoint():
     set_operator_service(service)
 
     # Disable auth for test
-    set_security_config(APISecurityConfig(security_enabled=False, rate_limit_enabled=False))
+    set_security_config(
+        APISecurityConfig(security_enabled=False, rate_limit_enabled=False)
+    )
 
     app = create_app()
     client = TestClient(app)
 
     response = client.post(
         "/copilot/query",
-        json={"query": "Analyze BTCUSDT right now", "symbol": "BTCUSDT", "timeframe": "1h"},
+        json={
+            "query": "Analyze BTCUSDT right now",
+            "symbol": "BTCUSDT",
+            "timeframe": "1h",
+        },
     )
     assert response.status_code == 200
     data = response.json()
@@ -84,7 +90,9 @@ async def test_copilot_reports_endpoints():
     provider.update_context(_create_sample_context())
     service = OperatorService(context_provider=provider)
     set_operator_service(service)
-    set_security_config(APISecurityConfig(security_enabled=False, rate_limit_enabled=False))
+    set_security_config(
+        APISecurityConfig(security_enabled=False, rate_limit_enabled=False)
+    )
 
     app = create_app()
     client = TestClient(app)
@@ -114,7 +122,9 @@ async def test_copilot_anomalies_and_memory_endpoints():
     provider.update_context(_create_sample_context())
     service = OperatorService(context_provider=provider)
     set_operator_service(service)
-    set_security_config(APISecurityConfig(security_enabled=False, rate_limit_enabled=False))
+    set_security_config(
+        APISecurityConfig(security_enabled=False, rate_limit_enabled=False)
+    )
 
     app = create_app()
     client = TestClient(app)

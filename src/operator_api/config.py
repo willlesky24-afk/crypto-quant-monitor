@@ -34,7 +34,11 @@ class APISecurityConfig:
 
         rate_limit_enabled_env = os.getenv("OPERATOR_API_RATE_LIMIT_ENABLED")
         if rate_limit_enabled_env is not None:
-            rate_limit_enabled = rate_limit_enabled_env.strip().lower() in ("true", "1", "yes")
+            rate_limit_enabled = rate_limit_enabled_env.strip().lower() in (
+                "true",
+                "1",
+                "yes",
+            )
         else:
             rate_limit_enabled = False
 

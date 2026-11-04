@@ -35,7 +35,9 @@ class MarketAlert:
     reason: str
     current_value: float
     reference_value: float
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     metadata: dict[str, Any] = field(default_factory=dict)
     disclaimer: str = "OBSERVATION ONLY: Anomaly detected for human review. No automated trading action."
 

@@ -67,7 +67,9 @@ def build_strategy_config(
     **kwargs: Any,
 ) -> BacktestConfig:
     """Build a deterministic BacktestConfig from a configured strategy preset."""
-    preset = PROVEN_STRATEGIES.get(strategy_key, PROVEN_STRATEGIES["capital_preservation"])
+    preset = PROVEN_STRATEGIES.get(
+        strategy_key, PROVEN_STRATEGIES["capital_preservation"]
+    )
     return BacktestConfig(
         initial_capital=max(5.0, float(initial_capital)),
         taker_fee_pct=taker_fee_pct,

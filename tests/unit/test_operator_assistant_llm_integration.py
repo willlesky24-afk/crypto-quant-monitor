@@ -16,7 +16,9 @@ class MockLLM(BaseLLMProvider):
         self.answer_text = answer_text
         self.calls: list[str] = []
 
-    async def generate_response(self, prompt: str, metadata: dict | None = None) -> AIResponse:
+    async def generate_response(
+        self, prompt: str, metadata: dict | None = None
+    ) -> AIResponse:
         self.calls.append(prompt)
         return AIResponse(
             content=self.answer_text,
@@ -61,14 +63,18 @@ async def test_operator_assistant_llm_integration():
     ctx = _create_sample_context()
     provider.update_context(ctx)
 
-    mock_llm = MockLLM(answer_text="LLM: BTC is showing strong continuous demand above EMA 20.")
+    mock_llm = MockLLM(
+        answer_text="LLM: BTC is showing strong continuous demand above EMA 20."
+    )
     assistant = OperatorAssistant(context_provider=provider, ai_provider=mock_llm)
 
-    res = await assistant.ask(OperatorQuery(query="Analyze BTC right now", symbol="BTCUSDT"))
+    res = await assistant.ask(
+        OperatorQuery(query="Analyze BTC right now", symbol="BTCUSDT")
+    )
 
     assert len(mock_llm.calls) == 1
     assert "IMMUTABLE QUANTITATIVE SNAPSHOT" in mock_llm.calls[0]
-    assert "Query: \"Analyze BTC right now\"" in mock_llm.calls[0]
+    assert 'Query: "Analyze BTC right now"' in mock_llm.calls[0]
     assert "LLM: BTC is showing strong continuous demand" in res.answer
     assert "Provider: test-llm (test-model)" in res.answer
     assert "DECISION SUPPORT ONLY" in res.disclaimer

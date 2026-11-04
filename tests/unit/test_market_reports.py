@@ -7,7 +7,9 @@ from src.market_reports.generator import MarketReportService
 from src.market_reports.models import DailyBriefingReport, IntradayUpdateReport
 
 
-def _create_sample_context(price: float = 60000.0, score: float = 75.0, regime: str = "TRENDING_BULL") -> MarketContext:
+def _create_sample_context(
+    price: float = 60000.0, score: float = 75.0, regime: str = "TRENDING_BULL"
+) -> MarketContext:
     return MarketContext(
         timestamp=pd.Timestamp("2026-09-20 12:00:00", tz="UTC"),
         symbol="BTCUSDT",
@@ -98,7 +100,6 @@ def test_daily_briefing_with_warnings_and_no_risks():
     assert "No adverse volatility spikes detected." in b_clean.main_risks
 
 
-
 def test_intraday_update_initial_baseline():
     svc = MarketReportService()
     ctx = _create_sample_context()
@@ -116,7 +117,9 @@ def test_intraday_update_delta_calculation():
     prev_ctx = _create_sample_context(price=60000.0, score=70.0, regime="CHOPPY_RANGE")
     curr_ctx = _create_sample_context(price=61200.0, score=80.0, regime="TRENDING_BULL")
 
-    update = svc.generate_intraday_update(current_context=curr_ctx, previous_context=prev_ctx)
+    update = svc.generate_intraday_update(
+        current_context=curr_ctx, previous_context=prev_ctx
+    )
 
     assert update.price_delta_pct == 2.0  # +2.0%
     assert update.score_delta == 10.0  # +10 pts

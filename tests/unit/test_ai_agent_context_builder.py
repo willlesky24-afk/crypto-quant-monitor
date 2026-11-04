@@ -253,13 +253,22 @@ def test_context_builder_uses_central_gross_r_and_keeps_candidate_wait(
 ):
     event = SignalEvent(
         timestamp=pd.Timestamp("2026-10-12T12:00:00Z"),
-        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
-        direction=direction, confidence=0.8, predictive_score=0.7,
-        regime="TRENDING", reasoning="Fixture", price=100.0,
-        stop_loss=stop, take_profit=target,
+        symbol="BTCUSDT",
+        timeframe="1h",
+        action="BUY" if direction == "LONG" else "SELL",
+        direction=direction,
+        confidence=0.8,
+        predictive_score=0.7,
+        regime="TRENDING",
+        reasoning="Fixture",
+        price=100.0,
+        stop_loss=stop,
+        take_profit=target,
         metadata={
-            "entry_price": 100.0, "signal_status": "CANDIDATA",
-            "entry_confirmed": False, "risk_reward_ratio": 2.0,
+            "entry_price": 100.0,
+            "signal_status": "CANDIDATA",
+            "entry_confirmed": False,
+            "risk_reward_ratio": 2.0,
         },
     )
     context = ContextBuilder.build_from_signal_event(event)
@@ -290,9 +299,17 @@ def test_context_builder_invalid_plan_exposes_no_levels_or_positive_r(
 ):
     event = SignalEvent(
         timestamp=pd.Timestamp("2026-10-12T12:00:00Z"),
-        symbol="BTCUSDT", timeframe="1h", action="BUY", direction=direction,
-        confidence=0.8, predictive_score=0.7, regime="TRENDING",
-        reasoning="Fixture", price=100.0, stop_loss=stop, take_profit=target,
+        symbol="BTCUSDT",
+        timeframe="1h",
+        action="BUY",
+        direction=direction,
+        confidence=0.8,
+        predictive_score=0.7,
+        regime="TRENDING",
+        reasoning="Fixture",
+        price=100.0,
+        stop_loss=stop,
+        take_profit=target,
         metadata={
             "entry_price": entry,
             "risk_reward_ratio": reported,
@@ -307,4 +324,3 @@ def test_context_builder_invalid_plan_exposes_no_levels_or_positive_r(
     assert context.signal.action == "WAIT"
     assert context.metadata["signal_status"] == "NO DISPONIBLE"
     assert context.metadata["risk_validation_error"]
-

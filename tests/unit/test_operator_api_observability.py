@@ -29,7 +29,9 @@ from src.operator_service.service import OperatorService
 from src.operator_service.storage.sqlite_provider import SQLiteMarketContextProvider
 
 
-def _create_mock_context(symbol: str = "BTCUSDT", price: float = 65000.0) -> MarketContext:
+def _create_mock_context(
+    symbol: str = "BTCUSDT", price: float = 65000.0
+) -> MarketContext:
     return MarketContext(
         timestamp=pd.Timestamp("2026-03-30 12:00:00"),
         symbol=symbol,
@@ -182,6 +184,7 @@ class TestStructuredLogging:
             raise ValueError("Test error trace")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(
@@ -306,7 +309,9 @@ class TestObservabilityEndpoints:
 
     def test_health_ready_unhealthy_storage(self):
         class BrokenProvider(BaseMarketContextProvider):
-            async def get_latest_context(self, symbol: str, timeframe: str) -> MarketContext | None:
+            async def get_latest_context(
+                self, symbol: str, timeframe: str
+            ) -> MarketContext | None:
                 return None
 
             async def get_available_symbols(self) -> list[str]:

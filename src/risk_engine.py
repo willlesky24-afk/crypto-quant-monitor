@@ -23,89 +23,60 @@ except ImportError:  # Streamlit execution with ``src`` on sys.path.
 
 
 class RiskEngine:
-
-
     def evaluate(self, analysis, profile):
-
 
         risks = []
 
         risk_score = 0
-
 
         # ==========================
         # RSI
         # ==========================
 
         if analysis["rsi"] >= 75:
-
             risk_score += 1
 
-            risks.append(
-                "RSI elevado, movimiento extendido."
-            )
-
+            risks.append("RSI elevado, movimiento extendido.")
 
         elif analysis["rsi"] <= 25:
-
             risk_score += 1
 
-            risks.append(
-                "RSI bajo, posible agotamiento."
-            )
-
+            risks.append("RSI bajo, posible agotamiento.")
 
         # ==========================
         # Volumen
         # ==========================
 
         if analysis["volume"] != VOLUME_ABOVE_AVERAGE:
-
             risk_score += 1
 
-            risks.append(
-                "Volumen sin confirmación."
-            )
-
+            risks.append("Volumen sin confirmación.")
 
         # ==========================
         # Distancia del precio al POC
         # ==========================
 
-        distance = abs(
-            analysis["price"] - profile["poc"]
-        )
-
+        distance = abs(analysis["price"] - profile["poc"])
 
         atr = analysis["atr"]
 
-
         if distance > atr * 2:
-
             risk_score += 1
 
-            risks.append(
-                "Precio alejado del POC."
-            )
-
+            risks.append("Precio alejado del POC.")
 
         # ==========================
         # Nivel de riesgo
         # ==========================
 
         if risk_score >= 3:
-
             level = RISK_HIGH
 
         elif risk_score >= 1:
-
             level = RISK_MEDIUM
 
         else:
-
             level = RISK_LOW
-
-
 
         # ==========================
         # Ajuste de confianza
@@ -113,27 +84,12 @@ class RiskEngine:
 
         adjustment = risk_score * 10
 
-
         return {
-
-
             "level": level,
-
-
             "risk_score": risk_score,
-
-
             "adjustment": adjustment,
-
-
-            "final_confidence": max(
-                0,
-                100 - adjustment
-            ),
-
-
-            "risks": risks
-
+            "final_confidence": max(0, 100 - adjustment),
+            "risks": risks,
         }
 
     @staticmethod
@@ -168,23 +124,33 @@ class RiskEngine:
             return result
         entry, stop, target = (self._positive_finite(value) for value in values)
         if any(value is None for value in (entry, stop, target)):
-            result["reason"] = "Entrada, Stop Loss y Take Profit deben ser finitos y positivos."
+            result["reason"] = (
+                "Entrada, Stop Loss y Take Profit deben ser finitos y positivos."
+            )
             return result
 
         if direction == "LONG":
             if stop >= entry:
-                result["reason"] = "El Stop Loss LONG debe estar por debajo de la entrada."
+                result["reason"] = (
+                    "El Stop Loss LONG debe estar por debajo de la entrada."
+                )
                 return result
             if target <= entry:
-                result["reason"] = "El Take Profit LONG debe estar por encima de la entrada."
+                result["reason"] = (
+                    "El Take Profit LONG debe estar por encima de la entrada."
+                )
                 return result
             risk_distance, reward_distance = entry - stop, target - entry
         else:
             if stop <= entry:
-                result["reason"] = "El Stop Loss SHORT debe estar por encima de la entrada."
+                result["reason"] = (
+                    "El Stop Loss SHORT debe estar por encima de la entrada."
+                )
                 return result
             if target >= entry:
-                result["reason"] = "El Take Profit SHORT debe estar por debajo de la entrada."
+                result["reason"] = (
+                    "El Take Profit SHORT debe estar por debajo de la entrada."
+                )
                 return result
             risk_distance, reward_distance = stop - entry, entry - target
 
@@ -192,14 +158,16 @@ class RiskEngine:
         if not math.isfinite(ratio):
             result["reason"] = "La relación beneficio/riesgo no es finita."
             return result
-        result.update({
-            "entry_price": entry,
-            "stop_loss": stop,
-            "take_profit": target,
-            "risk_distance": risk_distance,
-            "reward_distance": reward_distance,
-            "gross_risk_reward": ratio,
-        })
+        result.update(
+            {
+                "entry_price": entry,
+                "stop_loss": stop,
+                "take_profit": target,
+                "risk_distance": risk_distance,
+                "reward_distance": reward_distance,
+                "gross_risk_reward": ratio,
+            }
+        )
         return result
 
     def plan_from_decision(
@@ -225,13 +193,20 @@ class RiskEngine:
         }
 
         if decision == DECISION_WAIT_CONFIRMATION:
-            plan.update(status="ESPERANDO CONFIRMACIÓN", reason="La decisión requiere confirmación.")
+            plan.update(
+                status="ESPERANDO CONFIRMACIÓN",
+                reason="La decisión requiere confirmación.",
+            )
             return plan
         if decision == DECISION_WEAK_CONTEXT:
-            plan.update(status="DESCARTADA", reason="El contexto no justifica una entrada.")
+            plan.update(
+                status="DESCARTADA", reason="El contexto no justifica una entrada."
+            )
             return plan
         if decision != DECISION_FAVORABLE:
-            plan["reason"] = "No se reconoce una decisión favorable para planificar niveles."
+            plan["reason"] = (
+                "No se reconoce una decisión favorable para planificar niveles."
+            )
             return plan
 
         normalized_direction = str(direction).strip().upper()
@@ -242,8 +217,15 @@ class RiskEngine:
         plan["atr"] = atr_value
         sl_factor = self._positive_finite(sl_multiplier)
         tp_factor = self._positive_finite(tp_multiplier)
-        if reference is None or atr_value is None or sl_factor is None or tp_factor is None:
-            plan["reason"] = "Faltan precio, ATR o multiplicadores válidos para calcular niveles."
+        if (
+            reference is None
+            or atr_value is None
+            or sl_factor is None
+            or tp_factor is None
+        ):
+            plan["reason"] = (
+                "Faltan precio, ATR o multiplicadores válidos para calcular niveles."
+            )
             return plan
 
         if normalized_direction == "LONG":
@@ -258,10 +240,12 @@ class RiskEngine:
             plan["reason"] = levels["reason"]
             return plan
         plan.update(levels)
-        plan.update({
-            "status": "CANDIDATA",
-            "direction": normalized_direction,
-            "methodology": "ATR de la vela analizada con multiplicadores de decisión",
-            "reason": "Entrada propuesta al precio de referencia; falta confirmación de ejecución.",
-        })
+        plan.update(
+            {
+                "status": "CANDIDATA",
+                "direction": normalized_direction,
+                "methodology": "ATR de la vela analizada con multiplicadores de decisión",
+                "reason": "Entrada propuesta al precio de referencia; falta confirmación de ejecución.",
+            }
+        )
         return plan

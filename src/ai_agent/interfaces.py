@@ -104,7 +104,9 @@ class MockAIProvider(BaseAIProvider):
         if context.risk.risk_ratio is not None:
             risk_parts.append(f"Risk/Reward ratio: {context.risk.risk_ratio:.2f}.")
 
-        risk_assessment = " ".join(risk_parts) if risk_parts else "Standard risk boundaries apply."
+        risk_assessment = (
+            " ".join(risk_parts) if risk_parts else "Standard risk boundaries apply."
+        )
 
         meta: dict[str, Any] = {
             "provider": self.name,
@@ -134,9 +136,7 @@ class MockAIProvider(BaseAIProvider):
             f"Market is currently exhibiting characteristics of {context.market_regime}. "
             f"Predictive continuation/reversal score is {context.predictive_score:.2f}."
         )
-        outlook = (
-            f"Cautious stance: {context.signal.reasoning or 'Monitoring for confirmed structure'}."
-        )
+        outlook = f"Cautious stance: {context.signal.reasoning or 'Monitoring for confirmed structure'}."
 
         key_levels: dict[str, float] = {}
         if context.volume_profile.get("poc") is not None:

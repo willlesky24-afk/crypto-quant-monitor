@@ -6,11 +6,7 @@ from src.volume_profile import VolumeProfile
 loader = BinanceDataLoader()
 
 
-df = loader.get_klines(
-    symbol="BTCUSDT",
-    interval="1h",
-    limit=200
-)
+df = loader.get_klines(symbol="BTCUSDT", interval="1h", limit=200)
 
 
 vp = VolumeProfile()

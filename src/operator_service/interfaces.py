@@ -19,7 +19,9 @@ class BaseMarketContextProvider(ABC):
     """
 
     @abstractmethod
-    async def get_latest_context(self, symbol: str, timeframe: str) -> MarketContext | None:
+    async def get_latest_context(
+        self, symbol: str, timeframe: str
+    ) -> MarketContext | None:
         """Retrieve the latest closed candle MarketContext for a given symbol and timeframe.
 
         Args:
@@ -56,7 +58,9 @@ class InMemoryMarketContextProvider(BaseMarketContextProvider):
         key = (context.symbol.strip().upper(), context.timeframe.strip().lower())
         self._contexts[key] = context
 
-    async def get_latest_context(self, symbol: str, timeframe: str) -> MarketContext | None:
+    async def get_latest_context(
+        self, symbol: str, timeframe: str
+    ) -> MarketContext | None:
         """Retrieve the latest closed candle MarketContext."""
         key = (symbol.strip().upper(), timeframe.strip().lower())
         return self._contexts.get(key)

@@ -111,11 +111,17 @@ class HistoricalDataLoader:
     ) -> pd.DataFrame | RawHistoricalBatch:
         """Downloads full paginated history for given symbol, timeframe and date range."""
         start_ms = self._to_timestamp_ms(start_time)
-        end_ms = self._to_timestamp_ms(end_time) if end_time is not None else int(time.time() * 1000)
+        end_ms = (
+            self._to_timestamp_ms(end_time)
+            if end_time is not None
+            else int(time.time() * 1000)
+        )
         interval_ms = self._interval_to_ms(interval)
 
         if start_ms > end_ms:
-            raise ValueError(f"start_time ({start_ms}) no puede ser posterior a end_time ({end_ms})")
+            raise ValueError(
+                f"start_time ({start_ms}) no puede ser posterior a end_time ({end_ms})"
+            )
 
         all_candles: list[list[Any]] = []
         page_sizes: list[int] = []
@@ -140,7 +146,11 @@ class HistoricalDataLoader:
             next_start = last_open_time + interval_ms
 
             # Termination condition: no progress or reached beyond target
-            if next_start <= current_start or next_start > end_ms or len(chunk) < self.chunk_size:
+            if (
+                next_start <= current_start
+                or next_start > end_ms
+                or len(chunk) < self.chunk_size
+            ):
                 break
 
             current_start = next_start
@@ -164,8 +174,11 @@ class HistoricalDataLoader:
                 ]
             )
             return (
-                RawHistoricalBatch(empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms)
-                if return_raw_batch else empty
+                RawHistoricalBatch(
+                    empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms
+                )
+                if return_raw_batch
+                else empty
             )
 
         # Discard open candle if not requested
@@ -193,8 +206,11 @@ class HistoricalDataLoader:
                 ]
             )
             return (
-                RawHistoricalBatch(empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms)
-                if return_raw_batch else empty
+                RawHistoricalBatch(
+                    empty, (), datetime.now(timezone.utc).isoformat(), start_ms, end_ms
+                )
+                if return_raw_batch
+                else empty
             )
 
         df = pd.DataFrame(
@@ -232,16 +248,32 @@ class HistoricalDataLoader:
         df["trades"] = df["trades"].astype(int)
 
         columns = [
-            "timestamp", "open", "high", "low", "close", "volume",
-            "close_time", "quote_volume", "trades", "taker_buy_base", "taker_buy_quote",
+            "timestamp",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "close_time",
+            "quote_volume",
+            "trades",
+            "taker_buy_base",
+            "taker_buy_quote",
         ]
         if return_raw_batch:
             return RawHistoricalBatch(
-                df[columns], tuple(page_sizes), datetime.now(timezone.utc).isoformat(),
-                start_ms, end_ms,
+                df[columns],
+                tuple(page_sizes),
+                datetime.now(timezone.utc).isoformat(),
+                start_ms,
+                end_ms,
             )
 
         # Preserve the legacy normalized result unless the raw batch was requested.
-        df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+        df = (
+            df.drop_duplicates(subset=["timestamp"])
+            .sort_values("timestamp")
+            .reset_index(drop=True)
+        )
 
         return df[columns]

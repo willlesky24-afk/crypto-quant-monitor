@@ -8,11 +8,7 @@ from src.volume_profile import VolumeProfile
 loader = BinanceDataLoader()
 
 
-df = loader.get_klines(
-    symbol="BTCUSDT",
-    interval="1h",
-    limit=200
-)
+df = loader.get_klines(symbol="BTCUSDT", interval="1h", limit=200)
 
 
 indicators = TechnicalIndicators()
@@ -27,10 +23,7 @@ profile = vp.calculate(df)
 
 engine = MarketEngine()
 
-result = engine.analyze(
-    df,
-    profile
-)
+result = engine.analyze(df, profile)
 
 
 print(result)

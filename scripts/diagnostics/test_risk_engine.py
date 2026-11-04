@@ -2,33 +2,16 @@ import _bootstrap  # noqa: F401
 
 from src.risk_engine import RiskEngine
 
-analysis = {
-
-    "rsi": 78,
-
-    "volume": "Inferior al promedio",
-
-    "price": 81000,
-
-    "atr": 400
-
-}
+analysis = {"rsi": 78, "volume": "Inferior al promedio", "price": 81000, "atr": 400}
 
 
-profile = {
-
-    "poc": 77000
-
-}
+profile = {"poc": 77000}
 
 
 engine = RiskEngine()
 
 
-result = engine.evaluate(
-    analysis,
-    profile
-)
+result = engine.evaluate(analysis, profile)
 
 
 print(result)

@@ -27,4 +27,3 @@ def test_report_imports_from_streamlit_style_src_path():
         "import sys; sys.path.insert(0, 'src'); import report; assert report.MarketReport"
     )
     assert result.returncode == 0, result.stderr
-

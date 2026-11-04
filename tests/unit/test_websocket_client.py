@@ -110,7 +110,9 @@ def test_websocket_client_listen_stream_with_mock():
     client._is_running = True
 
     async def _test_coro():
-        with patch("websockets.connect", return_value=AsyncMockWebSocket(mock_messages)):
+        with patch(
+            "websockets.connect", return_value=AsyncMockWebSocket(mock_messages)
+        ):
             await client._listen_stream()
 
     asyncio.run(_test_coro())
@@ -209,7 +211,6 @@ def test_websocket_client_background_thread_start_and_disconnect():
         assert client._thread is None
 
 
-
 def test_websocket_client_callback_errors_in_connect_disconnect_error():
     client = BinanceWebSocketClient(symbol="BTCUSDT", interval="1h", dry_run=True)
 
@@ -221,5 +222,3 @@ def test_websocket_client_callback_errors_in_connect_disconnect_error():
     client._dispatch_connect()
     client._dispatch_disconnect()
     client._dispatch_error(ValueError("Original error"))
-
-

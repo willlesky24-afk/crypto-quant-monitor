@@ -40,7 +40,9 @@ def test_dataset_manager_initial_sync(tmp_path, make_synthetic_candles):
     store = ParquetStore(base_dir=tmp_path / "historical")
     candles = make_synthetic_candles(start="2024-01-01", periods=20, freq="1h")
 
-    loader = MockHistoricalLoader(synthetic_data_generator=lambda *args, **kwargs: candles)
+    loader = MockHistoricalLoader(
+        synthetic_data_generator=lambda *args, **kwargs: candles
+    )
     validator = CandleValidator()
 
     manager = HistoricalDatasetManager(
@@ -70,13 +72,19 @@ def test_dataset_manager_incremental_sync(tmp_path, make_synthetic_candles):
     store = ParquetStore(base_dir=tmp_path / "historical")
 
     # Initial 10 candles
-    initial_candles = make_synthetic_candles(start="2024-01-01 00:00:00", periods=10, freq="1h")
+    initial_candles = make_synthetic_candles(
+        start="2024-01-01 00:00:00", periods=10, freq="1h"
+    )
     store.write_dataset(initial_candles, "BTCUSDT", "1h")
 
     # Next 10 candles
-    next_candles = make_synthetic_candles(start="2024-01-01 10:00:00", periods=10, freq="1h")
+    next_candles = make_synthetic_candles(
+        start="2024-01-01 10:00:00", periods=10, freq="1h"
+    )
 
-    loader = MockHistoricalLoader(synthetic_data_generator=lambda *args, **kwargs: next_candles)
+    loader = MockHistoricalLoader(
+        synthetic_data_generator=lambda *args, **kwargs: next_candles
+    )
     manager = HistoricalDatasetManager(store=store, data_loader=loader)
 
     synced_df = manager.sync_dataset(
@@ -88,7 +96,9 @@ def test_dataset_manager_incremental_sync(tmp_path, make_synthetic_candles):
 
     assert len(loader.calls) == 1
     # Check start_time passed to loader is next candle in ms
-    expected_start_ms = int(initial_candles["timestamp"].max().value // 1_000_000) + 3_600_000
+    expected_start_ms = (
+        int(initial_candles["timestamp"].max().value // 1_000_000) + 3_600_000
+    )
     assert loader.calls[0]["start_time"] == expected_start_ms
 
     assert len(synced_df) == 20
@@ -117,11 +127,17 @@ def test_dataset_manager_already_up_to_date(tmp_path, make_synthetic_candles):
 
 def test_dataset_manager_force_refresh(tmp_path, make_synthetic_candles):
     store = ParquetStore(base_dir=tmp_path / "historical")
-    initial_candles = make_synthetic_candles(start="2024-01-01 00:00:00", periods=5, freq="1h")
+    initial_candles = make_synthetic_candles(
+        start="2024-01-01 00:00:00", periods=5, freq="1h"
+    )
     store.write_dataset(initial_candles, "BTCUSDT", "1h")
 
-    refreshed_candles = make_synthetic_candles(start="2024-01-01 00:00:00", periods=15, freq="1h")
-    loader = MockHistoricalLoader(synthetic_data_generator=lambda *args, **kwargs: refreshed_candles)
+    refreshed_candles = make_synthetic_candles(
+        start="2024-01-01 00:00:00", periods=15, freq="1h"
+    )
+    loader = MockHistoricalLoader(
+        synthetic_data_generator=lambda *args, **kwargs: refreshed_candles
+    )
     manager = HistoricalDatasetManager(store=store, data_loader=loader)
 
     df = manager.sync_dataset(
@@ -137,9 +153,13 @@ def test_dataset_manager_force_refresh(tmp_path, make_synthetic_candles):
     assert store.get_manifest("BTCUSDT", "1h")["total_candles"] == 15
 
 
-def test_dataset_manager_empty_download_returns_cached_or_empty(tmp_path, make_synthetic_candles):
+def test_dataset_manager_empty_download_returns_cached_or_empty(
+    tmp_path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path / "historical")
-    loader = MockHistoricalLoader(synthetic_data_generator=lambda *args, **kwargs: pd.DataFrame())
+    loader = MockHistoricalLoader(
+        synthetic_data_generator=lambda *args, **kwargs: pd.DataFrame()
+    )
     manager = HistoricalDatasetManager(store=store, data_loader=loader)
 
     # Completely empty
@@ -147,10 +167,17 @@ def test_dataset_manager_empty_download_returns_cached_or_empty(tmp_path, make_s
     assert df.empty
 
     # Cached data exists, but incremental return empty
-    cached_candles = make_synthetic_candles(start="2024-01-01 00:00:00", periods=5, freq="1h")
+    cached_candles = make_synthetic_candles(
+        start="2024-01-01 00:00:00", periods=5, freq="1h"
+    )
     store.write_dataset(cached_candles, "SOLUSDT", "1h")
 
-    df2 = manager.sync_dataset("SOLUSDT", "1h", start_time="2024-01-01 00:00:00", end_time="2024-01-02 00:00:00")
+    df2 = manager.sync_dataset(
+        "SOLUSDT",
+        "1h",
+        start_time="2024-01-01 00:00:00",
+        end_time="2024-01-02 00:00:00",
+    )
     assert len(df2) == 5
 
 
@@ -191,9 +218,13 @@ def test_dataset_manager_gap_warning(tmp_path, make_synthetic_candles):
     store = ParquetStore(base_dir=tmp_path / "historical")
     candles = make_synthetic_candles(start="2024-01-01", periods=10, freq="1h")
     # Induce gap by dropping row 3
-    candles_with_gap = pd.concat([candles.iloc[:3], candles.iloc[4:]], ignore_index=True)
+    candles_with_gap = pd.concat(
+        [candles.iloc[:3], candles.iloc[4:]], ignore_index=True
+    )
 
-    loader = MockHistoricalLoader(synthetic_data_generator=lambda *args, **kwargs: candles_with_gap)
+    loader = MockHistoricalLoader(
+        synthetic_data_generator=lambda *args, **kwargs: candles_with_gap
+    )
     manager = HistoricalDatasetManager(store=store, data_loader=loader)
 
     df = manager.sync_dataset("BTCUSDT", "1h")
@@ -210,19 +241,30 @@ def test_dataset_manager_slice_empty_df():
 
 
 def _raw_batch(candles, page_sizes):
-    return RawHistoricalBatch(candles.copy(), tuple(page_sizes), "2024-01-01T00:00:00+00:00")
+    return RawHistoricalBatch(
+        candles.copy(), tuple(page_sizes), "2024-01-01T00:00:00+00:00"
+    )
 
 
 def test_raw_temporal_inspection_distinguishes_page_anomalies(make_synthetic_candles):
     base = make_synthetic_candles(periods=4, freq="1h")
-    within = pd.concat([base.iloc[[0, 1, 1, 2]],], ignore_index=True)
-    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(within, [4]), "1h")
+    within = pd.concat(
+        [
+            base.iloc[[0, 1, 1, 2]],
+        ],
+        ignore_index=True,
+    )
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(within, [4]), "1h"
+    )
     assert status == "UNVERIFIED"
     assert counts["within_page_duplicates"] == 1
     assert counts["page_overlaps"] == 0
 
     overlap = pd.concat([base.iloc[:2], base.iloc[1:]], ignore_index=True)
-    _, status, reason, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(overlap, [2, 3]), "1h")
+    _, status, reason, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(overlap, [2, 3]), "1h"
+    )
     assert counts["page_overlaps"] == 1
     assert counts["conflicting_duplicates"] == 0
     assert status == "UNVERIFIED"
@@ -230,17 +272,23 @@ def test_raw_temporal_inspection_distinguishes_page_anomalies(make_synthetic_can
 
     conflict = overlap.copy()
     conflict.loc[2, "close"] += 1.0
-    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(conflict, [2, 3]), "1h")
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(conflict, [2, 3]), "1h"
+    )
     assert status == "UNVERIFIED"
     assert counts["conflicting_duplicates"] == 1
 
     disorder = base.iloc[[0, 2, 1, 3]].reset_index(drop=True)
-    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(disorder, [4]), "1h")
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(disorder, [4]), "1h"
+    )
     assert status == "UNVERIFIED"
     assert counts["within_page_disorder"] > 0
 
     gap = base.iloc[[0, 1, 3]].reset_index(drop=True)
-    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(_raw_batch(gap, [3]), "1h")
+    _, status, _, counts = HistoricalDatasetManager._inspect_raw_batch(
+        _raw_batch(gap, [3]), "1h"
+    )
     assert status == "UNVERIFIED"
     assert counts["irregular_steps"] == 1
 
@@ -257,7 +305,9 @@ def test_partial_requested_boundaries_are_not_gaps(make_synthetic_candles):
     base = make_synthetic_candles(start="2024-01-01", periods=3, freq="1h")
     first_ms = int(base.iloc[0]["timestamp"].value // 1_000_000)
     batch = RawHistoricalBatch(
-        base, (3,), "2024-01-01T00:00:00+00:00",
+        base,
+        (3,),
+        "2024-01-01T00:00:00+00:00",
         requested_start_ms=first_ms + 1_000,
         requested_end_ms=first_ms + 2 * 3_600_000 + 1_000,
     )
@@ -268,14 +318,28 @@ def test_partial_requested_boundaries_are_not_gaps(make_synthetic_candles):
     assert counts["irregular_steps"] == 0
 
 
-def test_controlled_sync_records_provenance_and_tampering_revokes_it(tmp_path, monkeypatch):
+def test_controlled_sync_records_provenance_and_tampering_revokes_it(
+    tmp_path, monkeypatch
+):
     store = ParquetStore(base_dir=tmp_path / "controlled")
     loader = HistoricalDataLoader(request_delay=0.0)
     start = int(pd.Timestamp("2024-01-01", tz="UTC").value // 1_000_000)
     step = 3_600_000
     chunk = [
-        [start + i * step, "100", "101", "99", "100", "1",
-         start + (i + 1) * step - 1, "100", 1, "1", "100", "0"]
+        [
+            start + i * step,
+            "100",
+            "101",
+            "99",
+            "100",
+            "1",
+            start + (i + 1) * step - 1,
+            "100",
+            1,
+            "1",
+            "100",
+            "0",
+        ]
         for i in range(5)
     ]
     monkeypatch.setattr(loader, "_fetch_chunk_with_retry", lambda **kwargs: chunk)
@@ -294,10 +358,15 @@ def test_controlled_sync_records_provenance_and_tampering_revokes_it(tmp_path, m
     changed.loc[0, "close"] = 99.0
     changed.to_parquet(path, index=False)
     assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
-    assert manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"].status == "UNKNOWN"
+    assert (
+        manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"].status
+        == "UNKNOWN"
+    )
 
 
-def test_arbitrary_loader_cannot_record_provider_provenance(tmp_path, make_synthetic_candles):
+def test_arbitrary_loader_cannot_record_provider_provenance(
+    tmp_path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path / "arbitrary")
     candles = make_synthetic_candles(periods=5, freq="1h")
     manager = HistoricalDatasetManager(
@@ -305,4 +374,7 @@ def test_arbitrary_loader_cannot_record_provider_provenance(tmp_path, make_synth
     )
     manager.sync_dataset("BTCUSDT", "1h")
     assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
-    assert isinstance(manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"], DatasetProvenance)
+    assert isinstance(
+        manager.load_dataset("BTCUSDT", "1h").attrs["_controlled_provenance"],
+        DatasetProvenance,
+    )

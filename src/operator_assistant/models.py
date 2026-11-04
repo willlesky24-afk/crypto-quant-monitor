@@ -13,7 +13,9 @@ class OperatorQuery:
     symbol: str = "BTCUSDT"
     timeframe: str = "1h"
     operator_id: str = "default_operator"
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -26,8 +28,16 @@ class AnalysisRequest:
 
     symbol: str
     timeframe: str = "1h"
-    focus_areas: tuple[str, ...] = ("regime", "quantitative", "predictive", "risk", "levels")
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    focus_areas: tuple[str, ...] = (
+        "regime",
+        "quantitative",
+        "predictive",
+        "risk",
+        "levels",
+    )
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -57,7 +67,9 @@ class OperatorResponse:
         "DECISION SUPPORT ONLY: This analysis is an AI interpretation of quantitative "
         "signals for human operator review. No trading recommendations or execution actions."
     )
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -82,7 +94,9 @@ class AnalysisResponse:
     volume_analysis: str
     risk_assessment: str
     possible_scenarios: tuple[str, ...] = field(default_factory=tuple)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

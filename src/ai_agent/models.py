@@ -109,30 +109,36 @@ class MarketContext:
             for w in self.signal.warnings:
                 lines.append(f"  - {w}")
 
-        lines.extend([
-            "",
-            "## Risk & Execution Boundaries",
-            f"- Risk Category: {self.risk.risk_category or 'N/A'}",
-            f"- Stop Loss: {f'{self.risk.stop_loss:,.2f}' if self.risk.stop_loss is not None else 'None'}",
-            f"- Take Profit: {f'{self.risk.take_profit:,.2f}' if self.risk.take_profit is not None else 'None'}",
-            f"- Risk/Reward Ratio: {f'{self.risk.risk_ratio:.2f}' if self.risk.risk_ratio is not None else 'N/A'}",
-            f"- ATR: {f'{self.risk.atr:.2f}' if self.risk.atr is not None else 'N/A'}",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Risk & Execution Boundaries",
+                f"- Risk Category: {self.risk.risk_category or 'N/A'}",
+                f"- Stop Loss: {f'{self.risk.stop_loss:,.2f}' if self.risk.stop_loss is not None else 'None'}",
+                f"- Take Profit: {f'{self.risk.take_profit:,.2f}' if self.risk.take_profit is not None else 'None'}",
+                f"- Risk/Reward Ratio: {f'{self.risk.risk_ratio:.2f}' if self.risk.risk_ratio is not None else 'N/A'}",
+                f"- ATR: {f'{self.risk.atr:.2f}' if self.risk.atr is not None else 'N/A'}",
+            ]
+        )
 
         if self.volume_profile:
-            lines.extend([
-                "",
-                "## Volume Profile (Value Area)",
-                f"- POC (Point of Control): {self.volume_profile.get('poc', 'N/A')}",
-                f"- VAH (Value Area High): {self.volume_profile.get('vah', 'N/A')}",
-                f"- VAL (Value Area Low): {self.volume_profile.get('val', 'N/A')}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "## Volume Profile (Value Area)",
+                    f"- POC (Point of Control): {self.volume_profile.get('poc', 'N/A')}",
+                    f"- VAH (Value Area High): {self.volume_profile.get('vah', 'N/A')}",
+                    f"- VAL (Value Area Low): {self.volume_profile.get('val', 'N/A')}",
+                ]
+            )
 
         if self.technical_indicators:
-            lines.extend([
-                "",
-                "## Technical Indicators Snapshot",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "## Technical Indicators Snapshot",
+                ]
+            )
             for k, v in sorted(self.technical_indicators.items()):
                 if isinstance(v, float):
                     lines.append(f"- {k}: {v:.2f}")

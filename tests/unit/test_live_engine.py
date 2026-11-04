@@ -23,22 +23,31 @@ from src.streaming.live_engine import LiveExecutionEngine
 def _closed_fixture(df):
     last = df.iloc[-1]
     return KlineEvent(
-        symbol="BTCUSDT", interval="1h",
+        symbol="BTCUSDT",
+        interval="1h",
         start_time=pd.Timestamp(last["timestamp"]),
         close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
-        open=float(last["open"]), high=float(last["high"]),
-        low=float(last["low"]), close=float(last["close"]),
-        volume=float(last["volume"]), is_closed=True,
+        open=float(last["open"]),
+        high=float(last["high"]),
+        low=float(last["low"]),
+        close=float(last["close"]),
+        volume=float(last["volume"]),
+        is_closed=True,
     )
 
 
 def _exact_calibrations():
     return {
         regime.value: OptimizedParameters(
-            regime=regime.value, volatility_state="NORMAL",
-            atr_tp_multiplier=4.0, atr_sl_multiplier=2.0,
-            expected_rr=2.0, sample_size=20, confidence=0.8,
-            validation_period={}, calibration_state="AVAILABLE",
+            regime=regime.value,
+            volatility_state="NORMAL",
+            atr_tp_multiplier=4.0,
+            atr_sl_multiplier=2.0,
+            expected_rr=2.0,
+            sample_size=20,
+            confidence=0.8,
+            validation_period={},
+            calibration_state="AVAILABLE",
             excursion_policy_version=EXCURSION_POLICY_VERSION,
         )
         for regime in MarketRegime
@@ -59,15 +68,17 @@ def test_live_legacy_no_calibration_request_retains_defaults(params):
 @pytest.mark.parametrize("params", [None, {}])
 def test_live_required_calibration_rejects_absence_at_construction(params):
     with pytest.raises(OptimizationUnavailableError, match="no hay parámetros"):
-        LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
-                            calibration_required=True)
+        LiveExecutionEngine(
+            "BTCUSDT", "1h", calibrated_params=params, calibration_required=True
+        )
 
 
 def test_live_required_calibration_uses_verified_parameters_and_no_stale_decision():
     df = _generate_synthetic_ohlcv(220)
     params = _exact_calibrations()
-    engine = LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
-                                 calibration_required=True)
+    engine = LiveExecutionEngine(
+        "BTCUSDT", "1h", calibrated_params=params, calibration_required=True
+    )
     signal, decision, notifications = engine.on_candle_closed(df, _closed_fixture(df))
     assert signal is not None and decision is not None
     assert (decision.tp_multiplier, decision.sl_multiplier) == (4.0, 2.0)
@@ -88,22 +99,28 @@ def test_live_required_calibration_never_falls_back_on_bad_regime(kind):
     if kind == "missing_regime":
         params = {"NOT_A_REGIME": next(iter(params.values()))}
     elif kind == "invalid_value":
-        params = {key: replace(value, atr_tp_multiplier=np.nan)
-                  for key, value in params.items()}
+        params = {
+            key: replace(value, atr_tp_multiplier=np.nan)
+            for key, value in params.items()
+        }
     else:
-        params = {key: replace(value, calibration_state="UNAVAILABLE")
-                  for key, value in params.items()}
+        params = {
+            key: replace(value, calibration_state="UNAVAILABLE")
+            for key, value in params.items()
+        }
     if kind == "missing_regime":
-        engine = LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
-                                     calibration_required=True)
+        engine = LiveExecutionEngine(
+            "BTCUSDT", "1h", calibrated_params=params, calibration_required=True
+        )
         with pytest.raises(OptimizationUnavailableError):
             engine.on_candle_closed(df, _closed_fixture(df))
         assert engine.last_decision is None
         assert engine.signal_history == []
     else:
         with pytest.raises(OptimizationUnavailableError):
-            LiveExecutionEngine("BTCUSDT", "1h", calibrated_params=params,
-                                calibration_required=True)
+            LiveExecutionEngine(
+                "BTCUSDT", "1h", calibrated_params=params, calibration_required=True
+            )
 
 
 def _generate_synthetic_ohlcv(bars: int = 250) -> pd.DataFrame:
@@ -118,14 +135,16 @@ def _generate_synthetic_ohlcv(bars: int = 250) -> pd.DataFrame:
     open_prices = close_prices - 20.0
     volume = np.random.uniform(100.0, 500.0, size=bars)
 
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open": open_prices,
-        "high": high_prices,
-        "low": low_prices,
-        "close": close_prices,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": open_prices,
+            "high": high_prices,
+            "low": low_prices,
+            "close": close_prices,
+            "volume": volume,
+        }
+    )
 
 
 def test_live_engine_warm_up_insufficient_bars():
@@ -133,22 +152,24 @@ def test_live_engine_warm_up_insufficient_bars():
 
     # DataFrame with only 50 bars
     short_df = _generate_synthetic_ohlcv(bars=50)
-    kline = KlineEvent.from_binance_payload({
-        "e": "kline",
-        "s": "BTCUSDT",
-        "k": {
-            "t": 1672531200000,
-            "T": 1672534799999,
+    kline = KlineEvent.from_binance_payload(
+        {
+            "e": "kline",
             "s": "BTCUSDT",
-            "i": "1h",
-            "o": "50000.0",
-            "c": "50100.0",
-            "h": "50200.0",
-            "l": "49900.0",
-            "v": "100.0",
-            "x": True,
-        },
-    })
+            "k": {
+                "t": 1672531200000,
+                "T": 1672534799999,
+                "s": "BTCUSDT",
+                "i": "1h",
+                "o": "50000.0",
+                "c": "50100.0",
+                "h": "50200.0",
+                "l": "49900.0",
+                "v": "100.0",
+                "x": True,
+            },
+        }
+    )
 
     sig, dec, notifs = engine.on_candle_closed(short_df, kline)
     assert sig is None
@@ -159,7 +180,11 @@ def test_live_engine_warm_up_insufficient_bars():
 
 def test_live_engine_full_predictive_pipeline_execution():
     dispatcher = NotificationDispatcher(
-        channels=[DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", dry_run=True)],
+        channels=[
+            DiscordWebhookChannel(
+                webhook_url="https://discord.com/api/webhooks/test", dry_run=True
+            )
+        ],
         min_predictive_score=0.10,  # Low threshold to ensure delivery
         min_confidence=0.10,
         ignore_actions=set(),  # Accept any action
@@ -218,7 +243,9 @@ def test_live_engine_full_predictive_pipeline_execution():
 
 
 def test_live_engine_legacy_mode_execution():
-    engine = LiveExecutionEngine(symbol="ETHUSDT", interval="4h", predictive_mode=False, warm_up_bars=200)
+    engine = LiveExecutionEngine(
+        symbol="ETHUSDT", interval="4h", predictive_mode=False, warm_up_bars=200
+    )
 
     full_df = _generate_synthetic_ohlcv(bars=210)
     last_row = full_df.iloc[-1]
@@ -255,42 +282,46 @@ def test_live_engine_attach_aggregator_end_to_end():
 
     # Feed an intra-bar kline (is_closed=False) -> should NOT trigger engine analysis
     t_open = int(pd.Timestamp("2026-03-01 00:00:00", tz="UTC").timestamp() * 1000)
-    intra_kline = KlineEvent.from_binance_payload({
-        "e": "kline",
-        "s": "BTCUSDT",
-        "k": {
-            "t": t_open,
-            "T": t_open + 3599999,
+    intra_kline = KlineEvent.from_binance_payload(
+        {
+            "e": "kline",
             "s": "BTCUSDT",
-            "i": "1h",
-            "o": "65000.0",
-            "c": "65150.0",
-            "h": "65200.0",
-            "l": "64900.0",
-            "v": "50.0",
-            "x": False,
-        },
-    })
+            "k": {
+                "t": t_open,
+                "T": t_open + 3599999,
+                "s": "BTCUSDT",
+                "i": "1h",
+                "o": "65000.0",
+                "c": "65150.0",
+                "h": "65200.0",
+                "l": "64900.0",
+                "v": "50.0",
+                "x": False,
+            },
+        }
+    )
     aggregator.process_kline(intra_kline)
     assert len(engine.signal_history) == 0
 
     # Feed closed kline (is_closed=True) -> triggers engine analysis automatically
-    closed_kline = KlineEvent.from_binance_payload({
-        "e": "kline",
-        "s": "BTCUSDT",
-        "k": {
-            "t": t_open,
-            "T": t_open + 3599999,
+    closed_kline = KlineEvent.from_binance_payload(
+        {
+            "e": "kline",
             "s": "BTCUSDT",
-            "i": "1h",
-            "o": "65000.0",
-            "c": "65200.0",
-            "h": "65250.0",
-            "l": "64900.0",
-            "v": "120.0",
-            "x": True,
-        },
-    })
+            "k": {
+                "t": t_open,
+                "T": t_open + 3599999,
+                "s": "BTCUSDT",
+                "i": "1h",
+                "o": "65000.0",
+                "c": "65200.0",
+                "h": "65250.0",
+                "l": "64900.0",
+                "v": "120.0",
+                "x": True,
+            },
+        }
+    )
     aggregator.process_kline(closed_kline)
 
     assert len(engine.signal_history) == 1
@@ -302,7 +333,9 @@ def test_live_engine_listener_and_dispatcher_error_isolation():
     mock_dispatcher = MagicMock()
     mock_dispatcher.dispatch_signal.side_effect = RuntimeError("Dispatcher crashed!")
 
-    engine = LiveExecutionEngine(symbol="BTCUSDT", interval="1h", dispatcher=mock_dispatcher, warm_up_bars=200)
+    engine = LiveExecutionEngine(
+        symbol="BTCUSDT", interval="1h", dispatcher=mock_dispatcher, warm_up_bars=200
+    )
 
     def failing_listener(sig):
         raise ValueError("Listener crashed!")
@@ -376,23 +409,33 @@ def test_live_engine_short_direction_sl_tp():
 def test_live_engine_invalid_risk_never_reaches_dispatcher(synthetic_ohlcv, bad_atr):
     dispatcher = MagicMock()
     engine = LiveExecutionEngine("BTCUSDT", "1h", dispatcher=dispatcher)
-    engine.decision_engine.evaluate = MagicMock(return_value=DecisionResult(
-        decision=DECISION_FAVORABLE,
-        confidence=85.0,
-        positives=[], warnings=[], market_state="fixture",
-        direction="LONG", sl_multiplier=1.5, tp_multiplier=3.0,
-    ))
+    engine.decision_engine.evaluate = MagicMock(
+        return_value=DecisionResult(
+            decision=DECISION_FAVORABLE,
+            confidence=85.0,
+            positives=[],
+            warnings=[],
+            market_state="fixture",
+            direction="LONG",
+            sl_multiplier=1.5,
+            tp_multiplier=3.0,
+        )
+    )
     enriched = TechnicalIndicators().calculate_all(synthetic_ohlcv.copy())
     enriched.loc[enriched.index[-1], "atr"] = bad_atr
     engine.indicators.calculate_all = MagicMock(return_value=enriched)
     last = synthetic_ohlcv.iloc[-1]
     candle = KlineEvent(
-        symbol="BTCUSDT", interval="1h",
+        symbol="BTCUSDT",
+        interval="1h",
         start_time=pd.Timestamp(last["timestamp"]),
         close_time=pd.Timestamp(last["timestamp"]) + pd.Timedelta(hours=1),
-        open=float(last["open"]), high=float(last["high"]),
-        low=float(last["low"]), close=float(last["close"]),
-        volume=float(last["volume"]), is_closed=True,
+        open=float(last["open"]),
+        high=float(last["high"]),
+        low=float(last["low"]),
+        close=float(last["close"]),
+        volume=float(last["volume"]),
+        is_closed=True,
     )
 
     event, _, notifications = engine.on_candle_closed(synthetic_ohlcv, candle)
@@ -404,4 +447,3 @@ def test_live_engine_invalid_risk_never_reaches_dispatcher(synthetic_ohlcv, bad_
     assert event.metadata["risk_reward_ratio"] is None
     assert notifications == []
     dispatcher.dispatch_signal.assert_not_called()
-

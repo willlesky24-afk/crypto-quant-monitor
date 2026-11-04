@@ -39,7 +39,9 @@ def make_synthetic_trades(
 
     trades: list[TradeResult] = []
     for i in range(n_trades):
-        rand_offset_hours = int(rng.uniform(0, (end_ts - start_ts).total_seconds() / 3600))
+        rand_offset_hours = int(
+            rng.uniform(0, (end_ts - start_ts).total_seconds() / 3600)
+        )
         entry_time = start_ts + pd.Timedelta(hours=rand_offset_hours)
         exit_time = entry_time + pd.Timedelta(hours=int(rng.integers(1, 24)))
 
@@ -127,15 +129,23 @@ def test_strategy_optimizer_respects_bounds():
     )
 
     # Trades with huge excursions (would exceed max without clipping)
-    huge_trades = make_synthetic_trades(n_trades=20, mfe_mean=20.0, mae_mean=10.0, seed=99)
-    res_huge = optimizer.optimize_regime(MarketRegime.HIGH_VOLATILITY_EXPANSION, huge_trades)
+    huge_trades = make_synthetic_trades(
+        n_trades=20, mfe_mean=20.0, mae_mean=10.0, seed=99
+    )
+    res_huge = optimizer.optimize_regime(
+        MarketRegime.HIGH_VOLATILITY_EXPANSION, huge_trades
+    )
 
     assert res_huge.atr_tp_multiplier <= 6.0
     assert res_huge.atr_sl_multiplier <= 3.5
 
     # Trades with tiny excursions (would fall below min without clipping)
-    tiny_trades = make_synthetic_trades(n_trades=20, mfe_mean=0.2, mae_mean=0.1, seed=77)
-    res_tiny = optimizer.optimize_regime(MarketRegime.RANGING_CONSOLIDATION, tiny_trades)
+    tiny_trades = make_synthetic_trades(
+        n_trades=20, mfe_mean=0.2, mae_mean=0.1, seed=77
+    )
+    res_tiny = optimizer.optimize_regime(
+        MarketRegime.RANGING_CONSOLIDATION, tiny_trades
+    )
 
     assert res_tiny.atr_tp_multiplier >= 2.0
     assert res_tiny.atr_sl_multiplier >= 1.0
@@ -154,8 +164,15 @@ def test_strategy_optimizer_separation_by_regime():
     """Validates that distributions are kept strictly separated by regime."""
     optimizer = StrategyOptimizer()
 
-    bull_trades = make_synthetic_trades(n_trades=25, regime=MarketRegime.TRENDING_BULL.value, mfe_mean=6.0, seed=1)
-    range_trades = make_synthetic_trades(n_trades=25, regime=MarketRegime.RANGING_CONSOLIDATION.value, mfe_mean=2.0, seed=2)
+    bull_trades = make_synthetic_trades(
+        n_trades=25, regime=MarketRegime.TRENDING_BULL.value, mfe_mean=6.0, seed=1
+    )
+    range_trades = make_synthetic_trades(
+        n_trades=25,
+        regime=MarketRegime.RANGING_CONSOLIDATION.value,
+        mfe_mean=2.0,
+        seed=2,
+    )
 
     all_trades = bull_trades + range_trades
     results = optimizer.optimize_all_regimes(all_trades)
@@ -175,8 +192,12 @@ def test_strategy_optimizer_walk_forward_division():
     """Validates TRAIN (2023-2024) vs. VALIDATION (2025) walk-forward split."""
     optimizer = StrategyOptimizer(train_end="2025-01-01 00:00:00+00:00")
 
-    trades_2023_2024 = make_synthetic_trades(n_trades=20, start_year=2023, end_year=2024, seed=11)
-    trades_2025 = make_synthetic_trades(n_trades=10, start_year=2025, end_year=2025, seed=22)
+    trades_2023_2024 = make_synthetic_trades(
+        n_trades=20, start_year=2023, end_year=2024, seed=11
+    )
+    trades_2025 = make_synthetic_trades(
+        n_trades=10, start_year=2025, end_year=2025, seed=22
+    )
 
     train_set, val_set = optimizer.split_walk_forward(trades_2023_2024 + trades_2025)
 
@@ -202,12 +223,22 @@ def test_strategy_optimizer_no_temporal_leakage():
     """
     optimizer = StrategyOptimizer(train_end="2025-01-01 00:00:00+00:00")
 
-    train_trades = make_synthetic_trades(n_trades=30, start_year=2023, end_year=2024, seed=101)
-    val_trades_original = make_synthetic_trades(n_trades=15, start_year=2025, end_year=2025, mfe_mean=3.0, seed=202)
-    val_trades_modified = make_synthetic_trades(n_trades=30, start_year=2025, end_year=2026, mfe_mean=15.0, seed=303)
+    train_trades = make_synthetic_trades(
+        n_trades=30, start_year=2023, end_year=2024, seed=101
+    )
+    val_trades_original = make_synthetic_trades(
+        n_trades=15, start_year=2025, end_year=2025, mfe_mean=3.0, seed=202
+    )
+    val_trades_modified = make_synthetic_trades(
+        n_trades=30, start_year=2025, end_year=2026, mfe_mean=15.0, seed=303
+    )
 
-    res_baseline = optimizer.optimize_regime(MarketRegime.TRENDING_BULL, train_trades, val_trades_original)
-    res_tampered = optimizer.optimize_regime(MarketRegime.TRENDING_BULL, train_trades, val_trades_modified)
+    res_baseline = optimizer.optimize_regime(
+        MarketRegime.TRENDING_BULL, train_trades, val_trades_original
+    )
+    res_tampered = optimizer.optimize_regime(
+        MarketRegime.TRENDING_BULL, train_trades, val_trades_modified
+    )
 
     # TRAIN parameters must be 100% invariant
     assert res_baseline.atr_tp_multiplier == res_tampered.atr_tp_multiplier
@@ -237,7 +268,9 @@ def test_strategy_optimizer_serialization():
 
 def test_strategy_optimizer_optimize_from_report():
     optimizer = StrategyOptimizer()
-    trades = make_synthetic_trades(n_trades=20, regime=MarketRegime.TRENDING_BULL.value, seed=777)
+    trades = make_synthetic_trades(
+        n_trades=20, regime=MarketRegime.TRENDING_BULL.value, seed=777
+    )
 
     mock_report = BacktestReport(
         config=BacktestConfig(),
@@ -331,20 +364,27 @@ def test_strategy_optimizer_edge_cases_and_only_statistical_fallback():
     assert MarketRegime.TRENDING_BULL.value in res_report
 
 
-@pytest.mark.parametrize("field,value", [
-    ("mfe_observability", "BOUNDED_OHLC"),
-    ("mae_observability", "UNDETERMINED"),
-    ("excursion_policy_version", None),
-    ("mfe_exact_pct", None),
-    ("mae_exact_pct", float("nan")),
-    ("atr_entry", 0.0),
-    ("atr_entry", float("inf")),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("mfe_observability", "BOUNDED_OHLC"),
+        ("mae_observability", "UNDETERMINED"),
+        ("excursion_policy_version", None),
+        ("mfe_exact_pct", None),
+        ("mae_exact_pct", float("nan")),
+        ("atr_entry", 0.0),
+        ("atr_entry", float("inf")),
+    ],
+)
 def test_optimizer_rejects_incomplete_cohort_without_proxy_or_zero(field, value):
     trades = make_synthetic_trades(n_trades=12)
     contaminated = replace(trades[0], **{field: value})
-    with pytest.raises(OptimizationUnavailableError, match="Optimización no disponible"):
-        StrategyOptimizer().optimize_regime("TRENDING_BULL", [contaminated, *trades[1:]])
+    with pytest.raises(
+        OptimizationUnavailableError, match="Optimización no disponible"
+    ):
+        StrategyOptimizer().optimize_regime(
+            "TRENDING_BULL", [contaminated, *trades[1:]]
+        )
 
 
 def test_optimizer_uses_exact_fields_not_legacy_proxies_and_preserves_formula():
@@ -366,8 +406,13 @@ def test_optimizer_uses_exact_fields_not_legacy_proxies_and_preserves_formula():
 def test_optimizer_legacy_dict_never_becomes_exact_evidence():
     exact = make_synthetic_trades(n_trades=12)
     legacy = exact[0].to_dict()
-    for key in ("excursion_policy_version", "mfe_observability", "mae_observability",
-                "mfe_exact_pct", "mae_exact_pct"):
+    for key in (
+        "excursion_policy_version",
+        "mfe_observability",
+        "mae_observability",
+        "mfe_exact_pct",
+        "mae_exact_pct",
+    ):
         legacy.pop(key)
     with pytest.raises(OptimizationUnavailableError, match="heredada"):
         StrategyOptimizer().optimize_regime("TRENDING_BULL", [legacy, *exact[1:]])
@@ -378,5 +423,3 @@ def test_optimizer_rejects_overflowing_atr_scale():
     extreme = replace(trades[0], entry_price=1e-300, atr_entry=1e300)
     with pytest.raises(OptimizationUnavailableError, match="escala ATR"):
         StrategyOptimizer().optimize_regime("TRENDING_BULL", [extreme, *trades[1:]])
-
-

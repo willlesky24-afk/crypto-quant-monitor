@@ -25,11 +25,20 @@ class MarketReportService:
             levels["Stop Loss"] = context.risk.stop_loss
         if context.risk.take_profit is not None:
             levels["Take Profit"] = context.risk.take_profit
-        if "poc" in context.volume_profile and context.volume_profile["poc"] is not None:
+        if (
+            "poc" in context.volume_profile
+            and context.volume_profile["poc"] is not None
+        ):
             levels["Volume POC"] = float(context.volume_profile["poc"])
-        if "vah" in context.volume_profile and context.volume_profile["vah"] is not None:
+        if (
+            "vah" in context.volume_profile
+            and context.volume_profile["vah"] is not None
+        ):
             levels["Value Area High"] = float(context.volume_profile["vah"])
-        if "val" in context.volume_profile and context.volume_profile["val"] is not None:
+        if (
+            "val" in context.volume_profile
+            and context.volume_profile["val"] is not None
+        ):
             levels["Value Area Low"] = float(context.volume_profile["val"])
 
         # Signals
@@ -37,7 +46,7 @@ class MarketReportService:
         if context.signal.action != "WAIT":
             signals.append(
                 f"{context.signal.action} ({context.signal.direction}) signal active with "
-                f"{context.signal.confidence*100:.1f}% confidence."
+                f"{context.signal.confidence * 100:.1f}% confidence."
             )
         if context.signal.positives:
             signals.extend(context.signal.positives)
@@ -89,7 +98,9 @@ class MarketReportService:
         )
 
     def generate_intraday_update(
-        self, current_context: MarketContext, previous_context: MarketContext | None = None
+        self,
+        current_context: MarketContext,
+        previous_context: MarketContext | None = None,
     ) -> IntradayUpdateReport:
         """Generate an intraday delta report comparing current and previous snapshots."""
         report_id = f"intraday-{uuid.uuid4().hex[:8]}"
@@ -114,7 +125,11 @@ class MarketReportService:
 
         # Calculate deltas
         price_delta_pct = (
-            ((current_context.current_price - previous_context.current_price) / previous_context.current_price) * 100.0
+            (
+                (current_context.current_price - previous_context.current_price)
+                / previous_context.current_price
+            )
+            * 100.0
             if previous_context.current_price > 0
             else 0.0
         )
@@ -132,10 +147,9 @@ class MarketReportService:
             f"{regime_shift if regime_shift else 'Regime remained stable.'}"
         )
 
-
         why_it_changed = (
             f"Driven by action: {current_context.signal.action} ({current_context.signal.direction}) "
-            f"with confidence {current_context.signal.confidence*100:.1f}%. "
+            f"with confidence {current_context.signal.confidence * 100:.1f}%. "
             f"Reasoning: {current_context.signal.reasoning or 'Continuous quantitative monitoring'}"
         )
 
@@ -144,12 +158,15 @@ class MarketReportService:
             f"Predictive score trajectory (now {current_context.predictive_score:.2f})",
         ]
         if current_context.risk.stop_loss:
-            what_to_monitor.append(f"Risk boundary stop: ${current_context.risk.stop_loss:,.2f}")
+            what_to_monitor.append(
+                f"Risk boundary stop: ${current_context.risk.stop_loss:,.2f}"
+            )
         if current_context.risk.take_profit:
-            what_to_monitor.append(f"Target boundary TP: ${current_context.risk.take_profit:,.2f}")
+            what_to_monitor.append(
+                f"Target boundary TP: ${current_context.risk.take_profit:,.2f}"
+            )
 
         return IntradayUpdateReport(
-
             report_id=report_id,
             symbol=current_context.symbol,
             timeframe=current_context.timeframe,

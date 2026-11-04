@@ -50,7 +50,10 @@ class OpenAIProvider(BaseLLMProvider):
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a quantitative market interpretation assistant."},
+                {
+                    "role": "system",
+                    "content": "You are a quantitative market interpretation assistant.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
@@ -65,7 +68,9 @@ class OpenAIProvider(BaseLLMProvider):
 
         for attempt in range(self.max_retries + 1):
             try:
-                req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+                req = urllib.request.Request(
+                    url, data=body, headers=headers, method="POST"
+                )
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     text = (
@@ -84,7 +89,7 @@ class OpenAIProvider(BaseLLMProvider):
                         metadata=metadata or {},
                     )
             except Exception as exc:
-                logger.warning(f"OpenAI API attempt {attempt+1} failed: {exc}")
+                logger.warning(f"OpenAI API attempt {attempt + 1} failed: {exc}")
                 if attempt < self.max_retries:
                     time.sleep(0.5 * (attempt + 1))
                 else:
@@ -92,7 +97,6 @@ class OpenAIProvider(BaseLLMProvider):
                         f"OpenAI API request failed ({exc}). Quantitative context remains intact.",
                         t0,
                     )
-
 
     def _fallback_response(self, reason: str, start_time: float) -> AIResponse:
         latency = (time.perf_counter() - start_time) * 1000.0
@@ -115,14 +119,17 @@ class OpenAIProvider(BaseLLMProvider):
         return AgentExplanation(
             summary=res.content[:200],
             rationale=res.content,
-            key_drivers=context.signal.positives or (f"Regime: {context.market_regime}",),
+            key_drivers=context.signal.positives
+            or (f"Regime: {context.market_regime}",),
             risk_assessment=f"SL: {context.risk.stop_loss} | TP: {context.risk.take_profit}",
             confidence=context.signal.confidence,
             raw_response=res.content,
         )
 
     async def summarize_market(self, context: MarketContext) -> AgentMarketSummary:
-        prompt = f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        prompt = (
+            f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        )
         res = await self.generate_response(prompt)
         return AgentMarketSummary(
             title=f"OpenAI Market Briefing: {context.symbol}",

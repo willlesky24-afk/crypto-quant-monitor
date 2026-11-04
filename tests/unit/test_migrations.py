@@ -74,7 +74,9 @@ def test_migration_creates_backup_and_marks_legacy_records(tmp_path: Path):
         assert "is_legacy" in columns
 
         # Verify data migrated with is_legacy = 1
-        cursor.execute("SELECT symbol, timeframe, candle_timestamp, is_legacy FROM signals ORDER BY id")
+        cursor.execute(
+            "SELECT symbol, timeframe, candle_timestamp, is_legacy FROM signals ORDER BY id"
+        )
         rows = cursor.fetchall()
         assert len(rows) == 3
         assert rows[0][0] == "BTCUSDT"

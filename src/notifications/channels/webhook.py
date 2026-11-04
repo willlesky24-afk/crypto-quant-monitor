@@ -66,13 +66,15 @@ class WebhookChannel(BaseNotificationChannel):
             )
 
         body_dict = self.format_message(payload)
-        success, status_code, error_msg, retries, latency_ms = self.http_post_with_retry(
-            url=self.url,
-            json_data=body_dict,
-            headers=self.headers,
-            timeout=self.timeout,
-            max_retries=self.max_retries,
-            base_backoff_sec=self.base_backoff_sec,
+        success, status_code, error_msg, retries, latency_ms = (
+            self.http_post_with_retry(
+                url=self.url,
+                json_data=body_dict,
+                headers=self.headers,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                base_backoff_sec=self.base_backoff_sec,
+            )
         )
 
         return NotificationResult(

@@ -24,7 +24,7 @@ class MarketAnomalyDetector:
     def __init__(
         self,
         atr_expansion_threshold: float = 0.30,  # 30% increase
-        volume_surge_threshold: float = 2.0,    # 2x volume baseline
+        volume_surge_threshold: float = 2.0,  # 2x volume baseline
         score_divergence_threshold: float = 0.40,  # normalized score spread > 40%
     ) -> None:
         self.atr_expansion_threshold = atr_expansion_threshold
@@ -42,7 +42,8 @@ class MarketAnomalyDetector:
         if previous is not None and current.market_regime != previous.market_regime:
             severity = (
                 AlertSeverity.CRITICAL
-                if "VOLATILITY" in current.market_regime or "BEAR" in current.market_regime
+                if "VOLATILITY" in current.market_regime
+                or "BEAR" in current.market_regime
                 else AlertSeverity.WARNING
             )
             alerts.append(
@@ -60,7 +61,10 @@ class MarketAnomalyDetector:
                     current_value=current.quant_score,
                     reference_value=previous.quant_score,
                     timestamp=now_iso,
-                    metadata={"from_regime": previous.market_regime, "to_regime": current.market_regime},
+                    metadata={
+                        "from_regime": previous.market_regime,
+                        "to_regime": current.market_regime,
+                    },
                 )
             )
 
@@ -77,8 +81,8 @@ class MarketAnomalyDetector:
                         severity=AlertSeverity.WARNING,
                         symbol=current.symbol,
                         timeframe=current.timeframe,
-                        headline=f"{current.symbol} Volatility Expansion (+{atr_pct_change*100:.1f}%)",
-                        reason=f"ATR expanded from {prev_atr:.2f} to {curr_atr:.2f} (+{atr_pct_change*100:.1f}%). Stop boundaries may require adjustment.",
+                        headline=f"{current.symbol} Volatility Expansion (+{atr_pct_change * 100:.1f}%)",
+                        reason=f"ATR expanded from {prev_atr:.2f} to {curr_atr:.2f} (+{atr_pct_change * 100:.1f}%). Stop boundaries may require adjustment.",
                         current_value=curr_atr,
                         reference_value=prev_atr,
                         timestamp=now_iso,
@@ -87,8 +91,18 @@ class MarketAnomalyDetector:
                 )
 
         # 3. Volume Surge Detection (via technical_indicators or volume_profile)
-        curr_vol = float(current.technical_indicators.get("volume", 0.0) or current.volume_profile.get("total_volume", 0.0))
-        prev_vol = float(previous.technical_indicators.get("volume", 0.0) or previous.volume_profile.get("total_volume", 0.0)) if previous is not None else 0.0
+        curr_vol = float(
+            current.technical_indicators.get("volume", 0.0)
+            or current.volume_profile.get("total_volume", 0.0)
+        )
+        prev_vol = (
+            float(
+                previous.technical_indicators.get("volume", 0.0)
+                or previous.volume_profile.get("total_volume", 0.0)
+            )
+            if previous is not None
+            else 0.0
+        )
         if curr_vol > 0 and prev_vol > 0:
             vol_ratio = curr_vol / prev_vol
             if vol_ratio >= self.volume_surge_threshold:

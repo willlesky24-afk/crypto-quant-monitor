@@ -37,9 +37,7 @@ def get_operator_service() -> OperatorService:
         else:
             provider = InMemoryMarketContextProvider()
 
-        _operator_service_instance = OperatorService(
-            context_provider=provider
-        )
+        _operator_service_instance = OperatorService(context_provider=provider)
     return _operator_service_instance
 
 
@@ -107,6 +105,7 @@ def get_operator_assistant() -> Any:
     if _assistant_instance is None:
         from src.ai_providers.factory import ProviderFactory
         from src.operator_assistant.assistant import OperatorAssistant
+
         service = get_operator_service()
         ai_prov = ProviderFactory.create_provider()
         _assistant_instance = OperatorAssistant(
@@ -114,7 +113,6 @@ def get_operator_assistant() -> Any:
             ai_provider=ai_prov,
         )
     return _assistant_instance
-
 
 
 def set_operator_assistant(assistant: Any) -> None:
@@ -126,6 +124,7 @@ def get_market_report_service() -> Any:
     global _report_service_instance
     if _report_service_instance is None:
         from src.market_reports.generator import MarketReportService
+
         _report_service_instance = MarketReportService()
     return _report_service_instance
 
@@ -139,6 +138,7 @@ def get_anomaly_detector() -> Any:
     global _anomaly_detector_instance
     if _anomaly_detector_instance is None:
         from src.anomaly_detection.detector import MarketAnomalyDetector
+
         _anomaly_detector_instance = MarketAnomalyDetector()
     return _anomaly_detector_instance
 
@@ -152,6 +152,7 @@ def get_operator_memory() -> Any:
     global _memory_instance
     if _memory_instance is None:
         from src.operator_memory.sqlite_memory import SQLiteOperatorMemory
+
         _memory_instance = SQLiteOperatorMemory()
     return _memory_instance
 
@@ -159,4 +160,3 @@ def get_operator_memory() -> Any:
 def set_operator_memory(memory: Any) -> None:
     global _memory_instance
     _memory_instance = memory
-

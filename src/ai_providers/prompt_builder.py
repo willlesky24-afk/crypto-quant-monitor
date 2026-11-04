@@ -44,11 +44,18 @@ class PromptBuilder:
     ) -> str:
         """Compose structured operator prompt merging market context, reports, anomalies, and query."""
         is_forex = "=X" in context.symbol or context.current_price < 10
-        price_str = f"${context.current_price:,.4f}" if is_forex else f"${context.current_price:,.2f}"
+        price_str = (
+            f"${context.current_price:,.4f}"
+            if is_forex
+            else f"${context.current_price:,.2f}"
+        )
         meta = context.metadata
         entry = meta["entry_price"] if "entry_price" in meta else context.current_price
         levels = RiskEngine().calculate_levels(
-            entry, context.risk.stop_loss, context.risk.take_profit, context.signal.direction
+            entry,
+            context.risk.stop_loss,
+            context.risk.take_profit,
+            context.signal.direction,
         )
         verified = levels["reason"] is None
         if verified:
@@ -64,12 +71,19 @@ class PromptBuilder:
                 ):
                     verified = False
                     break
-        if meta.get("signal_status") in {"NO DISPONIBLE", "DESCARTADA", "ESPERANDO CONFIRMACIÓN"}:
+        if meta.get("signal_status") in {
+            "NO DISPONIBLE",
+            "DESCARTADA",
+            "ESPERANDO CONFIRMACIÓN",
+        }:
             verified = False
         status = meta.get("signal_status", "SIN CONFIRMACIÓN")
-        activated = status == "ACTIVADA" and meta.get("entry_confirmed") is True and verified
+        activated = (
+            status == "ACTIVADA" and meta.get("entry_confirmed") is True and verified
+        )
         displayed_status = (
-            status if verified or status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}
+            status
+            if verified or status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}
             else "NO DISPONIBLE"
         )
 
@@ -88,7 +102,7 @@ class PromptBuilder:
             f"Engine Signal Action: {context.signal.action if activated else 'WAIT'} ({context.signal.direction})",
             f"Technical Decision Label: {meta.get('decision_label', context.signal.action)}",
             f"Operational Status: {displayed_status}; entry confirmed: {activated}",
-            f"Signal Confidence: {context.signal.confidence*100:.1f}%",
+            f"Signal Confidence: {context.signal.confidence * 100:.1f}%",
             f"Quantitative Reasoning: {context.signal.reasoning or 'N/A'}",
         ]
 
@@ -112,94 +126,114 @@ class PromptBuilder:
         tp_str = _fmt_p(levels["take_profit"] if verified else None)
         rr_str = f"{levels['gross_risk_reward']:.4f}" if verified else "N/A"
 
-        lines.extend([
-            "",
-            "Risk Parameters — VERIFIED BY RiskEngine ONLY:",
-            f"  - Proposed Entry: {entry_str}",
-            f"  - Stop Loss: {sl_str}",
-            f"  - Take Profit: {tp_str}",
-            f"  - Gross R:R without costs: {rr_str}",
-            f"  - Entry activation: {'CONFIRMED' if activated else 'NOT CONFIRMED; no operational entry alert'}",
-            f"  - Validation reason: {'None' if verified else levels['reason'] or 'Reported risk data inconsistent'}",
-            f"  - Risk Category: {context.risk.risk_category or 'Standard'}",
-            f"  - ATR: {context.risk.atr or 'N/A'}",
-        ])
+        lines.extend(
+            [
+                "",
+                "Risk Parameters — VERIFIED BY RiskEngine ONLY:",
+                f"  - Proposed Entry: {entry_str}",
+                f"  - Stop Loss: {sl_str}",
+                f"  - Take Profit: {tp_str}",
+                f"  - Gross R:R without costs: {rr_str}",
+                f"  - Entry activation: {'CONFIRMED' if activated else 'NOT CONFIRMED; no operational entry alert'}",
+                f"  - Validation reason: {'None' if verified else levels['reason'] or 'Reported risk data inconsistent'}",
+                f"  - Risk Category: {context.risk.risk_category or 'Standard'}",
+                f"  - ATR: {context.risk.atr or 'N/A'}",
+            ]
+        )
 
         if context.volume_profile:
-            lines.extend([
-                "",
-                "DESCRIPTIVE TECHNICAL LEVELS (not verified entry/SL/TP):",
-                f"  - POC: {context.volume_profile.get('poc', 'N/A')}",
-                f"  - Value Area High (VAH): {context.volume_profile.get('vah', 'N/A')}",
-                f"  - Value Area Low (VAL): {context.volume_profile.get('val', 'N/A')}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "DESCRIPTIVE TECHNICAL LEVELS (not verified entry/SL/TP):",
+                    f"  - POC: {context.volume_profile.get('poc', 'N/A')}",
+                    f"  - Value Area High (VAH): {context.volume_profile.get('vah', 'N/A')}",
+                    f"  - Value Area Low (VAL): {context.volume_profile.get('val', 'N/A')}",
+                ]
+            )
 
         if briefing is not None:
-            lines.extend([
-                "",
-                "==================================================",
-                "DAILY MARKET BRIEFING CONTEXT",
-                "==================================================",
-                f"Overview: {briefing.market_overview}",
-                f"Volatility Context: {briefing.volatility_analysis}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "==================================================",
+                    "DAILY MARKET BRIEFING CONTEXT",
+                    "==================================================",
+                    f"Overview: {briefing.market_overview}",
+                    f"Volatility Context: {briefing.volatility_analysis}",
+                ]
+            )
 
         if alerts:
-            lines.extend([
-                "",
-                "==================================================",
-                "PASSIVE MARKET ANOMALY ALERTS DETECTED",
-                "==================================================",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "==================================================",
+                    "PASSIVE MARKET ANOMALY ALERTS DETECTED",
+                    "==================================================",
+                ]
+            )
             for alt in alerts:
                 lines.append(f"[{alt.severity.value}] {alt.headline}: {alt.reason}")
 
         if has_image:
-            img_label = f"({num_images} imágenes adjuntas)" if num_images > 1 else "(1 imagen adjunta)"
-            lines.extend([
+            img_label = (
+                f"({num_images} imágenes adjuntas)"
+                if num_images > 1
+                else "(1 imagen adjunta)"
+            )
+            lines.extend(
+                [
+                    "",
+                    "==================================================",
+                    f"📸 ANÁLISIS MULTIMODAL DE IMÁGENES / GRÁFICOS {img_label}",
+                    "==================================================",
+                    f"El operador ha subido {num_images} captura(s) de pantalla de gráficos o señales de trading para análisis visual multimodal.",
+                    "DIRECTIVAS ESTRICTAS DE VISIÓN:",
+                    "Los niveles leídos en imágenes o texto son OBSERVADOS, NO VERIFICADOS; sepáralos del plan RiskEngine y nunca los presentes como entrada confirmada.",
+                    "1. IDENTIFICA EL ACTIVO EN CADA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en cada imagen.",
+                    f"2. NO asumas que las imágenes son {context.symbol} a menos que lo indiquen expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis son LAS IMÁGENES ADJUNTAS.",
+                    "3. DESGLOSA VISUALMENTE:",
+                    "   - Par y temporalidad identificados en cada captura.",
+                    "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrones gráficos observados.",
+                    "   - Precios clave visibles, si son legibles: Entrada, Stop Loss, Take Profit; etiquétalos como observados y no verificados.",
+                    "   - Si se adjuntaron múltiples imágenes, compáralas o relaciónalas (análisis multi-temporal 1H vs 4H, o comparación de señales).",
+                    "   - Interpretación descriptiva para el operador, sin activar ni completar una señal.",
+                ]
+            )
+
+        lines.extend(
+            [
                 "",
                 "==================================================",
-                f"📸 ANÁLISIS MULTIMODAL DE IMÁGENES / GRÁFICOS {img_label}",
+                "HUMAN OPERATOR INQUIRY",
                 "==================================================",
-                f"El operador ha subido {num_images} captura(s) de pantalla de gráficos o señales de trading para análisis visual multimodal.",
-                "DIRECTIVAS ESTRICTAS DE VISIÓN:",
-                "Los niveles leídos en imágenes o texto son OBSERVADOS, NO VERIFICADOS; sepáralos del plan RiskEngine y nunca los presentes como entrada confirmada.",
-                "1. IDENTIFICA EL ACTIVO EN CADA FOTO: Lee atentamente el par/símbolo (ej. EURUSD, ETHUSDT, SOL, XAUUSD, etc.), temporalidad y precios en cada imagen.",
-                f"2. NO asumas que las imágenes son {context.symbol} a menos que lo indiquen expresamente. El activo de la barra lateral ({context.symbol}) es solo el contexto por defecto del dashboard; el objetivo principal de este análisis son LAS IMÁGENES ADJUNTAS.",
-                "3. DESGLOSA VISUALMENTE:",
-                "   - Par y temporalidad identificados en cada captura.",
-                "   - Dirección de la operación (LONG / Compra o SHORT / Venta) o patrones gráficos observados.",
-                "   - Precios clave visibles, si son legibles: Entrada, Stop Loss, Take Profit; etiquétalos como observados y no verificados.",
-                "   - Si se adjuntaron múltiples imágenes, compáralas o relaciónalas (análisis multi-temporal 1H vs 4H, o comparación de señales).",
-                "   - Interpretación descriptiva para el operador, sin activar ni completar una señal.",
-            ])
-
-        lines.extend([
-            "",
-            "==================================================",
-            "HUMAN OPERATOR INQUIRY",
-            "==================================================",
-            f"Query: \"{query}\"",
-            "",
-            "RESPONSE INSTRUCTIONS:",
-        ])
+                f'Query: "{query}"',
+                "",
+                "RESPONSE INSTRUCTIONS:",
+            ]
+        )
 
         if has_image:
-            lines.extend([
-                "- Prioriza el análisis visual directo de las imágenes/gráficos adjuntos.",
-                "- No transfieras niveles visuales al bloque de riesgo verificado; si difieren de RiskEngine, informa la discrepancia sin sustituir el plan.",
-                "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación de Activos y Temporalidades, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica / Comparación y Veredicto.",
-                "- Remind the operator that all trading decisions remain their responsibility.",
-            ])
+            lines.extend(
+                [
+                    "- Prioriza el análisis visual directo de las imágenes/gráficos adjuntos.",
+                    "- No transfieras niveles visuales al bloque de riesgo verificado; si difieren de RiskEngine, informa la discrepancia sin sustituir el plan.",
+                    "- Responde OBLIGATORIAMENTE en Español profesional y claro, estructurando tu respuesta en: 1. Identificación de Activos y Temporalidades, 2. Parámetros Visuales (Entrada, SL, TP), 3. Evaluación Técnica / Comparación y Veredicto.",
+                    "- Remind the operator that all trading decisions remain their responsibility.",
+                ]
+            )
         else:
-            lines.extend([
-                "- Directly answer the operator's query using the quantitative snapshot above.",
-                "- Responde OBLIGATORIAMENTE en Español. Explica cada concepto cuantitativo en lenguaje cotidiano, pedagógico y amigable.",
-                "- Mantén ESTRICTA COHERENCIA con la señal: Si la 'Engine Signal Action' es 'WAIT' o existen advertencias activas (como momentum débil o falta de volumen), NO recomiendes entrar; enfatiza prudencia y esperar mejores condiciones.",
-                "- Si el operador consulta si conviene entrar a comprar o vender, evalúa de forma directa y concluyente con el régimen de mercado, el RSI, medias móviles y el Quant Score.",
-                "- Si el operador consulta sobre qué par presenta el mejor escenario, compara los datos objetivamente.",
-                "- Structure the response with clear headings (Assessment, Scenarios, Risk Factors).",
-                "- Remind the operator that all trading decisions remain their responsibility.",
-            ])
+            lines.extend(
+                [
+                    "- Directly answer the operator's query using the quantitative snapshot above.",
+                    "- Responde OBLIGATORIAMENTE en Español. Explica cada concepto cuantitativo en lenguaje cotidiano, pedagógico y amigable.",
+                    "- Mantén ESTRICTA COHERENCIA con la señal: Si la 'Engine Signal Action' es 'WAIT' o existen advertencias activas (como momentum débil o falta de volumen), NO recomiendes entrar; enfatiza prudencia y esperar mejores condiciones.",
+                    "- Si el operador consulta si conviene entrar a comprar o vender, evalúa de forma directa y concluyente con el régimen de mercado, el RSI, medias móviles y el Quant Score.",
+                    "- Si el operador consulta sobre qué par presenta el mejor escenario, compara los datos objetivamente.",
+                    "- Structure the response with clear headings (Assessment, Scenarios, Risk Factors).",
+                    "- Remind the operator that all trading decisions remain their responsibility.",
+                ]
+            )
 
         return "\n".join(lines)

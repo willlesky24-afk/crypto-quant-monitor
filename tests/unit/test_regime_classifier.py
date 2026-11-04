@@ -20,7 +20,9 @@ def make_regime_candles(
     if pattern == "bull":
         # Strong steady uptrend
         step = 0.5
-        close = base_price + np.arange(n_candles) * step + rng.normal(0, 0.05, n_candles)
+        close = (
+            base_price + np.arange(n_candles) * step + rng.normal(0, 0.05, n_candles)
+        )
         high = close + rng.uniform(0.1, 0.5, n_candles)
         low = close - rng.uniform(0.1, 0.5, n_candles)
         volume = rng.uniform(100.0, 300.0, n_candles)
@@ -28,7 +30,12 @@ def make_regime_candles(
     elif pattern == "bear":
         # Strong steady downtrend
         step = 0.5
-        close = base_price + 100.0 - (np.arange(n_candles) * step) + rng.normal(0, 0.05, n_candles)
+        close = (
+            base_price
+            + 100.0
+            - (np.arange(n_candles) * step)
+            + rng.normal(0, 0.05, n_candles)
+        )
         high = close + rng.uniform(0.1, 0.5, n_candles)
         low = close - rng.uniform(0.1, 0.5, n_candles)
         volume = rng.uniform(100.0, 300.0, n_candles)
@@ -176,7 +183,9 @@ def test_regime_classifier_causality_and_no_lookahead_bias():
 
         assert res_truncated.timestamp == full_df["timestamp"].iloc[k]
         assert 0.0 <= res_truncated.confidence <= 1.0
-        assert res_truncated.features_used["price"] == pytest.approx(float(full_df["close"].iloc[k]))
+        assert res_truncated.features_used["price"] == pytest.approx(
+            float(full_df["close"].iloc[k])
+        )
 
 
 def test_classify_series_empty_and_warmup():
@@ -212,4 +221,3 @@ def test_regime_classifier_constant_prices_zero_volatility():
 
     assert isinstance(res, RegimeResult)
     assert res.regime == MarketRegime.RANGING_CONSOLIDATION
-

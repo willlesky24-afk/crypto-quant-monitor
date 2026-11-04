@@ -12,14 +12,16 @@ from src.streaming.live_worker import LiveMarketWorker
 def _generate_mock_df(bars: int = 250) -> pd.DataFrame:
     dates = pd.date_range("2026-01-01", periods=bars, freq="1h", tz="UTC")
     base = 50000.0
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open": base + np.arange(bars) * 10,
-        "high": base + np.arange(bars) * 10 + 50,
-        "low": base + np.arange(bars) * 10 - 50,
-        "close": base + np.arange(bars) * 10 + 20,
-        "volume": np.full(bars, 100.0),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": base + np.arange(bars) * 10,
+            "high": base + np.arange(bars) * 10 + 50,
+            "low": base + np.arange(bars) * 10 - 50,
+            "close": base + np.arange(bars) * 10 + 20,
+            "volume": np.full(bars, 100.0),
+        }
+    )
 
 
 def test_live_worker_initialization():
@@ -57,7 +59,6 @@ def test_live_worker_bootstrap_warmup_success():
     res = worker.bootstrap_warmup(loader=mock_loader)
     assert res["BTCUSDT"] == 160
     assert len(worker._aggregators["BTCUSDT"].get_dataframe()) == 160
-
 
 
 def test_live_worker_bootstrap_warmup_empty_or_failure():
@@ -122,8 +123,16 @@ def test_live_worker_stop_handles_exceptions():
     assert worker.is_running
 
     # Inject exceptions into client disconnect and repo close
-    with patch.object(worker._ws_clients["BTCUSDT"], "disconnect", side_effect=RuntimeError("WS error")):
-        with patch.object(worker.context_provider.repository, "close", side_effect=RuntimeError("DB close error")):
+    with patch.object(
+        worker._ws_clients["BTCUSDT"],
+        "disconnect",
+        side_effect=RuntimeError("WS error"),
+    ):
+        with patch.object(
+            worker.context_provider.repository,
+            "close",
+            side_effect=RuntimeError("DB close error"),
+        ):
             worker.stop()
             assert not worker.is_running
 
@@ -146,7 +155,9 @@ def test_live_worker_run_forever_signals():
         assert not worker.is_running
 
     # Test signal handler execution
-    worker_sig = LiveMarketWorker(symbols=["BTCUSDT"], interval="1h", db_path=":memory:", dry_run=True)
+    worker_sig = LiveMarketWorker(
+        symbols=["BTCUSDT"], interval="1h", db_path=":memory:", dry_run=True
+    )
     with patch("signal.signal") as mock_signal:
         with patch.object(worker_sig, "start"):
             worker_sig._stop_event.set()
@@ -156,4 +167,3 @@ def test_live_worker_run_forever_signals():
             handler = mock_signal.call_args_list[0][0][1]
             with pytest.raises(SystemExit):
                 handler(2, None)
-

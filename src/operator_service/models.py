@@ -46,7 +46,9 @@ class SignalExplanationResponse:
             "success": self.success,
             "symbol": self.symbol,
             "timeframe": self.timeframe,
-            "explanation": self.explanation.to_dict() if self.explanation is not None else None,
+            "explanation": self.explanation.to_dict()
+            if self.explanation is not None
+            else None,
             "error": self.error,
             "timestamp": self.timestamp,
         }

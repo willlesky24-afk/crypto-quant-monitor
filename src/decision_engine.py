@@ -85,9 +85,13 @@ class DecisionEngine:
         legacy_mode: bool = False,
     ) -> None:
         if not (0.0 <= technical_weight <= 1.0):
-            raise ValueError(f"technical_weight debe estar en [0, 1], recibido {technical_weight}")
+            raise ValueError(
+                f"technical_weight debe estar en [0, 1], recibido {technical_weight}"
+            )
         if not (0.0 <= predictive_weight <= 1.0):
-            raise ValueError(f"predictive_weight debe estar en [0, 1], recibido {predictive_weight}")
+            raise ValueError(
+                f"predictive_weight debe estar en [0, 1], recibido {predictive_weight}"
+            )
 
         total_weight = technical_weight + predictive_weight
         if total_weight > 0:
@@ -107,30 +111,48 @@ class DecisionEngine:
     ) -> None:
         """Validate an explicit calibration request before relying on TP/SL values."""
         if required and optimized_params is None:
-            raise OptimizationUnavailableError("Optimización no disponible: faltan parámetros del régimen.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: faltan parámetros del régimen."
+            )
         if optimized_params is None:
             return
         state = (
-            optimized_params.get("calibration_state") if isinstance(optimized_params, dict)
+            optimized_params.get("calibration_state")
+            if isinstance(optimized_params, dict)
             else getattr(optimized_params, "calibration_state", None)
         )
         policy = (
-            optimized_params.get("excursion_policy_version") if isinstance(optimized_params, dict)
+            optimized_params.get("excursion_policy_version")
+            if isinstance(optimized_params, dict)
             else getattr(optimized_params, "excursion_policy_version", None)
         )
         if state == CalibrationState.UNAVAILABLE.value:
-            raise OptimizationUnavailableError("Optimización no disponible: calibración suspendida.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: calibración suspendida."
+            )
         if (required or state == CalibrationState.AVAILABLE.value) and (
-            state != CalibrationState.AVAILABLE.value or policy != EXCURSION_POLICY_VERSION
+            state != CalibrationState.AVAILABLE.value
+            or policy != EXCURSION_POLICY_VERSION
         ):
             raise OptimizationUnavailableError(
                 "Optimización no disponible: parámetros sin cobertura EXACT_OHLC acreditada."
             )
         if required or state == CalibrationState.AVAILABLE.value:
             for key in ("atr_tp_multiplier", "atr_sl_multiplier"):
-                value = optimized_params.get(key) if isinstance(optimized_params, dict) else getattr(optimized_params, key, None)
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-                    raise OptimizationUnavailableError(f"Optimización no disponible: {key} inválido.")
+                value = (
+                    optimized_params.get(key)
+                    if isinstance(optimized_params, dict)
+                    else getattr(optimized_params, key, None)
+                )
+                if (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not math.isfinite(value)
+                    or value <= 0
+                ):
+                    raise OptimizationUnavailableError(
+                        f"Optimización no disponible: {key} inválido."
+                    )
 
     def evaluate(
         self,
@@ -146,12 +168,16 @@ class DecisionEngine:
         calibration_required: bool = False,
     ) -> DecisionResult:
         """Evaluates market state, risks, predictive probabilities, and calibrated parameters."""
-        self.validate_calibration_params(optimized_params, required=calibration_required)
+        self.validate_calibration_params(
+            optimized_params, required=calibration_required
+        )
         # 1. Determine execution mode (legacy vs enhanced predictive)
         is_legacy = (
             legacy_mode
             if legacy_mode is not None
-            else (not predictive_mode if predictive_mode is not None else self.legacy_mode)
+            else (
+                not predictive_mode if predictive_mode is not None else self.legacy_mode
+            )
         )
         if calibration_required and (is_legacy or predictive is None):
             raise OptimizationUnavailableError(
@@ -214,14 +240,18 @@ class DecisionEngine:
             getattr(
                 predictive,
                 "predictive_score",
-                predictive.get("predictive_score", 0.5) if isinstance(predictive, dict) else 0.5,
+                predictive.get("predictive_score", 0.5)
+                if isinstance(predictive, dict)
+                else 0.5,
             )
         )
         pred_dir = str(
             getattr(
                 predictive,
                 "direction_bias",
-                predictive.get("direction_bias", "LONG") if isinstance(predictive, dict) else "LONG",
+                predictive.get("direction_bias", "LONG")
+                if isinstance(predictive, dict)
+                else "LONG",
             )
         )
 
@@ -242,18 +272,21 @@ class DecisionEngine:
         # Adaptive Weighted Confidence: FinalScore = W_tech * TechScore + W_pred * (PredScore * 100)
         pred_confidence = pred_score * 100.0
         final_confidence = (
-            self.technical_weight * tech_confidence + self.predictive_weight * pred_confidence
+            self.technical_weight * tech_confidence
+            + self.predictive_weight * pred_confidence
         )
         final_confidence = max(0.0, min(100.0, final_confidence))
 
         final_score = (
-            self.technical_weight * tech_score_val + self.predictive_weight * pred_confidence
+            self.technical_weight * tech_score_val
+            + self.predictive_weight * pred_confidence
         )
         final_score = max(0.0, min(100.0, final_score))
 
         # Directional mapping (LONG vs SHORT)
         if pred_dir == "SHORT" and (
-            regime_str in {"TRENDING_BEAR", "HIGH_VOLATILITY_EXPANSION"} or tech_score_val < 50.0
+            regime_str in {"TRENDING_BEAR", "HIGH_VOLATILITY_EXPANSION"}
+            or tech_score_val < 50.0
         ):
             direction = "SHORT"
         else:

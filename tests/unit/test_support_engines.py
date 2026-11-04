@@ -85,9 +85,7 @@ def test_market_intelligence_covers_medium_bearish_state(analysis_factory):
 
 
 def test_market_intelligence_covers_weak_lateral_state(analysis_factory):
-    result = MarketIntelligence().evaluate(
-        analysis_factory(trend="Lateral", score=0)
-    )
+    result = MarketIntelligence().evaluate(analysis_factory(trend="Lateral", score=0))
     assert result["state"] == "🔴 Contexto débil"
     assert result["risk"] == "Bajo"
     assert "tendencia dominante" in result["trend_analysis"]

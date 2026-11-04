@@ -73,10 +73,15 @@ class AlertOutcomeTracker:
 
     @staticmethod
     def _validated_plan(
-        entry_price: Any, stop_loss: Any, take_profit: Any,
-        direction: Any, reported_r: Any,
+        entry_price: Any,
+        stop_loss: Any,
+        take_profit: Any,
+        direction: Any,
+        reported_r: Any,
     ) -> dict[str, Any]:
-        levels = RiskEngine().calculate_levels(entry_price, stop_loss, take_profit, direction)
+        levels = RiskEngine().calculate_levels(
+            entry_price, stop_loss, take_profit, direction
+        )
         if levels["reason"] is not None:
             raise ValueError(f"Alerta no operable: {levels['reason']}")
         try:
@@ -86,23 +91,33 @@ class AlertOutcomeTracker:
         if not math.isfinite(ratio) or not math.isclose(
             ratio, levels["gross_risk_reward"], rel_tol=1e-6, abs_tol=0.005
         ):
-            raise ValueError("Alerta no operable: el R reportado no coincide con los niveles.")
+            raise ValueError(
+                "Alerta no operable: el R reportado no coincide con los niveles."
+            )
         return levels
 
     @classmethod
     def _classify_alert(cls, alert: dict[str, Any]) -> dict[str, Any]:
         if alert.get("risk_recorded_at") is None:
             alert["risk_integrity_status"] = "LEGACY_UNVERIFIED"
-            alert["risk_integrity_reason"] = "No consta validación del plan al registrar la alerta."
+            alert["risk_integrity_reason"] = (
+                "No consta validación del plan al registrar la alerta."
+            )
             return alert
         try:
             levels = cls._validated_plan(
-                alert["entry_price"], alert["stop_loss"], alert["take_profit"],
-                alert["direction"], alert["risk_reward"],
+                alert["entry_price"],
+                alert["stop_loss"],
+                alert["take_profit"],
+                alert["direction"],
+                alert["risk_reward"],
             )
             cls._validated_plan(
-                alert["entry_price"], alert["stop_loss"], alert["take_profit"],
-                alert["direction"], alert["validated_planned_r"],
+                alert["entry_price"],
+                alert["stop_loss"],
+                alert["take_profit"],
+                alert["direction"],
+                alert["validated_planned_r"],
             )
         except ValueError as exc:
             alert["risk_integrity_status"] = "INVALID_PLAN"
@@ -123,17 +138,31 @@ class AlertOutcomeTracker:
         action_direction = (str(signal.action).upper(), str(signal.direction).upper())
         if action_direction not in {("BUY", "LONG"), ("SELL", "SHORT")}:
             raise ValueError("Alerta no operable: acción y dirección no coinciden.")
-        if signal.metadata.get("signal_status") not in (None, "ACTIVADA") or signal.metadata.get("entry_confirmed") is False:
+        if (
+            signal.metadata.get("signal_status") not in (None, "ACTIVADA")
+            or signal.metadata.get("entry_confirmed") is False
+        ):
             raise ValueError("Alerta no operable: la entrada no está activada.")
 
-        reported_r = risk_reward if risk_reward is not None else signal.metadata.get("risk_reward_ratio")
+        reported_r = (
+            risk_reward
+            if risk_reward is not None
+            else signal.metadata.get("risk_reward_ratio")
+        )
         levels = self._validated_plan(
-            signal.price, signal.stop_loss, signal.take_profit, signal.direction, reported_r
+            signal.price,
+            signal.stop_loss,
+            signal.take_profit,
+            signal.direction,
+            reported_r,
         )
         if signal.metadata.get("risk_reward_ratio") is not None:
             self._validated_plan(
-                signal.price, signal.stop_loss, signal.take_profit,
-                signal.direction, signal.metadata["risk_reward_ratio"],
+                signal.price,
+                signal.stop_loss,
+                signal.take_profit,
+                signal.direction,
+                signal.metadata["risk_reward_ratio"],
             )
 
         alert_id = signal.signal_id
@@ -192,11 +221,13 @@ class AlertOutcomeTracker:
                 ).fetchone()
                 return self._classify_alert(dict(existing))
 
-        return self._classify_alert({
-            **record,
-            "risk_recorded_at": recorded_at,
-            "validated_planned_r": levels["gross_risk_reward"],
-        })
+        return self._classify_alert(
+            {
+                **record,
+                "risk_recorded_at": recorded_at,
+                "validated_planned_r": levels["gross_risk_reward"],
+            }
+        )
 
     def get_all_alerts(self, limit: int = 300) -> list[dict[str, Any]]:
         """Retrieve all recorded alerts ordered from newest to oldest."""
@@ -240,42 +271,57 @@ class AlertOutcomeTracker:
         if forex_loader is None:
             try:
                 from src.forex_data_loader import ForexDataLoader
+
                 forex_loader = ForexDataLoader()
             except Exception as e:
                 logger.warning(f"Could not initialize ForexDataLoader: {e}")
         if crypto_loader is None:
             try:
                 from src.data_loader import BinanceDataLoader
+
                 crypto_loader = BinanceDataLoader()
             except Exception as e:
                 logger.warning(f"Could not initialize BinanceDataLoader: {e}")
 
         for alert in open_alerts:
             if self._classify_alert(alert)["risk_integrity_status"] != "VALIDATED":
-                logger.warning("Skipping alert %s with an invalid persisted risk plan", alert["id"])
+                logger.warning(
+                    "Skipping alert %s with an invalid persisted risk plan", alert["id"]
+                )
                 continue
             is_fx = bool(alert["is_forex"]) or "=X" in alert["symbol"]
             sym = alert["symbol"]
             tf = alert["timeframe"]
             signal_time = pd.to_datetime(alert["timestamp"], utc=True, errors="coerce")
-            recorded_time = pd.to_datetime(alert["risk_recorded_at"], utc=True, errors="coerce")
+            recorded_time = pd.to_datetime(
+                alert["risk_recorded_at"], utc=True, errors="coerce"
+            )
             if pd.isna(signal_time) or pd.isna(recorded_time):
-                logger.warning("Skipping alert %s with an invalid event or recording timestamp", alert["id"])
+                logger.warning(
+                    "Skipping alert %s with an invalid event or recording timestamp",
+                    alert["id"],
+                )
                 continue
             cutoff_time = max(signal_time, recorded_time)
             direction = alert["direction"]
             entry_p = alert["entry_price"]
             sl = alert["stop_loss"]
             tp = alert["take_profit"]
-            plan = self._validated_plan(entry_p, sl, tp, direction, alert["risk_reward"])
+            plan = self._validated_plan(
+                entry_p, sl, tp, direction, alert["risk_reward"]
+            )
             planned_r = plan["gross_risk_reward"]
 
             candles_df = None
             try:
                 if is_fx and forex_loader is not None:
-                    candles_df = forex_loader.get_klines(symbol=sym, interval=tf, limit=200)
+                    candles_df = forex_loader.get_klines(
+                        symbol=sym, interval=tf, limit=200
+                    )
                 elif crypto_loader is not None:
-                    candles_df = crypto_loader.get_klines(symbol=sym, interval=tf, limit=200)
+                    candles_df = crypto_loader.get_klines(
+                        symbol=sym, interval=tf, limit=200
+                    )
             except Exception as exc:
                 logger.warning(f"Failed to fetch outcome candles for {sym}: {exc}")
                 continue
@@ -284,14 +330,17 @@ class AlertOutcomeTracker:
                 continue
 
             if "timestamp" not in candles_df.columns:
-                logger.warning("Skipping alert %s: outcome candles have no timestamp", alert["id"])
+                logger.warning(
+                    "Skipping alert %s: outcome candles have no timestamp", alert["id"]
+                )
                 continue
             post_candles = candles_df.copy()
             post_candles["timestamp"] = pd.to_datetime(
                 post_candles["timestamp"], utc=True, errors="coerce"
             )
             post_candles = post_candles[
-                post_candles["timestamp"].notna() & (post_candles["timestamp"] > cutoff_time)
+                post_candles["timestamp"].notna()
+                & (post_candles["timestamp"] > cutoff_time)
             ].sort_values("timestamp")
             if post_candles.empty:
                 continue
@@ -363,7 +412,9 @@ class AlertOutcomeTracker:
                 else:
                     pnl_pct = ((entry_p - latest_close) / entry_p) * 100
                 r_mult = (
-                    (latest_close - entry_p) if direction == "LONG" else (entry_p - latest_close)
+                    (latest_close - entry_p)
+                    if direction == "LONG"
+                    else (entry_p - latest_close)
                 ) / plan["risk_distance"]
 
             with self._get_connection() as conn:
@@ -394,7 +445,9 @@ class AlertOutcomeTracker:
     def compute_statistics(self) -> dict[str, Any]:
         """Calculate performance only from alerts validated when first recorded."""
         recorded_alerts = self.get_all_alerts(limit=1000)
-        alerts = [a for a in recorded_alerts if a["risk_integrity_status"] == "VALIDATED"]
+        alerts = [
+            a for a in recorded_alerts if a["risk_integrity_status"] == "VALIDATED"
+        ]
         unverified_count = len(recorded_alerts) - len(alerts)
         if not alerts:
             return {
@@ -419,11 +472,19 @@ class AlertOutcomeTracker:
         win_rate = (wins / closed_cnt * 100.0) if closed_cnt > 0 else 0.0
 
         total_gain_r = sum(a["r_multiple"] for a in alerts if a["status"] == "WIN")
-        total_loss_r = abs(sum(a["r_multiple"] for a in alerts if a["status"] == "LOSS"))
-        profit_factor = (total_gain_r / total_loss_r) if total_loss_r > 0 else (total_gain_r if total_gain_r > 0 else 0.0)
+        total_loss_r = abs(
+            sum(a["r_multiple"] for a in alerts if a["status"] == "LOSS")
+        )
+        profit_factor = (
+            (total_gain_r / total_loss_r)
+            if total_loss_r > 0
+            else (total_gain_r if total_gain_r > 0 else 0.0)
+        )
 
         total_r = sum(a["r_multiple"] for a in alerts if a["status"] in ("WIN", "LOSS"))
-        total_pnl = sum(a["pnl_percent"] for a in alerts if a["status"] in ("WIN", "LOSS"))
+        total_pnl = sum(
+            a["pnl_percent"] for a in alerts if a["status"] in ("WIN", "LOSS")
+        )
 
         return {
             "total_alerts": len(alerts),

@@ -29,9 +29,13 @@ class OperatorCLI:
         provider_type: str | None = None,
         provider: BaseLLMProvider | None = None,
     ) -> None:
-        self.db_path = Path(db_path or os.getenv("DATABASE_PATH", "data/market_contexts.db"))
+        self.db_path = Path(
+            db_path or os.getenv("DATABASE_PATH", "data/market_contexts.db")
+        )
         self.context_provider = SQLiteMarketContextProvider(db_path=self.db_path)
-        self.ai_provider = provider or ProviderFactory.create_provider(provider_type=provider_type)
+        self.ai_provider = provider or ProviderFactory.create_provider(
+            provider_type=provider_type
+        )
         self.assistant = OperatorAssistant(
             context_provider=self.context_provider,
             ai_provider=self.ai_provider,
@@ -39,7 +43,9 @@ class OperatorCLI:
         self.report_service = MarketReportService()
         self.anomaly_detector = MarketAnomalyDetector()
 
-    def get_status(self, symbol: str = "BTCUSDT", timeframe: str = "1h") -> dict[str, Any]:
+    def get_status(
+        self, symbol: str = "BTCUSDT", timeframe: str = "1h"
+    ) -> dict[str, Any]:
         """Fetch current market context and return structured status."""
         sym = symbol.strip().upper()
         tf = timeframe.strip().lower()
@@ -87,9 +93,15 @@ class OperatorCLI:
             f"Action / Dir:     {status['action']} ({status['direction']})",
             f"Quant Score:      {status['quant_score']:.2f}",
             f"Predictive Score: {status['predictive_score']:.2f}",
-            f"Stop Loss:        ${status['stop_loss']:.2f}" if status.get("stop_loss") else "Stop Loss:        None",
-            f"Take Profit:      ${status['take_profit']:.2f}" if status.get("take_profit") else "Take Profit:      None",
-            f"Risk/Reward:      {status['risk_reward_ratio']:.2f}" if status.get("risk_reward_ratio") else "Risk/Reward:      N/A",
+            f"Stop Loss:        ${status['stop_loss']:.2f}"
+            if status.get("stop_loss")
+            else "Stop Loss:        None",
+            f"Take Profit:      ${status['take_profit']:.2f}"
+            if status.get("take_profit")
+            else "Take Profit:      None",
+            f"Risk/Reward:      {status['risk_reward_ratio']:.2f}"
+            if status.get("risk_reward_ratio")
+            else "Risk/Reward:      N/A",
             f"Active Anomalies: {status['anomalies_count']}",
             "=" * 56 + "\n",
         ]
@@ -119,7 +131,6 @@ class OperatorCLI:
             "-" * 60 + "\n",
         ]
         return "\n".join(output)
-
 
     def get_report(self, symbol: str = "BTCUSDT", timeframe: str = "1h") -> str:
         """Generate and format an institutional market intelligence report."""
@@ -154,7 +165,9 @@ class OperatorCLI:
         if anomalies:
             output.append("\nDETECTED ANOMALIES:")
             for anom in anomalies:
-                output.append(f"  ⚡ [{anom.severity.value}] {anom.headline}: {anom.reason}")
+                output.append(
+                    f"  ⚡ [{anom.severity.value}] {anom.headline}: {anom.reason}"
+                )
 
         output.append("\nDECISION SUPPORT CONCLUSION:")
         output.append(f"  Historical Context: {report.historical_context}")
@@ -163,14 +176,18 @@ class OperatorCLI:
 
         return "\n".join(output)
 
-    def run_repl(self, default_symbol: str = "BTCUSDT", default_timeframe: str = "1h") -> None:
+    def run_repl(
+        self, default_symbol: str = "BTCUSDT", default_timeframe: str = "1h"
+    ) -> None:
         """Launch an interactive REPL dialogue loop for continuous operator assistance."""
         symbol = default_symbol.strip().upper()
         timeframe = default_timeframe.strip().lower()
 
         print("\n" + "=" * 60)
         print("🤖 Crypto Quant Copilot — Interactive REPL Session")
-        print(f"Tracking: {symbol} [{timeframe}] | Provider: {self.ai_provider.__class__.__name__}")
+        print(
+            f"Tracking: {symbol} [{timeframe}] | Provider: {self.ai_provider.__class__.__name__}"
+        )
         print("Commands: 'status', 'report', 'switch <sym> <tf>', 'exit', 'quit'")
         print("=" * 60 + "\n")
 

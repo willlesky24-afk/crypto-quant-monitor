@@ -67,7 +67,9 @@ class LiveAIContextBridge:
             engine.on_signal(self.on_signal_event)
             logger.info(f"LiveAIContextBridge successfully attached to engine {engine}")
         else:
-            raise TypeError(f"Target engine {engine} does not support .on_signal() registration.")
+            raise TypeError(
+                f"Target engine {engine} does not support .on_signal() registration."
+            )
 
     def on_signal_event(
         self,
@@ -99,12 +101,16 @@ class LiveAIContextBridge:
             try:
                 res = sub(context)
                 if inspect.isawaitable(res):
-                    logger.debug("Async subscriber detected in sync context; closing unawaited coroutine.")
+                    logger.debug(
+                        "Async subscriber detected in sync context; closing unawaited coroutine."
+                    )
                     if inspect.iscoroutine(res):
                         res.close()
             except Exception as exc:
-                logger.error(f"Error in LiveAIContextBridge subscriber {sub}: {exc}", exc_info=True)
-
+                logger.error(
+                    f"Error in LiveAIContextBridge subscriber {sub}: {exc}",
+                    exc_info=True,
+                )
 
         return context
 
@@ -135,6 +141,9 @@ class LiveAIContextBridge:
                 if inspect.isawaitable(res):
                     await res
             except Exception as exc:
-                logger.error(f"Error in LiveAIContextBridge async subscriber {sub}: {exc}", exc_info=True)
+                logger.error(
+                    f"Error in LiveAIContextBridge async subscriber {sub}: {exc}",
+                    exc_info=True,
+                )
 
         return context

@@ -6,9 +6,7 @@ from src.volume_profile import VolumeProfile
 from tests.unit.test_report import make_history, make_report
 
 
-def test_complete_v16_pipeline_is_offline_and_deterministic(
-    tmp_path, synthetic_ohlcv
-):
+def test_complete_v16_pipeline_is_offline_and_deterministic(tmp_path, synthetic_ohlcv):
     assert len(synthetic_ohlcv) >= 240
     enriched = TechnicalIndicators().calculate_all(synthetic_ohlcv.copy())
     profile = VolumeProfile().calculate(enriched)
@@ -52,5 +50,3 @@ def test_complete_v16_pipeline_is_offline_and_deterministic(
         assert db_path.exists()
     finally:
         history.db.connection.close()
-
-

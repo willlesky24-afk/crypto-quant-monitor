@@ -2,67 +2,27 @@ import _bootstrap  # noqa: F401
 
 from src.signal_history import SignalHistory
 
-analysis = {
+analysis = {"price": 81000, "trend": "Alcista"}
 
 
-    "price": 81000,
-
-    "trend": "Alcista"
-
-}
+decision = {"decision": "🟡 Esperar confirmación"}
 
 
-
-decision = {
-
-
-    "decision": "🟡 Esperar confirmación"
-
-}
+quant_score = {"score": 95}
 
 
-
-quant_score = {
-
-
-    "score": 95
-
-}
-
-
-
-risk = {
-
-
-    "level": "Medio"
-
-}
-
+risk = {"level": "Medio"}
 
 
 history = SignalHistory()
 
 
-
-saved = history.save(
-
-    "BTCUSDT",
-
-    analysis,
-
-    decision,
-
-    quant_score,
-
-    risk
-
-)
+saved = history.save("BTCUSDT", analysis, decision, quant_score, risk)
 
 
 print("SEÑAL GUARDADA:")
 
 print(saved)
-
 
 
 print("\nHISTORIAL:")

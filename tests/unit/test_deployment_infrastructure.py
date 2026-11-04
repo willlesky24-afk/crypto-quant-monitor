@@ -87,7 +87,10 @@ class TestConfigurationSettings:
             assert s.security.security_enabled is True
             assert s.security.rate_limit_enabled is False
             assert s.security.rate_limit_per_minute == 120
-            assert s.security.cors_origins == ("http://localhost:3000", "https://myapp.com")
+            assert s.security.cors_origins == (
+                "http://localhost:3000",
+                "https://myapp.com",
+            )
             assert s.observability.metrics_enabled is False
             assert s.observability.json_logging_enabled is False
             assert s.ai_provider.provider == "gemini"
@@ -99,7 +102,6 @@ class TestConfigurationSettings:
             assert s.ai_provider.ollama_model == "mistral"
             assert s.ai_provider.timeout_seconds == 20.0
             assert s.ai_provider.max_retries == 4
-
 
     def test_ensure_directories(self, tmp_path: Path):
         custom_data = tmp_path / "deep" / "nested" / "data"
@@ -208,6 +210,7 @@ class TestEntrypointCLI:
     @patch("urllib.request.urlopen")
     def test_check_health_http_error(self, mock_urlopen):
         import urllib.error
+
         fp = io.BytesIO(b'{"error": "down"}')
         mock_urlopen.side_effect = urllib.error.HTTPError(
             url="http://test", code=503, msg="Service Unavailable", hdrs={}, fp=fp
@@ -236,7 +239,9 @@ class TestEntrypointCLI:
 
     @patch("scripts.entrypoint.check_health", return_value=0)
     def test_main_health_command(self, mock_check_health):
-        with patch.object(sys, "argv", ["entrypoint.py", "health", "--url", "http://localhost:8000"]):
+        with patch.object(
+            sys, "argv", ["entrypoint.py", "health", "--url", "http://localhost:8000"]
+        ):
             code = main()
             assert code == 0
             mock_check_health.assert_called_once_with(url="http://localhost:8000")
@@ -250,7 +255,10 @@ class TestEntrypointCLI:
     def test_entrypoint_dunder_main(self, mock_uvicorn_run):
         import runpy
 
-        with patch.object(sys, "argv", ["entrypoint.py", "api"]), patch.object(sys, "exit") as mock_exit:
+        with (
+            patch.object(sys, "argv", ["entrypoint.py", "api"]),
+            patch.object(sys, "exit") as mock_exit,
+        ):
             runpy.run_path("scripts/entrypoint.py", run_name="__main__")
             mock_exit.assert_called_once_with(0)
             mock_uvicorn_run.assert_called_once()

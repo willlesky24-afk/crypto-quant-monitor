@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -65,8 +65,13 @@ def get_forex_session_status(dt: datetime | None = None) -> ForexSessionStatus:
         reopen_info = "Reapertura: Domingo a las 21:00 UTC (17:00 EST / 23:00 España)"
     else:
         # Check overlap
-        if "🇬🇧 Sesión Londres" in active_sessions and "🇺🇸 Sesión Nueva York" in active_sessions:
-            status_headline = "🟢 Solapamiento Londres - Nueva York (Máxima Liquidez Mundial)"
+        if (
+            "🇬🇧 Sesión Londres" in active_sessions
+            and "🇺🇸 Sesión Nueva York" in active_sessions
+        ):
+            status_headline = (
+                "🟢 Solapamiento Londres - Nueva York (Máxima Liquidez Mundial)"
+            )
         elif active_sessions:
             status_headline = f"🟢 Mercado Abierto: {' + '.join(active_sessions)}"
         else:

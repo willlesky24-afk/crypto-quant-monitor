@@ -76,7 +76,9 @@ class MetricsCollector:
         with self._lock:
             self._bridge_events_processed += 1
 
-    def set_storage_metrics(self, records_count: int, active_symbols_count: int) -> None:
+    def set_storage_metrics(
+        self, records_count: int, active_symbols_count: int
+    ) -> None:
         """Update gauges for stored records and active symbols."""
         with self._lock:
             self._stored_records_count = max(0, records_count)
@@ -163,10 +165,14 @@ class MetricsCollector:
             lines: list[str] = []
 
             # http_requests_total
-            lines.append("# HELP http_requests_total Total number of HTTP requests processed.")
+            lines.append(
+                "# HELP http_requests_total Total number of HTTP requests processed."
+            )
             lines.append("# TYPE http_requests_total counter")
             if self._requests_by_route:
-                for (method, path, status_code), count in sorted(self._requests_by_route.items()):
+                for (method, path, status_code), count in sorted(
+                    self._requests_by_route.items()
+                ):
                     lines.append(
                         f'http_requests_total{{method="{method}",path="{path}",status="{status_code}"}} {count}'
                     )
@@ -174,59 +180,87 @@ class MetricsCollector:
                 lines.append("http_requests_total 0")
 
             # http_requests_active
-            lines.append("# HELP http_requests_active Current number of active in-flight HTTP requests.")
+            lines.append(
+                "# HELP http_requests_active Current number of active in-flight HTTP requests."
+            )
             lines.append("# TYPE http_requests_active gauge")
             lines.append(f"http_requests_active {self._active_requests}")
 
             # rate_limit_rejections_total
-            lines.append("# HELP rate_limit_rejections_total Total number of rejected requests due to rate limiting.")
+            lines.append(
+                "# HELP rate_limit_rejections_total Total number of rejected requests due to rate limiting."
+            )
             lines.append("# TYPE rate_limit_rejections_total counter")
             lines.append(f"rate_limit_rejections_total {self._rate_limit_rejections}")
 
             # explanation_requests_total
-            lines.append("# HELP explanation_requests_total Total signal explanation requests received.")
+            lines.append(
+                "# HELP explanation_requests_total Total signal explanation requests received."
+            )
             lines.append("# TYPE explanation_requests_total counter")
             lines.append(f"explanation_requests_total {self._explanation_requests}")
 
             # explanation_errors_total
-            lines.append("# HELP explanation_errors_total Total signal explanation generation failures.")
+            lines.append(
+                "# HELP explanation_errors_total Total signal explanation generation failures."
+            )
             lines.append("# TYPE explanation_errors_total counter")
             lines.append(f"explanation_errors_total {self._explanation_errors}")
 
             # summary_requests_total
-            lines.append("# HELP summary_requests_total Total market summary requests received.")
+            lines.append(
+                "# HELP summary_requests_total Total market summary requests received."
+            )
             lines.append("# TYPE summary_requests_total counter")
             lines.append(f"summary_requests_total {self._summary_requests}")
 
             # summary_errors_total
-            lines.append("# HELP summary_errors_total Total market summary generation failures.")
+            lines.append(
+                "# HELP summary_errors_total Total market summary generation failures."
+            )
             lines.append("# TYPE summary_errors_total counter")
             lines.append(f"summary_errors_total {self._summary_errors}")
 
             # bridge_events_processed_total
-            lines.append("# HELP bridge_events_processed_total Total closed candle signal events processed by context bridge.")
+            lines.append(
+                "# HELP bridge_events_processed_total Total closed candle signal events processed by context bridge."
+            )
             lines.append("# TYPE bridge_events_processed_total counter")
-            lines.append(f"bridge_events_processed_total {self._bridge_events_processed}")
+            lines.append(
+                f"bridge_events_processed_total {self._bridge_events_processed}"
+            )
 
             # stored_records_count
-            lines.append("# HELP stored_records_count Total context snapshots currently in persistent storage.")
+            lines.append(
+                "# HELP stored_records_count Total context snapshots currently in persistent storage."
+            )
             lines.append("# TYPE stored_records_count gauge")
             lines.append(f"stored_records_count {self._stored_records_count}")
 
             # active_symbols_count
-            lines.append("# HELP active_symbols_count Distinct symbols currently tracked in context storage.")
+            lines.append(
+                "# HELP active_symbols_count Distinct symbols currently tracked in context storage."
+            )
             lines.append("# TYPE active_symbols_count gauge")
             lines.append(f"active_symbols_count {self._active_symbols_count}")
 
             # latency summary
             lat = self.get_latency_stats()
-            lines.append("# HELP http_request_duration_seconds HTTP request duration statistics in seconds.")
+            lines.append(
+                "# HELP http_request_duration_seconds HTTP request duration statistics in seconds."
+            )
             lines.append("# TYPE http_request_duration_seconds summary")
             count = int(lat["count"])
             sum_sec = sum(self._latencies) if self._latencies else 0.0
-            lines.append(f'http_request_duration_seconds{{quantile="0.5"}} {lat["p50_ms"] / 1000.0:.4f}')
-            lines.append(f'http_request_duration_seconds{{quantile="0.95"}} {lat["p95_ms"] / 1000.0:.4f}')
-            lines.append(f'http_request_duration_seconds{{quantile="0.99"}} {lat["p99_ms"] / 1000.0:.4f}')
+            lines.append(
+                f'http_request_duration_seconds{{quantile="0.5"}} {lat["p50_ms"] / 1000.0:.4f}'
+            )
+            lines.append(
+                f'http_request_duration_seconds{{quantile="0.95"}} {lat["p95_ms"] / 1000.0:.4f}'
+            )
+            lines.append(
+                f'http_request_duration_seconds{{quantile="0.99"}} {lat["p99_ms"] / 1000.0:.4f}'
+            )
             lines.append(f"http_request_duration_seconds_sum {sum_sec:.4f}")
             lines.append(f"http_request_duration_seconds_count {count}")
 

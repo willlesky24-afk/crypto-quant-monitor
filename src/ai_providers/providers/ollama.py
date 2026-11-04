@@ -28,7 +28,9 @@ class OllamaProvider(BaseLLMProvider):
         timeout_seconds: float = 15.0,
         max_retries: int = 1,
     ) -> None:
-        self.base_url = (base_url or os.getenv("OLLAMA_URL", "http://localhost:11434")).rstrip("/")
+        self.base_url = (
+            base_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
+        ).rstrip("/")
         self.model = model or os.getenv("OLLAMA_MODEL", "llama3")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
@@ -52,7 +54,9 @@ class OllamaProvider(BaseLLMProvider):
 
         for attempt in range(self.max_retries + 1):
             try:
-                req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+                req = urllib.request.Request(
+                    url, data=body, headers=headers, method="POST"
+                )
                 with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                     resp_data = json.loads(resp.read().decode("utf-8"))
                     text = resp_data.get("response", "")
@@ -67,7 +71,7 @@ class OllamaProvider(BaseLLMProvider):
                         metadata=metadata or {},
                     )
             except Exception as exc:
-                logger.warning(f"Ollama API attempt {attempt+1} failed: {exc}")
+                logger.warning(f"Ollama API attempt {attempt + 1} failed: {exc}")
                 if attempt < self.max_retries:
                     time.sleep(0.5)
                 else:
@@ -75,7 +79,6 @@ class OllamaProvider(BaseLLMProvider):
                         f"Local Ollama daemon unreachable at {self.base_url} ({exc}).",
                         t0,
                     )
-
 
     def _fallback_response(self, reason: str, start_time: float) -> AIResponse:
         latency = (time.perf_counter() - start_time) * 1000.0
@@ -98,14 +101,17 @@ class OllamaProvider(BaseLLMProvider):
         return AgentExplanation(
             summary=res.content[:200],
             rationale=res.content,
-            key_drivers=context.signal.positives or (f"Regime: {context.market_regime}",),
+            key_drivers=context.signal.positives
+            or (f"Regime: {context.market_regime}",),
             risk_assessment=f"SL: {context.risk.stop_loss} | TP: {context.risk.take_profit}",
             confidence=context.signal.confidence,
             raw_response=res.content,
         )
 
     async def summarize_market(self, context: MarketContext) -> AgentMarketSummary:
-        prompt = f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        prompt = (
+            f"Summarize market for {context.symbol} in regime {context.market_regime}."
+        )
         res = await self.generate_response(prompt)
         return AgentMarketSummary(
             title=f"Ollama Local Briefing: {context.symbol}",

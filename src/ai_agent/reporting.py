@@ -80,7 +80,9 @@ class MarketReportGenerator:
                 "increase execution risk and potential slippage."
             )
         else:
-            regime_parts.append(f"Market is operating under an unclassified or custom {regime} regime.")
+            regime_parts.append(
+                f"Market is operating under an unclassified or custom {regime} regime."
+            )
 
         # Volume Profile value area positioning
         vp = context.volume_profile
@@ -90,8 +92,16 @@ class MarketReportGenerator:
 
         if poc is not None and isinstance(poc, (int, float)):
             poc_val = float(poc)
-            vah_val = float(vah) if vah is not None and isinstance(vah, (int, float)) else None
-            val_val = float(val) if val is not None and isinstance(val, (int, float)) else None
+            vah_val = (
+                float(vah)
+                if vah is not None and isinstance(vah, (int, float))
+                else None
+            )
+            val_val = (
+                float(val)
+                if val is not None and isinstance(val, (int, float))
+                else None
+            )
 
             if vah_val is not None and price > vah_val:
                 regime_parts.append(
@@ -109,7 +119,9 @@ class MarketReportGenerator:
                     f"confirming fair value acceptance centered at POC ({poc_val:,.2f})."
                 )
             else:
-                regime_parts.append(f"High-volume Point of Control (POC) is situated at {poc_val:,.2f}.")
+                regime_parts.append(
+                    f"High-volume Point of Control (POC) is situated at {poc_val:,.2f}."
+                )
 
         regime_interpretation = " ".join(regime_parts)
 
@@ -118,28 +130,42 @@ class MarketReportGenerator:
         if context.signal.reasoning:
             outlook_parts.append(f"Operational focus: {context.signal.reasoning}.")
         else:
-            outlook_parts.append("Operational focus: Quantitative parameters monitor for confirmed setups.")
+            outlook_parts.append(
+                "Operational focus: Quantitative parameters monitor for confirmed setups."
+            )
 
         # Volatility context
         if context.risk.atr is not None:
-            outlook_parts.append(f"Local volatility measured by ATR is {context.risk.atr:,.2f}.")
+            outlook_parts.append(
+                f"Local volatility measured by ATR is {context.risk.atr:,.2f}."
+            )
 
         # Risk context
         risk_cat = context.risk.risk_category or "Standard"
         outlook_parts.append(f"Risk environment is assessed as {risk_cat}.")
 
         if context.risk.stop_loss is not None and context.risk.take_profit is not None:
-            rr_str = f" (R:R {context.risk.risk_ratio:.2f})" if context.risk.risk_ratio is not None else ""
+            rr_str = (
+                f" (R:R {context.risk.risk_ratio:.2f})"
+                if context.risk.risk_ratio is not None
+                else ""
+            )
             outlook_parts.append(
                 f"Established execution boundaries: Stop Loss at {context.risk.stop_loss:,.2f} "
                 f"and Take Profit at {context.risk.take_profit:,.2f}{rr_str}."
             )
         elif context.risk.stop_loss is not None:
-            outlook_parts.append(f"Protective Stop Loss is stationed at {context.risk.stop_loss:,.2f}.")
+            outlook_parts.append(
+                f"Protective Stop Loss is stationed at {context.risk.stop_loss:,.2f}."
+            )
         elif context.risk.take_profit is not None:
-            outlook_parts.append(f"Target Take Profit is set at {context.risk.take_profit:,.2f}.")
+            outlook_parts.append(
+                f"Target Take Profit is set at {context.risk.take_profit:,.2f}."
+            )
         else:
-            outlook_parts.append("No explicit Stop Loss or Take Profit targets defined for this posture.")
+            outlook_parts.append(
+                "No explicit Stop Loss or Take Profit targets defined for this posture."
+            )
 
         outlook = " ".join(outlook_parts)
 

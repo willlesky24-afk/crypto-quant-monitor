@@ -8,7 +8,9 @@ import pytest
 from src.parquet_store import DATASET_SCHEMA_VERSION, ParquetStore
 
 
-def test_parquet_store_saves_and_loads_partition(tmp_path: Path, make_synthetic_candles):
+def test_parquet_store_saves_and_loads_partition(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path)
     df = make_synthetic_candles(start="2024-01-01", periods=100, freq="1h")
 
@@ -26,7 +28,14 @@ def test_parquet_store_saves_and_loads_partition(tmp_path: Path, make_synthetic_
     # Load back
     loaded = store.load_dataset(symbol="BTCUSDT", interval="1h")
     assert len(loaded) == 100
-    assert list(loaded.columns) == ["timestamp", "open", "high", "low", "close", "volume"]
+    assert list(loaded.columns) == [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
     assert loaded["timestamp"].dt.tz is not None
     assert loaded.loc[0, "close"] == pytest.approx(df.loc[0, "close"])
 
@@ -80,8 +89,12 @@ def test_parquet_store_time_filtering(tmp_path: Path, make_synthetic_candles):
         end_time="2024-01-01 10:00:00",
     )
     assert len(filtered) == 6
-    assert filtered.iloc[0]["timestamp"] == pd.to_datetime("2024-01-01 05:00:00", utc=True)
-    assert filtered.iloc[-1]["timestamp"] == pd.to_datetime("2024-01-01 10:00:00", utc=True)
+    assert filtered.iloc[0]["timestamp"] == pd.to_datetime(
+        "2024-01-01 05:00:00", utc=True
+    )
+    assert filtered.iloc[-1]["timestamp"] == pd.to_datetime(
+        "2024-01-01 10:00:00", utc=True
+    )
 
 
 def test_parquet_store_empty_df_raises_error(tmp_path: Path):
@@ -90,7 +103,9 @@ def test_parquet_store_empty_df_raises_error(tmp_path: Path):
         store.save_partition(pd.DataFrame(), "BTCUSDT", "1h", "empty")
 
 
-def test_parquet_store_atomic_write_leaves_no_temp_files(tmp_path: Path, make_synthetic_candles):
+def test_parquet_store_atomic_write_leaves_no_temp_files(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path)
     df = make_synthetic_candles(start="2024-01-01", periods=10)
     store.save_partition(df, "BTCUSDT", "1h", "atomic")
@@ -100,10 +115,14 @@ def test_parquet_store_atomic_write_leaves_no_temp_files(tmp_path: Path, make_sy
     assert len(temp_files) == 0
 
 
-def test_parquet_store_formats_close_time_if_present(tmp_path: Path, make_synthetic_candles):
+def test_parquet_store_formats_close_time_if_present(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path)
     df = make_synthetic_candles(start="2024-01-01", periods=10)
-    df["close_time"] = df["timestamp"] + pd.Timedelta(hours=1) - pd.Timedelta(milliseconds=1)
+    df["close_time"] = (
+        df["timestamp"] + pd.Timedelta(hours=1) - pd.Timedelta(milliseconds=1)
+    )
 
     store.save_partition(df, "BTCUSDT", "1h", "2024")
     loaded = store.load_dataset("BTCUSDT", "1h")
@@ -117,7 +136,9 @@ def test_parquet_store_load_dataset_returns_empty_when_no_files(tmp_path: Path):
     assert loaded.empty
 
 
-def test_parquet_store_lists_datasets_without_manifest(tmp_path: Path, make_synthetic_candles):
+def test_parquet_store_lists_datasets_without_manifest(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path)
     # Create non-directory in base_dir to test filter
     (tmp_path / "dummy.txt").write_text("ignore", encoding="utf-8")
@@ -135,9 +156,10 @@ def test_parquet_store_lists_datasets_without_manifest(tmp_path: Path, make_synt
     assert sol_dataset["dataset_version"] == "unknown"
 
 
-def test_legacy_manifest_source_default_is_not_provenance(tmp_path: Path, make_synthetic_candles):
+def test_legacy_manifest_source_default_is_not_provenance(
+    tmp_path: Path, make_synthetic_candles
+):
     store = ParquetStore(base_dir=tmp_path)
     store.save_dataset(make_synthetic_candles(periods=5), "BTCUSDT", "1h")
     assert store.read_manifest("BTCUSDT", "1h")["source"] == "binance_public_rest"
     assert store.inspect_provenance("BTCUSDT", "1h").status == "UNKNOWN"
-

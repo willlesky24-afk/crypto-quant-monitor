@@ -91,7 +91,10 @@ class TestStorageModels:
         assert reconstructed.current_price == ctx.current_price
         assert reconstructed.timestamp == ctx.timestamp
         assert reconstructed.signal.action == "BUY"
-        assert reconstructed.signal.positives == ("RSI oversold rebound", "Volume surge")
+        assert reconstructed.signal.positives == (
+            "RSI oversold rebound",
+            "Volume surge",
+        )
         assert reconstructed.signal.warnings == ("Approaching major resistance",)
         assert reconstructed.risk.stop_loss == 63500.0
         assert reconstructed.risk.take_profit == 68000.0
@@ -148,8 +151,12 @@ class TestSQLiteMarketContextRepository:
 
     def test_upsert_replaces_duplicate_timestamp(self):
         repo = SQLiteMarketContextRepository(":memory:")
-        ctx1 = make_test_context(timestamp_str="2026-03-30 12:00:00", price=60000.0, action="WAIT")
-        ctx2 = make_test_context(timestamp_str="2026-03-30 12:00:00", price=61000.0, action="BUY")
+        ctx1 = make_test_context(
+            timestamp_str="2026-03-30 12:00:00", price=60000.0, action="WAIT"
+        )
+        ctx2 = make_test_context(
+            timestamp_str="2026-03-30 12:00:00", price=61000.0, action="BUY"
+        )
 
         repo.save_context(ctx1)
         assert repo.count_records() == 1
@@ -240,7 +247,19 @@ class TestSQLiteMarketContextRepository:
                 payload_json, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("CORRUPT", "1h", "2026-03-30 12:00:00", 100.0, "UNKNOWN", "WAIT", "NEUTRAL", 50.0, 0.5, "{broken_json", "2026-03-30T12:00:00Z"),
+            (
+                "CORRUPT",
+                "1h",
+                "2026-03-30 12:00:00",
+                100.0,
+                "UNKNOWN",
+                "WAIT",
+                "NEUTRAL",
+                50.0,
+                0.5,
+                "{broken_json",
+                "2026-03-30T12:00:00Z",
+            ),
         )
         assert repo.get_latest_context("CORRUPT", "1h") is None
         assert repo.get_context_history("CORRUPT", "1h") == []

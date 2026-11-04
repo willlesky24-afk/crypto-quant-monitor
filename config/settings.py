@@ -85,7 +85,6 @@ class AppSettings:
     ai_provider: AIProviderSettings = field(default_factory=AIProviderSettings)
 
     @classmethod
-
     def from_env(cls) -> AppSettings:
         """Construct AppSettings resolving environment variable overrides."""
         # Environment
@@ -95,7 +94,11 @@ class AppSettings:
         host = os.getenv("SERVER_HOST", "0.0.0.0").strip()
         port = int(os.getenv("SERVER_PORT", "8000").strip())
         workers = int(os.getenv("SERVER_WORKERS", "1").strip())
-        reload_val = os.getenv("SERVER_RELOAD", "false").strip().lower() in ("true", "1", "yes")
+        reload_val = os.getenv("SERVER_RELOAD", "false").strip().lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         log_level = os.getenv("LOG_LEVEL", "info").strip().lower()
         server = ServerSettings(
             host=host,
@@ -107,9 +110,13 @@ class AppSettings:
 
         # Storage
         data_dir = Path(os.getenv("DATA_DIR", "data")).resolve()
-        raw_db = os.getenv("DATABASE_PATH", str(data_dir / "market_contexts.db")).strip()
+        raw_db = os.getenv(
+            "DATABASE_PATH", str(data_dir / "market_contexts.db")
+        ).strip()
         database_path = Path(raw_db).resolve()
-        parquet_dir = Path(os.getenv("PARQUET_DIR", str(data_dir / "parquet"))).resolve()
+        parquet_dir = Path(
+            os.getenv("PARQUET_DIR", str(data_dir / "parquet"))
+        ).resolve()
         storage = StorageSettings(
             data_dir=data_dir,
             database_path=database_path,
@@ -129,12 +136,16 @@ class AppSettings:
 
         # Security
         api_key = os.getenv("OPERATOR_API_KEY", "").strip() or None
-        sec_enabled = os.getenv("OPERATOR_API_SECURITY_ENABLED", "false").strip().lower() in (
+        sec_enabled = os.getenv(
+            "OPERATOR_API_SECURITY_ENABLED", "false"
+        ).strip().lower() in (
             "true",
             "1",
             "yes",
         )
-        rl_enabled = os.getenv("OPERATOR_API_RATE_LIMIT_ENABLED", "true").strip().lower() in (
+        rl_enabled = os.getenv(
+            "OPERATOR_API_RATE_LIMIT_ENABLED", "true"
+        ).strip().lower() in (
             "true",
             "1",
             "yes",
@@ -198,7 +209,6 @@ class AppSettings:
             observability=observability,
             ai_provider=ai_provider,
         )
-
 
     def ensure_directories(self) -> None:
         """Create target data and logs directories if they do not exist."""

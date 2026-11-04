@@ -16,7 +16,9 @@ def test_provider_factory_mock():
 
 
 def test_provider_factory_gemini():
-    prov = ProviderFactory.create_provider("gemini", api_key="test_key", model="gemini-2.5-flash")
+    prov = ProviderFactory.create_provider(
+        "gemini", api_key="test_key", model="gemini-2.5-flash"
+    )
     assert isinstance(prov, GeminiProvider)
     assert prov.api_key == "test_key"
     assert prov.model == "gemini-2.5-flash"
@@ -30,7 +32,9 @@ def test_provider_factory_openai():
 
 
 def test_provider_factory_ollama():
-    prov = ProviderFactory.create_provider("ollama", base_url="http://custom:11434", model="mistral")
+    prov = ProviderFactory.create_provider(
+        "ollama", base_url="http://custom:11434", model="mistral"
+    )
     assert isinstance(prov, OllamaProvider)
     assert prov.base_url == "http://custom:11434"
     assert prov.model == "mistral"

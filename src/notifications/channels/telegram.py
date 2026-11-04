@@ -68,7 +68,11 @@ class TelegramChannel(BaseNotificationChannel):
         safe_reasoning = html.escape(payload.reasoning or "N/A")
 
         is_fx = "=X" in payload.symbol or payload.price < 10
-        p_str = f"${payload.price}" if tracked else (f"${payload.price:,.4f}" if is_fx else f"${payload.price:,.2f}")
+        p_str = (
+            f"${payload.price}"
+            if tracked
+            else (f"${payload.price:,.4f}" if is_fx else f"${payload.price:,.2f}")
+        )
 
         lines = [
             f"<b>{icon} SIGNAL ALERT: {safe_symbol} [{safe_tf}]</b>",
@@ -82,26 +86,50 @@ class TelegramChannel(BaseNotificationChannel):
         ]
 
         if tracked:
-            lines.extend([
-                f"<b>ID de seguimiento:</b> {html.escape(str(payload.metadata['tracking_id']))}",
-                f"<b>Registro (UTC):</b> {html.escape(str(payload.metadata['tracking_recorded_at']))}",
-                f"<b>Estado de señal:</b> {html.escape(str(payload.metadata['signal_status']))}",
-            ])
+            lines.extend(
+                [
+                    f"<b>ID de seguimiento:</b> {html.escape(str(payload.metadata['tracking_id']))}",
+                    f"<b>Registro (UTC):</b> {html.escape(str(payload.metadata['tracking_recorded_at']))}",
+                    f"<b>Estado de señal:</b> {html.escape(str(payload.metadata['signal_status']))}",
+                ]
+            )
 
         if payload.stop_loss is not None:
-            sl_str = f"${payload.stop_loss}" if tracked else (f"${payload.stop_loss:,.4f}" if is_fx else f"${payload.stop_loss:,.2f}")
+            sl_str = (
+                f"${payload.stop_loss}"
+                if tracked
+                else (
+                    f"${payload.stop_loss:,.4f}"
+                    if is_fx
+                    else f"${payload.stop_loss:,.2f}"
+                )
+            )
             lines.append(f"<b>🛑 Stop Loss:</b> {sl_str}")
         if payload.take_profit is not None:
-            tp_str = f"${payload.take_profit}" if tracked else (f"${payload.take_profit:,.4f}" if is_fx else f"${payload.take_profit:,.2f}")
+            tp_str = (
+                f"${payload.take_profit}"
+                if tracked
+                else (
+                    f"${payload.take_profit:,.4f}"
+                    if is_fx
+                    else f"${payload.take_profit:,.2f}"
+                )
+            )
             lines.append(f"<b>🎯 Take Profit:</b> {tp_str}")
         if payload.risk_reward_ratio is not None:
             ratio_label = "R:R bruto (sin costes)" if tracked else "R:R Ratio"
-            ratio_value = str(payload.risk_reward_ratio) if tracked else f"{payload.risk_reward_ratio:.2f}"
+            ratio_value = (
+                str(payload.risk_reward_ratio)
+                if tracked
+                else f"{payload.risk_reward_ratio:.2f}"
+            )
             lines.append(f"<b>⚖️ {ratio_label}:</b> {ratio_value}")
 
         lines.append(f"<b>🧠 Reasoning:</b> {safe_reasoning}")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"<i>Event ID: {html.escape(payload.event_id)} | Priority: {payload.priority.value}</i>")
+        lines.append(
+            f"<i>Event ID: {html.escape(payload.event_id)} | Priority: {payload.priority.value}</i>"
+        )
 
         full_message = "\n".join(lines)
 
@@ -125,7 +153,9 @@ class TelegramChannel(BaseNotificationChannel):
             )
 
         if (not self.bot_token or not self.chat_id) and not self.dry_run:
-            logger.error(f"[{self.name}] Cannot send: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.")
+            logger.error(
+                f"[{self.name}] Cannot send: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing."
+            )
             return NotificationResult(
                 success=False,
                 channel=self.channel_type,
@@ -142,13 +172,15 @@ class TelegramChannel(BaseNotificationChannel):
             "disable_web_page_preview": True,
         }
 
-        success, status_code, error_msg, retries, latency_ms = self.http_post_with_retry(
-            url=api_url,
-            json_data=json_data,
-            headers={"Content-Type": "application/json"},
-            timeout=self.timeout,
-            max_retries=self.max_retries,
-            base_backoff_sec=self.base_backoff_sec,
+        success, status_code, error_msg, retries, latency_ms = (
+            self.http_post_with_retry(
+                url=api_url,
+                json_data=json_data,
+                headers={"Content-Type": "application/json"},
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                base_backoff_sec=self.base_backoff_sec,
+            )
         )
 
         return NotificationResult(
@@ -206,7 +238,9 @@ class TelegramChannel(BaseNotificationChannel):
     ) -> bool:
         """Deliver an AI Copilot interpretation message to Telegram."""
         if (not self.bot_token or not self.chat_id) and not self.dry_run:
-            logger.error(f"[{self.name}] Cannot send: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.")
+            logger.error(
+                f"[{self.name}] Cannot send: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing."
+            )
             return False
 
         msg_body = self.format_copilot_response(
@@ -219,7 +253,9 @@ class TelegramChannel(BaseNotificationChannel):
         )
 
         if self.dry_run:
-            logger.info(f"[{self.name}] [DRY-RUN] Sent copilot message: {msg_body[:100]}...")
+            logger.info(
+                f"[{self.name}] [DRY-RUN] Sent copilot message: {msg_body[:100]}..."
+            )
             return True
 
         api_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -239,4 +275,3 @@ class TelegramChannel(BaseNotificationChannel):
             base_backoff_sec=self.base_backoff_sec,
         )
         return success
-

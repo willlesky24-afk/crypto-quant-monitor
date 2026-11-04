@@ -60,8 +60,11 @@ def _build_test_payload(
 # 1. DISCORD ADAPTER TESTS
 # =====================================================================
 
+
 def test_discord_formatting_colors_and_fields():
-    channel = DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", dry_run=True)
+    channel = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/webhooks/test", dry_run=True
+    )
 
     # LONG format (Green)
     long_payload = _build_test_payload(action="BUY", direction="LONG")
@@ -75,7 +78,9 @@ def test_discord_formatting_colors_and_fields():
     assert "R:R Ratio" in field_names
 
     # SHORT format (Red)
-    short_payload = _build_test_payload(action="SELL", direction="SHORT", stop_loss=66500.0, take_profit=62000.0)
+    short_payload = _build_test_payload(
+        action="SELL", direction="SHORT", stop_loss=66500.0, take_profit=62000.0
+    )
     short_embed = channel.format_message(short_payload)["embeds"][0]
     assert short_embed["color"] == COLOR_SHORT
     assert "🔴" in short_embed["title"]
@@ -125,7 +130,13 @@ def test_tracked_discord_format_preserves_validated_plan_and_provenance():
 
 def test_discord_escapes_untrusted_text_and_candidate_is_not_activated():
     payload = replace(
-        _build_test_payload(action="WAIT", direction="NEUTRAL", stop_loss=None, take_profit=None, risk_reward_ratio=None),
+        _build_test_payload(
+            action="WAIT",
+            direction="NEUTRAL",
+            stop_loss=None,
+            take_profit=None,
+            risk_reward_ratio=None,
+        ),
         symbol="BTC@everyone*",
         reasoning="*untrusted* @everyone",
         metadata={"signal_status": "CANDIDATA", "tracking_id": "forged"},
@@ -141,7 +152,9 @@ def test_discord_escapes_untrusted_text_and_candidate_is_not_activated():
 
 @patch("requests.post")
 def test_discord_send_success_and_failure(mock_post):
-    channel = DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", base_backoff_sec=0.001)
+    channel = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/webhooks/test", base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     # Success 204
@@ -192,6 +205,7 @@ def test_discord_missing_url_and_dry_run():
 # 2. TELEGRAM ADAPTER TESTS
 # =====================================================================
 
+
 def test_telegram_formatting_and_length_protection():
     channel = TelegramChannel(bot_token="dummy_token", chat_id="12345", dry_run=True)
 
@@ -207,7 +221,13 @@ def test_telegram_formatting_and_length_protection():
     msg_short = channel.format_message(payload_short)
     assert "🔴 SIGNAL ALERT: BTCUSDT [1H]" in msg_short
 
-    payload_wait = _build_test_payload(action="WAIT", direction="NEUTRAL", stop_loss=None, take_profit=None, risk_reward_ratio=None)
+    payload_wait = _build_test_payload(
+        action="WAIT",
+        direction="NEUTRAL",
+        stop_loss=None,
+        take_profit=None,
+        risk_reward_ratio=None,
+    )
     msg_wait = channel.format_message(payload_wait)
     assert "⏳ SIGNAL ALERT: BTCUSDT [1H]" in msg_wait
 
@@ -245,7 +265,13 @@ def test_tracked_telegram_format_preserves_validated_plan_and_provenance():
 
 def test_telegram_escapes_untrusted_text_and_candidate_is_not_activated():
     payload = replace(
-        _build_test_payload(action="WAIT", direction="NEUTRAL", stop_loss=None, take_profit=None, risk_reward_ratio=None),
+        _build_test_payload(
+            action="WAIT",
+            direction="NEUTRAL",
+            stop_loss=None,
+            take_profit=None,
+            risk_reward_ratio=None,
+        ),
         symbol="<BTC&USDT>",
         reasoning="<b>unsafe</b>",
         event_id="<id&1>",
@@ -262,7 +288,9 @@ def test_telegram_escapes_untrusted_text_and_candidate_is_not_activated():
 
 @patch("requests.post")
 def test_telegram_send_success_and_failure(mock_post):
-    channel = TelegramChannel(bot_token="dummy_token", chat_id="12345", base_backoff_sec=0.001)
+    channel = TelegramChannel(
+        bot_token="dummy_token", chat_id="12345", base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     # Success 200
@@ -292,7 +320,9 @@ def test_telegram_missing_credentials_and_dry_run():
     channel_no_creds = TelegramChannel(bot_token="", chat_id="", dry_run=False)
     res = channel_no_creds.send(_build_test_payload())
     assert res.success is False
-    assert "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured" in str(res.error_message)
+    assert "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not configured" in str(
+        res.error_message
+    )
 
     # Dry run
     channel_dry = TelegramChannel(bot_token="", chat_id="", dry_run=True)
@@ -308,10 +338,13 @@ def test_telegram_missing_credentials_and_dry_run():
 # 3. GENERIC WEBHOOK ADAPTER TESTS
 # =====================================================================
 
+
 @patch("requests.post")
 def test_webhook_send_and_custom_headers(mock_post):
     headers = {"Authorization": "Bearer secret_api_key", "X-Custom": "test"}
-    channel = WebhookChannel(url="https://api.example.com/alerts", headers=headers, base_backoff_sec=0.001)
+    channel = WebhookChannel(
+        url="https://api.example.com/alerts", headers=headers, base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     mock_resp = MagicMock()
@@ -346,9 +379,14 @@ def test_webhook_missing_url_and_dry_run():
 # 4. RETRY SYSTEM TESTS (HTTP 429, 5xx, Network Timeout)
 # =====================================================================
 
+
 @patch("requests.post")
 def test_retry_on_429_then_success(mock_post):
-    channel = DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", max_retries=3, base_backoff_sec=0.001)
+    channel = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/webhooks/test",
+        max_retries=3,
+        base_backoff_sec=0.001,
+    )
     payload = _build_test_payload()
 
     resp_429 = MagicMock(status_code=429, text="Rate Limited")
@@ -364,7 +402,9 @@ def test_retry_on_429_then_success(mock_post):
 
 @patch("requests.post")
 def test_retry_on_503_exceeds_max_retries(mock_post):
-    channel = WebhookChannel(url="https://api.example.com/alerts", max_retries=2, base_backoff_sec=0.001)
+    channel = WebhookChannel(
+        url="https://api.example.com/alerts", max_retries=2, base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     resp_503 = MagicMock(status_code=503, text="Service Unavailable")
@@ -379,11 +419,16 @@ def test_retry_on_503_exceeds_max_retries(mock_post):
 
 @patch("requests.post")
 def test_retry_on_network_timeout_then_success(mock_post):
-    channel = TelegramChannel(bot_token="tok", chat_id="123", max_retries=2, base_backoff_sec=0.001)
+    channel = TelegramChannel(
+        bot_token="tok", chat_id="123", max_retries=2, base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     resp_200 = MagicMock(status_code=200, text="OK")
-    mock_post.side_effect = [requests.exceptions.Timeout("Connection timed out"), resp_200]
+    mock_post.side_effect = [
+        requests.exceptions.Timeout("Connection timed out"),
+        resp_200,
+    ]
 
     res = channel.send(payload)
     assert res.success is True
@@ -393,7 +438,9 @@ def test_retry_on_network_timeout_then_success(mock_post):
 
 @patch("requests.post")
 def test_network_exception_exceeds_retries(mock_post):
-    channel = WebhookChannel(url="https://api.example.com/alerts", max_retries=1, base_backoff_sec=0.001)
+    channel = WebhookChannel(
+        url="https://api.example.com/alerts", max_retries=1, base_backoff_sec=0.001
+    )
     payload = _build_test_payload()
 
     mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
@@ -405,7 +452,9 @@ def test_network_exception_exceeds_retries(mock_post):
 
 
 def test_channel_disabled_returns_error_immediately():
-    channel = DiscordWebhookChannel(webhook_url="https://discord.com/api/test", is_enabled=False)
+    channel = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/test", is_enabled=False
+    )
     payload = _build_test_payload()
 
     res = channel.send(payload)
@@ -417,12 +466,19 @@ def test_channel_disabled_returns_error_immediately():
 # 5. CHANNEL ISOLATION TESTS
 # =====================================================================
 
+
 @patch("requests.post")
 def test_channel_isolation_one_fails_others_succeed(mock_post):
     """Demonstrates that a failure in Telegram does not stop Discord or Webhook."""
-    discord = DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", base_backoff_sec=0.001)
-    telegram = TelegramChannel(bot_token="bad_token", chat_id="123", base_backoff_sec=0.001)
-    webhook = WebhookChannel(url="https://api.example.com/alerts", base_backoff_sec=0.001)
+    discord = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/webhooks/test", base_backoff_sec=0.001
+    )
+    telegram = TelegramChannel(
+        bot_token="bad_token", chat_id="123", base_backoff_sec=0.001
+    )
+    webhook = WebhookChannel(
+        url="https://api.example.com/alerts", base_backoff_sec=0.001
+    )
 
     payload = _build_test_payload()
 
@@ -457,9 +513,10 @@ def test_channel_isolation_one_fails_others_succeed(mock_post):
 
 
 def test_channel_negative_max_retries():
-    channel = DiscordWebhookChannel(webhook_url="https://discord.com/api/webhooks/test", max_retries=-1)
+    channel = DiscordWebhookChannel(
+        webhook_url="https://discord.com/api/webhooks/test", max_retries=-1
+    )
     payload = _build_test_payload()
     res = channel.send(payload)
     assert res.success is False
     assert "Max retries exceeded" in str(res.error_message)
-

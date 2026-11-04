@@ -92,10 +92,24 @@ def test_evaluate_long_win(temp_tracker):
 
     # Mock candles that hit TP
     mock_loader = MagicMock()
-    mock_candles = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 10:00:00", tz="UTC"), "open": 60000.0, "high": 60500.0, "low": 59800.0, "close": 60400.0},
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "open": 60400.0, "high": 62500.0, "low": 60300.0, "close": 62200.0},
-    ])
+    mock_candles = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 10:00:00", tz="UTC"),
+                "open": 60000.0,
+                "high": 60500.0,
+                "low": 59800.0,
+                "close": 60400.0,
+            },
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "open": 60400.0,
+                "high": 62500.0,
+                "low": 60300.0,
+                "close": 62200.0,
+            },
+        ]
+    )
     mock_loader.get_klines.return_value = mock_candles
 
     updated = temp_tracker.update_alert_outcomes(crypto_loader=mock_loader)
@@ -134,9 +148,17 @@ def test_evaluate_short_loss(temp_tracker):
 
     # Mock candles that hit SL
     mock_loader = MagicMock()
-    mock_candles = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "open": 3000.0, "high": 3150.0, "low": 2980.0, "close": 3120.0},
-    ])
+    mock_candles = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "open": 3000.0,
+                "high": 3150.0,
+                "low": 2980.0,
+                "close": 3120.0,
+            },
+        ]
+    )
     mock_loader.get_klines.return_value = mock_candles
 
     updated = temp_tracker.update_alert_outcomes(crypto_loader=mock_loader)
@@ -191,16 +213,35 @@ def test_only_candles_after_recording_can_resolve_alert(temp_tracker, monkeypatc
     )
     temp_tracker.record_alert(make_signal(), risk_reward=2.0)
     loader = MagicMock()
-    loader.get_klines.return_value = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 10:15:00", tz="UTC"), "high": 62500, "low": 60000, "close": 62200},
-        {"timestamp": pd.Timestamp("2026-09-23 10:30:00", tz="UTC"), "high": 62500, "low": 60000, "close": 62200},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 10:15:00", tz="UTC"),
+                "high": 62500,
+                "low": 60000,
+                "close": 62200,
+            },
+            {
+                "timestamp": pd.Timestamp("2026-09-23 10:30:00", tz="UTC"),
+                "high": 62500,
+                "low": 60000,
+                "close": 62200,
+            },
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 0
     assert temp_tracker.get_all_alerts()[0]["status"] == "OPEN"
 
-    loader.get_klines.return_value = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "high": 62500, "low": 60000, "close": 62200},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "high": 62500,
+                "low": 60000,
+                "close": 62200,
+            },
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 1
     row = temp_tracker.get_all_alerts()[0]
     assert row["status"] == "WIN"
@@ -211,9 +252,11 @@ def test_only_candles_after_recording_can_resolve_alert(temp_tracker, monkeypatc
 def test_missing_candle_timestamps_cannot_resolve_alert(temp_tracker):
     temp_tracker.record_alert(make_signal(), risk_reward=2.0)
     loader = MagicMock()
-    loader.get_klines.return_value = pd.DataFrame([
-        {"high": 62500, "low": 60000, "close": 62200},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {"high": 62500, "low": 60000, "close": 62200},
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 0
     assert temp_tracker.get_all_alerts()[0]["status"] == "OPEN"
 
@@ -221,9 +264,16 @@ def test_missing_candle_timestamps_cannot_resolve_alert(temp_tracker):
 def test_planned_r_and_observed_floating_r_stay_separate(temp_tracker):
     temp_tracker.record_alert(make_signal(), risk_reward=2.0)
     loader = MagicMock()
-    loader.get_klines.return_value = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "high": 60700, "low": 60000, "close": 60500},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "high": 60700,
+                "low": 60000,
+                "close": 60500,
+            },
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 1
     row = temp_tracker.get_all_alerts()[0]
     assert row["status"] == "OPEN"
@@ -240,12 +290,29 @@ def test_legacy_rows_are_preserved_classified_and_excluded_from_stats(temp_track
                 current_or_exit_price, exit_time, pnl_percent, r_multiple, is_forex
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                "legacy-01", "2026-09-22 10:00:00", "BTCUSDT", "LONG", "1h",
-                60000.0, 58800.0, 62400.0, 90.0, 2.0, "WIN",
-                62400.0, "2026-09-22 11:00:00", 4.0, 2.0, 0,
+                "legacy-01",
+                "2026-09-22 10:00:00",
+                "BTCUSDT",
+                "LONG",
+                "1h",
+                60000.0,
+                58800.0,
+                62400.0,
+                90.0,
+                2.0,
+                "WIN",
+                62400.0,
+                "2026-09-22 11:00:00",
+                4.0,
+                2.0,
+                0,
             ),
         )
-        before = tuple(conn.execute("SELECT * FROM dispatched_alerts WHERE id = 'legacy-01'").fetchone())
+        before = tuple(
+            conn.execute(
+                "SELECT * FROM dispatched_alerts WHERE id = 'legacy-01'"
+            ).fetchone()
+        )
 
     row = temp_tracker.get_all_alerts()[0]
     assert row["risk_integrity_status"] == "LEGACY_UNVERIFIED"
@@ -257,8 +324,15 @@ def test_legacy_rows_are_preserved_classified_and_excluded_from_stats(temp_track
     assert stats["all_recorded_alerts"] == 1
     assert stats["excluded_unverified_alerts"] == 1
     with temp_tracker._get_connection() as conn:
-        after = tuple(conn.execute("SELECT * FROM dispatched_alerts WHERE id = 'legacy-01'").fetchone())
-        assert conn.execute("SELECT COUNT(*) FROM validated_alert_plans").fetchone()[0] == 0
+        after = tuple(
+            conn.execute(
+                "SELECT * FROM dispatched_alerts WHERE id = 'legacy-01'"
+            ).fetchone()
+        )
+        assert (
+            conn.execute("SELECT COUNT(*) FROM validated_alert_plans").fetchone()[0]
+            == 0
+        )
     assert after == before
 
 
@@ -271,37 +345,70 @@ def test_legacy_open_alert_is_never_evaluated_or_revalidated_on_duplicate(temp_t
                 current_or_exit_price, exit_time, pnl_percent, r_multiple, is_forex
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                "verified-fixture", "2026-09-23 10:00:00", "BTCUSDT", "LONG", "1h",
-                60000.0, 59000.0, 62000.0, 90.0, 2.0, "OPEN",
-                60000.0, None, 0.0, 0.0, 0,
+                "verified-fixture",
+                "2026-09-23 10:00:00",
+                "BTCUSDT",
+                "LONG",
+                "1h",
+                60000.0,
+                59000.0,
+                62000.0,
+                90.0,
+                2.0,
+                "OPEN",
+                60000.0,
+                None,
+                0.0,
+                0.0,
+                0,
             ),
         )
     duplicate = temp_tracker.record_alert(make_signal(), risk_reward=2.0)
     assert duplicate["risk_integrity_status"] == "LEGACY_UNVERIFIED"
     loader = MagicMock()
-    loader.get_klines.return_value = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "high": 62500, "low": 60000, "close": 62200},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "high": 62500,
+                "low": 60000,
+                "close": 62200,
+            },
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 0
     loader.get_klines.assert_not_called()
     row = temp_tracker.get_all_alerts()[0]
     assert row["status"] == "OPEN"
     assert row["risk_integrity_status"] == "LEGACY_UNVERIFIED"
     with temp_tracker._get_connection() as conn:
-        assert conn.execute("SELECT COUNT(*) FROM validated_alert_plans").fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT COUNT(*) FROM validated_alert_plans").fetchone()[0]
+            == 0
+        )
 
 
 def test_invalid_persisted_plan_is_not_evaluated_or_counted(temp_tracker):
     temp_tracker.record_alert(make_signal(), risk_reward=2.0)
     with temp_tracker._get_connection() as conn:
-        conn.execute("UPDATE dispatched_alerts SET risk_reward = 99 WHERE id = ?", ("verified-fixture",))
+        conn.execute(
+            "UPDATE dispatched_alerts SET risk_reward = 99 WHERE id = ?",
+            ("verified-fixture",),
+        )
     row = temp_tracker.get_all_alerts()[0]
     assert row["risk_integrity_status"] == "INVALID_PLAN"
     assert temp_tracker.compute_statistics()["excluded_unverified_alerts"] == 1
     loader = MagicMock()
-    loader.get_klines.return_value = pd.DataFrame([
-        {"timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"), "high": 62500, "low": 60000, "close": 62200},
-    ])
+    loader.get_klines.return_value = pd.DataFrame(
+        [
+            {
+                "timestamp": pd.Timestamp("2026-09-23 11:00:00", tz="UTC"),
+                "high": 62500,
+                "low": 60000,
+                "close": 62200,
+            },
+        ]
+    )
     assert temp_tracker.update_alert_outcomes(crypto_loader=loader) == 0
     loader.get_klines.assert_not_called()
     assert temp_tracker.get_all_alerts()[0]["status"] == "OPEN"

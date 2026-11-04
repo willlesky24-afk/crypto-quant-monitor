@@ -18,10 +18,7 @@ else:  # pragma: no cover - exercised by subprocess import compatibility test.
     from signal_history import SignalHistory
 
 
-
 class MarketReport:
-
-
     def __init__(self, signal_history=None):
 
         self.analyzer = MarketAnalyzer()
@@ -39,12 +36,8 @@ class MarketReport:
         self.quant_score = QuantScore()
 
         self.signal_history = (
-            signal_history
-            if signal_history is not None
-            else SignalHistory()
+            signal_history if signal_history is not None else SignalHistory()
         )
-
-
 
     def generate(
         self,

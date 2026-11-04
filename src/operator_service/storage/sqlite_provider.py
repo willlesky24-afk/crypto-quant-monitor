@@ -150,7 +150,8 @@ class SQLiteMarketContextRepository(BaseMarketContextRepository):
                 return market_context_from_dict(row["payload_json"])
             except Exception as exc:
                 logger.error(
-                    f"Corrupted MarketContext payload for {sym} {tf}: {exc}", exc_info=True
+                    f"Corrupted MarketContext payload for {sym} {tf}: {exc}",
+                    exc_info=True,
                 )
                 return None
 
@@ -180,7 +181,9 @@ class SQLiteMarketContextRepository(BaseMarketContextRepository):
                 try:
                     contexts.append(market_context_from_dict(row["payload_json"]))
                 except Exception as exc:
-                    logger.warning(f"Skipping corrupted history record for {sym} {tf}: {exc}")
+                    logger.warning(
+                        f"Skipping corrupted history record for {sym} {tf}: {exc}"
+                    )
             return contexts
 
     def get_available_symbols(self) -> list[str]:
@@ -206,7 +209,9 @@ class SQLiteMarketContextRepository(BaseMarketContextRepository):
             cursor.execute(sql, (sym,))
             return [str(row["timeframe"]) for row in cursor.fetchall()]
 
-    def count_records(self, symbol: str | None = None, timeframe: str | None = None) -> int:
+    def count_records(
+        self, symbol: str | None = None, timeframe: str | None = None
+    ) -> int:
         """Count the number of stored context records."""
         with self._lock:
             if self._is_closed:
@@ -273,7 +278,9 @@ class SQLiteMarketContextProvider(BaseMarketContextProvider):
         """Store or update the closed candle MarketContext in the persistent database."""
         self._repository.save_context(context)
 
-    async def get_latest_context(self, symbol: str, timeframe: str) -> MarketContext | None:
+    async def get_latest_context(
+        self, symbol: str, timeframe: str
+    ) -> MarketContext | None:
         """Retrieve the latest closed candle MarketContext for a given symbol and timeframe."""
         return self._repository.get_latest_context(symbol=symbol, timeframe=timeframe)
 
@@ -289,7 +296,9 @@ class SQLiteMarketContextProvider(BaseMarketContextProvider):
         self, symbol: str, timeframe: str, limit: int = 50
     ) -> list[MarketContext]:
         """Retrieve historical closed candle MarketContext snapshots."""
-        return self._repository.get_context_history(symbol=symbol, timeframe=timeframe, limit=limit)
+        return self._repository.get_context_history(
+            symbol=symbol, timeframe=timeframe, limit=limit
+        )
 
     def close(self) -> None:
         """Close the underlying repository."""

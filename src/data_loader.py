@@ -117,4 +117,4 @@ class BinanceDataLoader:
                 "close",
                 "volume",
             ]
-        ]
+        ]

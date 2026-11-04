@@ -34,7 +34,9 @@ class BaseNotificationChannel(ABC):
     def validate_payload(self, payload: NotificationPayload) -> bool:
         """Validate that the payload has the mandatory fields for transmission."""
         if not payload.symbol or not payload.timeframe or not payload.event_id:
-            logger.warning(f"[{self.name}] Invalid payload: missing mandatory identifiers.")
+            logger.warning(
+                f"[{self.name}] Invalid payload: missing mandatory identifiers."
+            )
             return False
         if payload.price <= 0:
             logger.warning(f"[{self.name}] Invalid payload: price must be positive.")
@@ -66,7 +68,9 @@ class BaseNotificationChannel(ABC):
             return False, None, f"Channel '{self.name}' is disabled", 0, 0.0
 
         if self.dry_run:
-            logger.info(f"[{self.name}] Dry-run mode enabled: skipping HTTP POST to {url}")
+            logger.info(
+                f"[{self.name}] Dry-run mode enabled: skipping HTTP POST to {url}"
+            )
             return True, 200, None, 0, 0.0
 
         last_status: int | None = None
@@ -107,7 +111,11 @@ class BaseNotificationChannel(ABC):
                 logger.error(f"[{self.name}] Non-retryable HTTP error: {last_error}")
                 return False, last_status, last_error, attempt, total_latency_ms
 
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as exc:
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.RequestException,
+            ) as exc:
                 elapsed_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
                 total_latency_ms += elapsed_ms
                 last_error = f"Network exception: {exc.__class__.__name__} - {str(exc)}"
@@ -120,7 +128,13 @@ class BaseNotificationChannel(ABC):
                     continue
                 return False, None, last_error, attempt, total_latency_ms
 
-        return False, last_status, last_error or "Max retries exceeded", max_retries, total_latency_ms
+        return (
+            False,
+            last_status,
+            last_error or "Max retries exceeded",
+            max_retries,
+            total_latency_ms,
+        )
 
     @abstractmethod
     def format_message(self, payload: NotificationPayload) -> Any:

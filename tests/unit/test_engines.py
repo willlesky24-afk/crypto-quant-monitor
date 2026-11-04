@@ -127,9 +127,7 @@ def test_signal_engine_branches(analysis_factory, profile, overrides, state, sco
         ),
     ],
 )
-def test_risk_engine_branches(
-    analysis_factory, profile, overrides, level, risk_score
-):
+def test_risk_engine_branches(analysis_factory, profile, overrides, level, risk_score):
     result = RiskEngine().evaluate(analysis_factory(**overrides), profile)
     assert result["level"] == level
     assert result["risk_score"] == risk_score

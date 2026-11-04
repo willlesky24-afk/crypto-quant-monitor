@@ -92,5 +92,3 @@ def make_synthetic_candles() -> Callable[..., pd.DataFrame]:
         )
 
     return _build
-
-

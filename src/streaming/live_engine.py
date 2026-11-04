@@ -50,15 +50,22 @@ class LiveExecutionEngine:
         # legitimate on legacy, uncalibrated calls but cannot satisfy a request.
         self.calibration_required = calibration_required
         self.calibrated_params = calibrated_params
-        if calibration_required and (not isinstance(calibrated_params, dict) or not calibrated_params):
-            raise OptimizationUnavailableError("Optimización no disponible: no hay parámetros calibrados.")
+        if calibration_required and (
+            not isinstance(calibrated_params, dict) or not calibrated_params
+        ):
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: no hay parámetros calibrados."
+            )
         if calibration_required and not predictive_mode:
-            raise OptimizationUnavailableError("Optimización no disponible: modo predictivo desactivado.")
+            raise OptimizationUnavailableError(
+                "Optimización no disponible: modo predictivo desactivado."
+            )
         if calibration_required:
             for params in calibrated_params.values():
                 DecisionEngine.validate_calibration_params(params, required=True)
         self.calibration_state = (
-            CalibrationState.AVAILABLE.value if calibration_required
+            CalibrationState.AVAILABLE.value
+            if calibration_required
             else CalibrationState.NOT_REQUESTED.value
         )
         self.predictive_mode = predictive_mode
@@ -145,9 +152,15 @@ class LiveExecutionEngine:
         # 3. Predictive & Optimization Layer (t > T)
         if self.predictive_mode:
             regime_res = self.regime_classifier.classify(df_enriched)
-            pred_res = self.predictive_engine.evaluate(df_enriched, current_regime_res=regime_res)
+            pred_res = self.predictive_engine.evaluate(
+                df_enriched, current_regime_res=regime_res
+            )
 
-            opt_param = self.calibrated_params.get(regime_res.regime.value) if self.calibrated_params else None
+            opt_param = (
+                self.calibrated_params.get(regime_res.regime.value)
+                if self.calibrated_params
+                else None
+            )
             if self.calibration_required and opt_param is None:
                 raise OptimizationUnavailableError(
                     f"Optimización no disponible: faltan parámetros para {regime_res.regime.value}."
@@ -250,7 +263,11 @@ class LiveExecutionEngine:
 
         # 7. Only confirmed, validated entries may be dispatched as operational alerts.
         notif_results: list[NotificationResult] = []
-        if self.dispatcher is not None and plan["status"] == "ACTIVADA" and plan["entry_confirmed"]:
+        if (
+            self.dispatcher is not None
+            and plan["status"] == "ACTIVADA"
+            and plan["entry_confirmed"]
+        ):
             try:
                 notif_results = self.dispatcher.dispatch_signal(signal_event)
             except Exception as exc:

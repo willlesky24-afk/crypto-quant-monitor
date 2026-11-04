@@ -29,7 +29,6 @@ class SQLiteOperatorMemory(BaseOperatorMemory):
     def _get_connection(self) -> sqlite3.Connection:
         return self._conn
 
-
     def _init_db(self) -> None:
         with self._lock, self._get_connection() as conn:
             conn.execute(

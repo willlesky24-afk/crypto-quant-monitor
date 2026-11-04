@@ -81,7 +81,9 @@ def test_anomaly_detector_atr_expansion():
     curr = _create_context(atr=1450.0)  # +45%
 
     alerts = detector.evaluate(curr, prev)
-    vol_alerts = [a for a in alerts if a.anomaly_type == AnomalyType.VOLATILITY_EXPANSION]
+    vol_alerts = [
+        a for a in alerts if a.anomaly_type == AnomalyType.VOLATILITY_EXPANSION
+    ]
     assert len(vol_alerts) == 1
     assert vol_alerts[0].current_value == 1450.0
 

@@ -64,7 +64,10 @@ class OperatorAssistant(BaseOperatorAssistant):
         meta = context.metadata
         entry = meta["entry_price"] if "entry_price" in meta else context.current_price
         levels = RiskEngine().calculate_levels(
-            entry, context.risk.stop_loss, context.risk.take_profit, context.signal.direction
+            entry,
+            context.risk.stop_loss,
+            context.risk.take_profit,
+            context.signal.direction,
         )
         status = meta.get("signal_status", "SIN CONFIRMACIÓN")
         reason = levels["reason"]
@@ -85,19 +88,26 @@ class OperatorAssistant(BaseOperatorAssistant):
                     break
         if reason is not None:
             return {
-                "status": status if status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"} else "NO DISPONIBLE",
-                "reason": reason, "entry_price": None,
-                "stop_loss": None, "take_profit": None, "gross_risk_reward": None,
+                "status": status
+                if status in {"ESPERANDO CONFIRMACIÓN", "DESCARTADA"}
+                else "NO DISPONIBLE",
+                "reason": reason,
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit": None,
+                "gross_risk_reward": None,
                 "entry_confirmed": False,
             }
         return {
             **levels,
             "status": status,
-            "entry_confirmed": status == "ACTIVADA" and meta.get("entry_confirmed") is True,
+            "entry_confirmed": status == "ACTIVADA"
+            and meta.get("entry_confirmed") is True,
         }
 
-
-    def _extract_symbol_timeframe(self, text: str, fallback_symbol: str, fallback_tf: str) -> tuple[str, str]:
+    def _extract_symbol_timeframe(
+        self, text: str, fallback_symbol: str, fallback_tf: str
+    ) -> tuple[str, str]:
         """Extract symbol and timeframe tokens if explicitly mentioned in query string."""
         sym, tf, _ = resolve_mentioned_symbol(text, fallback_symbol, fallback_tf)
         return sym, tf
@@ -139,7 +149,9 @@ class OperatorAssistant(BaseOperatorAssistant):
         num_images = (
             len(images_list)
             if images_list
-            else (1 if bool(query.metadata and query.metadata.get("image_bytes")) else 0)
+            else (
+                1 if bool(query.metadata and query.metadata.get("image_bytes")) else 0
+            )
         )
         has_image = num_images > 0
 
@@ -151,7 +163,9 @@ class OperatorAssistant(BaseOperatorAssistant):
                 has_image=has_image,
                 num_images=num_images,
             )
-            llm_res = await self._ai_provider.generate_response(prompt, metadata=query.metadata)
+            llm_res = await self._ai_provider.generate_response(
+                prompt, metadata=query.metadata
+            )
             if llm_res.content.startswith("⚠️") or "fallback" in llm_res.provider:
                 if has_image:
                     image_noun = "las imágenes" if num_images > 1 else "la imagen"
@@ -161,7 +175,9 @@ class OperatorAssistant(BaseOperatorAssistant):
                         f"Por favor verifica la clave de Gemini o reintenta subir el gráfico.*"
                     )
                 else:
-                    local_explanation = self._generate_local_explanation_es(context, query.query)
+                    local_explanation = self._generate_local_explanation_es(
+                        context, query.query
+                    )
                     explanation_summary = f"{llm_res.content}\n\n{local_explanation}"
             else:
                 explanation_summary = llm_res.content
@@ -175,7 +191,11 @@ class OperatorAssistant(BaseOperatorAssistant):
             summary = await self._ai_provider.summarize_market(context)
             explanation_summary = explanation.summary
             market_outlook = summary.outlook
-            key_drivers = list(explanation.key_drivers) if explanation.key_drivers else list(context.signal.positives)
+            key_drivers = (
+                list(explanation.key_drivers)
+                if explanation.key_drivers
+                else list(context.signal.positives)
+            )
             if not key_drivers:
                 key_drivers.append(f"Regime: {context.market_regime}")
                 key_drivers.append(f"Quant Score: {context.quant_score:.1f}")
@@ -198,7 +218,6 @@ class OperatorAssistant(BaseOperatorAssistant):
         )
 
         return OperatorResponse(
-
             answer=answer,
             symbol=context.symbol,
             timeframe=context.timeframe,
@@ -250,14 +269,20 @@ class OperatorAssistant(BaseOperatorAssistant):
         for k, v in sorted(context.technical_indicators.items()):
             val_str = f"{v:.2f}" if isinstance(v, float) else str(v)
             tech_lines.append(f"- {k}: {val_str}")
-        tech_summary = "\n".join(tech_lines) if tech_lines else "Indicators within expected baselines."
+        tech_summary = (
+            "\n".join(tech_lines)
+            if tech_lines
+            else "Indicators within expected baselines."
+        )
 
         # Volume Profile summary
         vp = context.volume_profile
         poc = vp.get("poc", "N/A")
         vah = vp.get("vah", "N/A")
         val = vp.get("val", "N/A")
-        vol_summary = f"POC: {poc} | Value Area High (VAH): {vah} | Value Area Low (VAL): {val}"
+        vol_summary = (
+            f"POC: {poc} | Value Area High (VAH): {vah} | Value Area Low (VAL): {val}"
+        )
 
         # Risk parameters
         plan = self._validated_risk_plan(context)
@@ -297,11 +322,19 @@ class OperatorAssistant(BaseOperatorAssistant):
         direction_desc = (
             "al alza (compra / LONG)"
             if context.signal.direction == "LONG"
-            else ("a la baja (venta / SHORT)" if context.signal.direction == "SHORT" else "neutral / a la espera")
+            else (
+                "a la baja (venta / SHORT)"
+                if context.signal.direction == "SHORT"
+                else "neutral / a la espera"
+            )
         )
 
         quant_fuerza = (
-            "muy alta" if context.quant_score >= 80 else ("moderada-alta" if context.quant_score >= 65 else "neutral/precaución")
+            "muy alta"
+            if context.quant_score >= 80
+            else (
+                "moderada-alta" if context.quant_score >= 65 else "neutral/precaución"
+            )
         )
 
         poc_val = context.volume_profile.get("poc") if context.volume_profile else None
@@ -321,14 +354,16 @@ class OperatorAssistant(BaseOperatorAssistant):
             f"📊 **Diagnóstico Cuantitativo en Lenguaje Cotidiano para {context.symbol} ({context.timeframe.upper()}):**",
             f"- **Postura y Dirección:** El sistema sugiere `{context.signal.action}` {direction_desc}.",
             f"- **Régimen de Mercado:** Actualmente en **{regime_desc}** con el precio en **${context.current_price:,.2f}**.",
-            f"- **Fuerza Técnica (Quant Score):** **{context.quant_score:.1f}/100** (fuerza {quant_fuerza}). De cada 10 métricas analizadas, aproximadamente **{int(context.quant_score/10)} respaldan** este diagnóstico.",
+            f"- **Fuerza Técnica (Quant Score):** **{context.quant_score:.1f}/100** (fuerza {quant_fuerza}). De cada 10 métricas analizadas, aproximadamente **{int(context.quant_score / 10)} respaldan** este diagnóstico.",
             f"- **Probabilidad Predictiva:** **{context.predictive_score:.2f}** con una confianza estadística del **{context.signal.confidence * 100:.1f}%**.",
             f"- **Nivel Clave Institucional:** {poc_text}",
             f"- **Plan de riesgo ({plan['status']}):** Stop Loss **{sl_text}**; Take Profit **{tp_text}**. {plan['reason'] or 'Niveles validados; entrada no confirmada salvo estado ACTIVADA.'}",
         ]
 
         if context.signal.positives:
-            lines.append(f"- **Factores a Favor:** {', '.join(context.signal.positives)}.")
+            lines.append(
+                f"- **Factores a Favor:** {', '.join(context.signal.positives)}."
+            )
 
         return "\n".join(lines)
 
@@ -343,7 +378,8 @@ class OperatorAssistant(BaseOperatorAssistant):
             plan = self._validated_risk_plan(context)
             support = (
                 f"SL técnico indicativo {plan['stop_loss']}"
-                if plan["stop_loss"] is not None else "soporte aún no validado"
+                if plan["stop_loss"] is not None
+                else "soporte aún no validado"
             )
             scenarios.append(
                 f"Escenario Principal (Bullish Expansion / Expansión Alcista): Continuación hacia resistencia manteniendo soporte "
@@ -405,7 +441,7 @@ class OperatorAssistant(BaseOperatorAssistant):
         lines = [
             f"### 🤖 Copilot Intelligence (Diagnóstico Cuantitativo): {context.symbol} [{context.timeframe.upper()}]",
             f"**Precio Actual:** ${context.current_price:,.2f} | **Régimen de Mercado:** `{context.market_regime}`",
-            f"**Puntuación Quant:** {context.quant_score:.1f}/100 | **Puntaje Predictivo:** {context.predictive_score:.2f} | **Confianza:** {context.signal.confidence*100:.1f}%",
+            f"**Puntuación Quant:** {context.quant_score:.1f}/100 | **Puntaje Predictivo:** {context.predictive_score:.2f} | **Confianza:** {context.signal.confidence * 100:.1f}%",
             "",
             "#### 📊 Interpretación descriptiva de IA (no modifica el estado de señal)",
             f"{explanation_summary}",
@@ -453,7 +489,9 @@ class OperatorAssistant(BaseOperatorAssistant):
         else:
             lines.append(f"- **R bruto sin costes:** 1:{plan['gross_risk_reward']:.2f}")
             if not plan["entry_confirmed"]:
-                lines.append("- **Entrada no confirmada:** escenario técnico, no señal activada.")
+                lines.append(
+                    "- **Entrada no confirmada:** escenario técnico, no señal activada."
+                )
         return lines
 
     @staticmethod

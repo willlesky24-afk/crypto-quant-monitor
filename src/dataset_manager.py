@@ -61,10 +61,17 @@ class HistoricalDatasetManager:
     ) -> tuple[pd.DataFrame, str, str, dict[str, int]]:
         """Inspect arrival order and page boundaries before legacy normalization."""
         raw = batch.candles
-        counts = {"within_page_duplicates": 0, "page_overlaps": 0, "conflicting_duplicates": 0,
-                  "within_page_disorder": 0, "combined_disorder": 0, "irregular_steps": 0,
-                  "misaligned_timestamps": 0, "partial_start_boundary": 0,
-                  "partial_end_boundary": 0}
+        counts = {
+            "within_page_duplicates": 0,
+            "page_overlaps": 0,
+            "conflicting_duplicates": 0,
+            "within_page_disorder": 0,
+            "combined_disorder": 0,
+            "irregular_steps": 0,
+            "misaligned_timestamps": 0,
+            "partial_start_boundary": 0,
+            "partial_end_boundary": 0,
+        }
         issues: list[str] = []
         if sum(batch.page_sizes) != len(raw):
             issues.append("Límites de páginas inconsistentes.")
@@ -80,7 +87,9 @@ class HistoricalDatasetManager:
                 ts = timestamps.iloc[row_index]
                 if pd.isna(ts):
                     continue
-                values = tuple(raw.iloc[row_index][["open", "high", "low", "close", "volume"]])
+                values = tuple(
+                    raw.iloc[row_index][["open", "high", "low", "close", "volume"]]
+                )
                 if previous_in_page is not None and ts <= previous_in_page:
                     counts["within_page_disorder"] += 1
                 if ts in seen:
@@ -103,7 +112,11 @@ class HistoricalDatasetManager:
             issues.append("Velas con timestamp repetido y OHLCV diferente.")
         if counts["combined_disorder"]:
             issues.append("Desorden al combinar páginas.")
-        normalized = raw.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+        normalized = (
+            raw.drop_duplicates(subset=["timestamp"])
+            .sort_values("timestamp")
+            .reset_index(drop=True)
+        )
         expected_step = INTERVAL_TIMEDELTAS.get(interval.lower())
         if expected_step is None:
             issues.append("Intervalo no reconocido.")
@@ -112,14 +125,18 @@ class HistoricalDatasetManager:
             # from real gaps between consecutive observations.
             interval_ms = expected_step.value // 1_000_000
             counts["partial_start_boundary"] = int(
-                batch.requested_start_ms is not None and batch.requested_start_ms % interval_ms != 0
+                batch.requested_start_ms is not None
+                and batch.requested_start_ms % interval_ms != 0
             )
             counts["partial_end_boundary"] = int(
-                batch.requested_end_ms is not None and batch.requested_end_ms % interval_ms != 0
+                batch.requested_end_ms is not None
+                and batch.requested_end_ms % interval_ms != 0
             )
             normalized_ts = pd.to_datetime(normalized["timestamp"], utc=True)
             counts["misaligned_timestamps"] = int(
-                (normalized_ts.map(lambda ts: ts.value % expected_step.value != 0)).sum()
+                (
+                    normalized_ts.map(lambda ts: ts.value % expected_step.value != 0)
+                ).sum()
             )
             if counts["misaligned_timestamps"]:
                 issues.append("Apertura de vela no alineada al intervalo declarado.")
@@ -127,20 +144,43 @@ class HistoricalDatasetManager:
                 steps = normalized_ts.diff().iloc[1:]
                 counts["irregular_steps"] = int((steps != expected_step).sum())
                 if counts["irregular_steps"]:
-                    issues.append("Huecos o frecuencia distinta del intervalo declarado.")
+                    issues.append(
+                        "Huecos o frecuencia distinta del intervalo declarado."
+                    )
         if counts["page_overlaps"]:
             # Identical page overlaps are recorded, not labeled as provider defects.
             issues.append("Solapamiento entre páginas: origen temporal no acreditado.")
-        return normalized, "VALID" if not issues else "UNVERIFIED", " ".join(issues), counts
+        return (
+            normalized,
+            "VALID" if not issues else "UNVERIFIED",
+            " ".join(issues),
+            counts,
+        )
 
     def _download_for_sync(self, symbol: str, interval: str, start_time, end_time):
-        kwargs = dict(symbol=symbol, interval=interval, start_time=start_time,
-                      end_time=end_time, include_open_candle=False)
-        if type(self.loader) is HistoricalDataLoader and self.loader.base_url == DEFAULT_BASE_URL:
+        kwargs = dict(
+            symbol=symbol,
+            interval=interval,
+            start_time=start_time,
+            end_time=end_time,
+            include_open_candle=False,
+        )
+        if (
+            type(self.loader) is HistoricalDataLoader
+            and self.loader.base_url == DEFAULT_BASE_URL
+        ):
             batch = self.loader.get_historical_klines(**kwargs, return_raw_batch=True)
-            normalized, status, reason, counts = self._inspect_raw_batch(batch, interval)
+            normalized, status, reason, counts = self._inspect_raw_batch(
+                batch, interval
+            )
             return normalized, batch, status, reason, counts
-        return self.loader.get_historical_klines(**kwargs), None, "UNKNOWN", "Cargador no acreditado.", {}
+        return (
+            self.loader.get_historical_klines(**kwargs),
+            None,
+            "UNKNOWN",
+            "Cargador no acreditado.",
+            {},
+        )
 
     def sync_dataset(
         self,
@@ -174,7 +214,9 @@ class HistoricalDatasetManager:
             existing_df = self.store.read_dataset(symbol=sym, interval=inv)
 
         if not existing_df.empty:
-            existing_df["timestamp"] = pd.to_datetime(existing_df["timestamp"], utc=True)
+            existing_df["timestamp"] = pd.to_datetime(
+                existing_df["timestamp"], utc=True
+            )
             last_cached_ts = existing_df["timestamp"].max()
 
             # Target start is next candle after last cached timestamp
@@ -190,9 +232,14 @@ class HistoricalDatasetManager:
                 # Already up to date
                 return self._slice_df(existing_df, start_time, end_time)
 
-            logger.info("Incremental sync for %s %s from %s", sym, inv, pd.to_datetime(next_start_ms, unit="ms", utc=True))
-            new_df, raw_batch, temporal_status, temporal_reason, raw_counts = self._download_for_sync(
-                sym, inv, next_start_ms, end_time
+            logger.info(
+                "Incremental sync for %s %s from %s",
+                sym,
+                inv,
+                pd.to_datetime(next_start_ms, unit="ms", utc=True),
+            )
+            new_df, raw_batch, temporal_status, temporal_reason, raw_counts = (
+                self._download_for_sync(sym, inv, next_start_ms, end_time)
             )
 
             if new_df.empty:
@@ -201,8 +248,8 @@ class HistoricalDatasetManager:
             combined_df = pd.concat([existing_df, new_df], ignore_index=True)
         else:
             logger.info("Full sync for %s %s from %s", sym, inv, start_time)
-            combined_df, raw_batch, temporal_status, temporal_reason, raw_counts = self._download_for_sync(
-                sym, inv, start_time, end_time
+            combined_df, raw_batch, temporal_status, temporal_reason, raw_counts = (
+                self._download_for_sync(sym, inv, start_time, end_time)
             )
 
         if combined_df.empty:
@@ -240,21 +287,28 @@ class HistoricalDatasetManager:
                 inv,
                 DatasetProvenance(
                     status="CONTROLLED_INGESTION",
-                    reason="" if is_valid else (temporal_reason or "Calidad OHLCV no validada."),
+                    reason=""
+                    if is_valid
+                    else (temporal_reason or "Calidad OHLCV no validada."),
                     provider="BINANCE_PUBLIC_SPOT_REST",
                     instrument_type="CRYPTO_SPOT",
                     calendar="24_7",
                     interval=inv,
                     acquired_at_utc=raw_batch.acquired_at_utc,
                     temporal_validation="VALID" if is_valid else "UNVERIFIED",
-                    normalization=("ninguna" if not raw_counts.get("page_overlaps") else
-                                   "solapamientos de páginas deduplicados"),
+                    normalization=(
+                        "ninguna"
+                        if not raw_counts.get("page_overlaps")
+                        else "solapamientos de páginas deduplicados"
+                    ),
                 ),
             )
 
         return self._slice_df(validated_df, start_time, end_time)
 
-    def get_dataset_summary(self, symbol: str | None = None, interval: str | None = None) -> list[dict[str, Any]]:
+    def get_dataset_summary(
+        self, symbol: str | None = None, interval: str | None = None
+    ) -> list[dict[str, Any]]:
         """Returns metadata summary of available datasets."""
         manifests = self.store.list_datasets()
         results = []

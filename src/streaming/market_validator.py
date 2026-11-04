@@ -94,13 +94,17 @@ class RealMarketValidator:
         self.db_path = str(db_path)
         self.timeout_sec = timeout_sec
 
-    def check_exchange_connectivity(self, base_url: str = "https://api.binance.com") -> CheckResult:
+    def check_exchange_connectivity(
+        self, base_url: str = "https://api.binance.com"
+    ) -> CheckResult:
         """Validate exchange ping and clock synchronization."""
         t0 = time.perf_counter()
         try:
             # 1. Ping
             ping_url = f"{base_url}/api/v3/ping"
-            req = urllib.request.Request(ping_url, headers={"User-Agent": "CryptoQuant-Validator/1.0"})
+            req = urllib.request.Request(
+                ping_url, headers={"User-Agent": "CryptoQuant-Validator/1.0"}
+            )
             with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
                 if resp.status != 200:
                     return CheckResult(
@@ -112,7 +116,9 @@ class RealMarketValidator:
 
             # 2. Time check
             time_url = f"{base_url}/api/v3/time"
-            req_time = urllib.request.Request(time_url, headers={"User-Agent": "CryptoQuant-Validator/1.0"})
+            req_time = urllib.request.Request(
+                time_url, headers={"User-Agent": "CryptoQuant-Validator/1.0"}
+            )
             with urllib.request.urlopen(req_time, timeout=self.timeout_sec) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 server_time_ms = int(data.get("serverTime", 0))
@@ -137,7 +143,9 @@ class RealMarketValidator:
                 latency_ms=(time.perf_counter() - t0) * 1000,
             )
 
-    def check_market_data_ingestion(self, loader: BinanceDataLoader | None = None) -> tuple[CheckResult, pd.DataFrame | None]:
+    def check_market_data_ingestion(
+        self, loader: BinanceDataLoader | None = None
+    ) -> tuple[CheckResult, pd.DataFrame | None]:
         """Validate live candle fetching, OHLCV constraints, and anti-repainting closed candle rule."""
         t0 = time.perf_counter()
         data_loader = loader or BinanceDataLoader()
@@ -164,7 +172,12 @@ class RealMarketValidator:
             invalid_close_low = (df["close"] < df["low"]).sum()
             invalid_vol = (df["volume"] < 0).sum()
 
-            if invalid_high_low > 0 or invalid_open_high > 0 or invalid_close_low > 0 or invalid_vol > 0:
+            if (
+                invalid_high_low > 0
+                or invalid_open_high > 0
+                or invalid_close_low > 0
+                or invalid_vol > 0
+            ):
                 return CheckResult(
                     name="market_data_ingestion",
                     status="FAIL",
@@ -178,7 +191,10 @@ class RealMarketValidator:
                 status="PASS",
                 message=f"Retrieved {len(df)} validated closed candles for {self.symbol}",
                 latency_ms=latency,
-                details={"bars_count": len(df), "last_candle_timestamp": str(df["timestamp"].iloc[-1])},
+                details={
+                    "bars_count": len(df),
+                    "last_candle_timestamp": str(df["timestamp"].iloc[-1]),
+                },
             ), df
         except Exception as exc:
             return CheckResult(
@@ -188,7 +204,9 @@ class RealMarketValidator:
                 latency_ms=(time.perf_counter() - t0) * 1000,
             ), None
 
-    def check_quantitative_pipeline(self, df: pd.DataFrame) -> tuple[CheckResult, SignalEvent | None]:
+    def check_quantitative_pipeline(
+        self, df: pd.DataFrame
+    ) -> tuple[CheckResult, SignalEvent | None]:
         """Validate pipeline execution from raw candles to SignalEvent at closed candle T."""
         t0 = time.perf_counter()
         try:
@@ -246,7 +264,10 @@ class RealMarketValidator:
                 stop_loss=risk.get("stop_loss"),
                 take_profit=risk.get("take_profit"),
                 signal_id=f"val-{self.symbol}-{self.interval}-{int(time.time())}",
-                metadata={"risk_reward_ratio": risk.get("risk_ratio"), "atr": risk.get("atr")},
+                metadata={
+                    "risk_reward_ratio": risk.get("risk_ratio"),
+                    "atr": risk.get("atr"),
+                },
             )
 
             latency = (time.perf_counter() - t0) * 1000
@@ -300,7 +321,9 @@ class RealMarketValidator:
             from src.operator_assistant.models import OperatorQuery
 
             ai_provider = ProviderFactory.create_provider(provider_type="mock")
-            assistant = OperatorAssistant(context_provider=provider, ai_provider=ai_provider)
+            assistant = OperatorAssistant(
+                context_provider=provider, ai_provider=ai_provider
+            )
 
             query_obj = OperatorQuery(
                 query=f"Explain current state for {self.symbol}",

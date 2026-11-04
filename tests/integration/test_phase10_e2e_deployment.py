@@ -14,14 +14,16 @@ from src.streaming.live_worker import LiveMarketWorker
 def _generate_synthetic_candles(bars: int = 220) -> pd.DataFrame:
     dates = pd.date_range("2026-03-01", periods=bars, freq="1h", tz="UTC")
     base = 60000.0
-    return pd.DataFrame({
-        "timestamp": dates,
-        "open": base + np.arange(bars) * 15,
-        "high": base + np.arange(bars) * 15 + 80,
-        "low": base + np.arange(bars) * 15 - 80,
-        "close": base + np.arange(bars) * 15 + 40,
-        "volume": np.random.uniform(500.0, 1500.0, size=bars),
-    })
+    return pd.DataFrame(
+        {
+            "timestamp": dates,
+            "open": base + np.arange(bars) * 15,
+            "high": base + np.arange(bars) * 15 + 80,
+            "low": base + np.arange(bars) * 15 - 80,
+            "close": base + np.arange(bars) * 15 + 40,
+            "volume": np.random.uniform(500.0, 1500.0, size=bars),
+        }
+    )
 
 
 def test_phase10_full_e2e_live_deployment_pipeline(tmp_path: Path):
@@ -104,6 +106,7 @@ def test_phase10_full_e2e_live_deployment_pipeline(tmp_path: Path):
     # 6. Verify OperatorService queries
     service = OperatorService(context_provider=worker.context_provider)
     import asyncio
+
     health = asyncio.run(service.health_check())
     assert health.status.upper() == "HEALTHY"
     assert "BTCUSDT" in health.available_symbols
@@ -120,7 +123,9 @@ def test_phase10_full_e2e_live_deployment_pipeline(tmp_path: Path):
     assert "$63,450.00" in formatted_status
 
     # Ask Copilot
-    copilot_reply = cli.ask("What is the current regime and risk level?", "BTCUSDT", "1h")
+    copilot_reply = cli.ask(
+        "What is the current regime and risk level?", "BTCUSDT", "1h"
+    )
     assert "COPILOT RESPONSE [BTCUSDT 1h]" in copilot_reply
     assert "DISCLAIMER" in copilot_reply
 

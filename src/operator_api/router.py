@@ -40,7 +40,6 @@ router = APIRouter(
 )
 
 
-
 @router.get(
     "/health",
     response_model=HealthResponse,
@@ -99,7 +98,9 @@ async def readiness_check(
         details["error"] = str(exc)
 
     status_str = "READY" if storage_healthy else "NOT_READY"
-    status_code = status.HTTP_200_OK if storage_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    status_code = (
+        status.HTTP_200_OK if storage_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    )
 
     res = ReadinessResponse(
         status=status_str,
@@ -134,7 +135,11 @@ async def service_stats(
     try:
         symbols = await provider.get_available_symbols()
         repo = getattr(provider, "repository", None)
-        records_count = repo.count_records() if repo is not None and hasattr(repo, "count_records") else len(symbols)
+        records_count = (
+            repo.count_records()
+            if repo is not None and hasattr(repo, "count_records")
+            else len(symbols)
+        )
         collector.set_storage_metrics(records_count, len(symbols))
     except Exception:
         pass
@@ -157,13 +162,19 @@ async def prometheus_metrics(
     try:
         symbols = await provider.get_available_symbols()
         repo = getattr(provider, "repository", None)
-        records_count = repo.count_records() if repo is not None and hasattr(repo, "count_records") else len(symbols)
+        records_count = (
+            repo.count_records()
+            if repo is not None and hasattr(repo, "count_records")
+            else len(symbols)
+        )
         collector.set_storage_metrics(records_count, len(symbols))
     except Exception:
         pass
 
     prometheus_data = collector.to_prometheus_text()
-    return Response(content=prometheus_data, media_type="text/plain; version=0.0.4; charset=utf-8")
+    return Response(
+        content=prometheus_data, media_type="text/plain; version=0.0.4; charset=utf-8"
+    )
 
 
 @router.get(
@@ -180,12 +191,15 @@ async def get_latest_signal_explanation(
     req = SignalExplanationRequest(symbol=symbol, timeframe=timeframe)
     res = await service.get_signal_explanation(req)
     collector = get_metrics_collector()
-    collector.record_explanation_request(success=res.success and res.explanation is not None)
+    collector.record_explanation_request(
+        success=res.success and res.explanation is not None
+    )
 
     if not res.success or res.explanation is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=res.error or f"No quantitative context found for {req.symbol} ({req.timeframe}).",
+            detail=res.error
+            or f"No quantitative context found for {req.symbol} ({req.timeframe}).",
         )
 
     dto = ExplanationDTO(
@@ -226,7 +240,8 @@ async def get_market_summary(
     if not res.success or res.summary is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=res.error or f"No quantitative context found for {req.symbol} ({req.timeframe}).",
+            detail=res.error
+            or f"No quantitative context found for {req.symbol} ({req.timeframe}).",
         )
 
     dto = MarketSummaryDTO(
@@ -423,4 +438,3 @@ async def get_memory_entries(
         limit=limit,
     )
     return [e.to_dict() for e in entries]
-

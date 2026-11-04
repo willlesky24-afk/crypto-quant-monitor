@@ -183,17 +183,26 @@ def test_trade_result_immutability_and_serialization():
     assert d["execution_policy_version"] is None
 
     # Old JSON rows omit the additive field; omission remains unknown, not clean.
-    legacy = TradeResult(**{key: value for key, value in d.items()
-                            if key not in {"execution_trace_status", "execution_policy_version"}})
+    legacy = TradeResult(
+        **{
+            key: value
+            for key, value in d.items()
+            if key not in {"execution_trace_status", "execution_policy_version"}
+        }
+    )
     assert legacy.execution_trace_status is None
     assert legacy.execution_policy_version is None
     assert legacy.to_dict()["execution_trace_status"] is None
     classified = replace(
-        trade, execution_trace_status=ExecutionTraceStatus.INTRABAR_SL_FIRST.value,
+        trade,
+        execution_trace_status=ExecutionTraceStatus.INTRABAR_SL_FIRST.value,
         execution_policy_version=ExecutionPolicyVersion.SPOT_LONG_C1.value,
     )
     assert classified.to_dict()["execution_trace_status"] == "INTRABAR_SL_FIRST"
-    assert classified.to_dict()["execution_policy_version"] == ExecutionPolicyVersion.SPOT_LONG_C1.value
+    assert (
+        classified.to_dict()["execution_policy_version"]
+        == ExecutionPolicyVersion.SPOT_LONG_C1.value
+    )
 
     with pytest.raises(FrozenInstanceError):
         trade.net_pnl = 300.0
@@ -202,17 +211,34 @@ def test_trade_result_immutability_and_serialization():
 def test_trade_result_serializes_effective_risk_without_reinterpreting_final_stop():
     ts = pd.to_datetime("2024-01-01", utc=True)
     trade = TradeResult(
-        trade_id="tr-risk", symbol="BTCUSDT", timeframe="1h", direction="LONG",
-        signal_timestamp=ts, entry_timestamp=ts, exit_timestamp=ts,
-        entry_price=100.0, exit_price=104.0, size_units=9.99,
-        notional_entry=1000.0, notional_exit=1038.96,
-        gross_pnl=39.96, fee_entry=1.0, fee_exit=1.03896,
-        net_pnl=37.92104, net_return_pct=3.792104,
-        r_multiple=2.0, net_r_multiple=37.92104 / 19.98,
-        bars_held=2, exit_reason=TradeExitReason.TAKE_PROFIT.value,
-        mfe_pct=4.0, mae_pct=0.0, is_win=True,
-        sl_price=100.0, initial_stop_price=98.0,
-        initial_risk_per_unit=2.0, initial_risk_amount=19.98,
+        trade_id="tr-risk",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        direction="LONG",
+        signal_timestamp=ts,
+        entry_timestamp=ts,
+        exit_timestamp=ts,
+        entry_price=100.0,
+        exit_price=104.0,
+        size_units=9.99,
+        notional_entry=1000.0,
+        notional_exit=1038.96,
+        gross_pnl=39.96,
+        fee_entry=1.0,
+        fee_exit=1.03896,
+        net_pnl=37.92104,
+        net_return_pct=3.792104,
+        r_multiple=2.0,
+        net_r_multiple=37.92104 / 19.98,
+        bars_held=2,
+        exit_reason=TradeExitReason.TAKE_PROFIT.value,
+        mfe_pct=4.0,
+        mae_pct=0.0,
+        is_win=True,
+        sl_price=100.0,
+        initial_stop_price=98.0,
+        initial_risk_per_unit=2.0,
+        initial_risk_amount=19.98,
     )
     data = trade.to_dict()
     assert data["sl_price"] == 100.0
@@ -227,20 +253,32 @@ def test_excursion_metadata_is_additive_and_legacy_rows_stay_unknown():
 
     base = make_verified_spot_trade("legacy", 40.0, 38.0, 40.0)
     legacy_dict = base.to_dict()
-    for key in ("excursion_policy_version", "mfe_observability", "mae_observability",
-                "mfe_exact_pct", "mae_exact_pct", "mfe_lower_bound_pct",
-                "mfe_upper_bound_pct", "mae_lower_bound_pct", "mae_upper_bound_pct",
-                "atr_entry"):
+    for key in (
+        "excursion_policy_version",
+        "mfe_observability",
+        "mae_observability",
+        "mfe_exact_pct",
+        "mae_exact_pct",
+        "mfe_lower_bound_pct",
+        "mfe_upper_bound_pct",
+        "mae_lower_bound_pct",
+        "mae_upper_bound_pct",
+        "atr_entry",
+    ):
         legacy_dict.pop(key)
     old = TradeResult(**legacy_dict)
     assert old.mfe_observability == old.mae_observability == "LEGACY_UNKNOWN"
     assert old.excursion_policy_version is None
     assert old.mfe_exact_pct is None and old.mae_exact_pct is None
     current = replace(
-        base, excursion_policy_version=EXCURSION_POLICY_VERSION,
-        mfe_observability="EXACT_OHLC", mfe_exact_pct=4.0,
-        mae_observability="BOUNDED_OHLC", mae_lower_bound_pct=0.0,
-        mae_upper_bound_pct=2.0, atr_entry=2.0,
+        base,
+        excursion_policy_version=EXCURSION_POLICY_VERSION,
+        mfe_observability="EXACT_OHLC",
+        mfe_exact_pct=4.0,
+        mae_observability="BOUNDED_OHLC",
+        mae_lower_bound_pct=0.0,
+        mae_upper_bound_pct=2.0,
+        atr_entry=2.0,
     )
     data = current.to_dict()
     assert data["mfe_exact_pct"] == 4.0
@@ -313,8 +351,12 @@ def test_equity_point_and_backtest_report_serialization():
     assert metrics["r_coverage_status"] == "UNKNOWN"
 
     verified = replace(
-        report, gross_expectancy_r=2 / 3, net_expectancy_r=1 / 3,
-        r_verified_trades=8, r_excluded_trades=2, r_coverage_status="PARTIAL",
+        report,
+        gross_expectancy_r=2 / 3,
+        net_expectancy_r=1 / 3,
+        r_verified_trades=8,
+        r_excluded_trades=2,
+        r_coverage_status="PARTIAL",
         r_unavailable_reason="Promedio solo del subconjunto verificable (8 de 10 operaciones).",
     )
     assert verified.metrics["expectancy_r"] == report.expectancy_r == 0.65
@@ -332,14 +374,30 @@ def test_equity_point_and_backtest_report_serialization():
 def test_report_preserves_unavailable_sharpe_as_none():
     ts = pd.Timestamp("2024-01-01", tz="UTC")
     report = BacktestReport(
-        config=BacktestConfig(), symbol="BTCUSDT", timeframe="1h",
-        start_time=str(ts), end_time=str(ts), total_candles=0,
-        total_trades=0, winning_trades=0, losing_trades=0,
-        win_rate_pct=0.0, profit_factor=0.0, expectancy=0.0, expectancy_r=0.0,
-        max_drawdown_pct=0.0, max_drawdown_usd=0.0, max_drawdown_duration_bars=0,
-        avg_mfe_pct=0.0, avg_mae_pct=0.0, avg_bars_held=0.0,
-        total_gross_pnl=0.0, total_fees_paid=0.0, total_net_pnl=0.0,
-        return_on_capital_pct=0.0, sharpe_unavailable_reason="Calendario desconocido.",
+        config=BacktestConfig(),
+        symbol="BTCUSDT",
+        timeframe="1h",
+        start_time=str(ts),
+        end_time=str(ts),
+        total_candles=0,
+        total_trades=0,
+        winning_trades=0,
+        losing_trades=0,
+        win_rate_pct=0.0,
+        profit_factor=0.0,
+        expectancy=0.0,
+        expectancy_r=0.0,
+        max_drawdown_pct=0.0,
+        max_drawdown_usd=0.0,
+        max_drawdown_duration_bars=0,
+        avg_mfe_pct=0.0,
+        avg_mae_pct=0.0,
+        avg_bars_held=0.0,
+        total_gross_pnl=0.0,
+        total_fees_paid=0.0,
+        total_net_pnl=0.0,
+        return_on_capital_pct=0.0,
+        sharpe_unavailable_reason="Calendario desconocido.",
     )
     assert report.metrics["sharpe_ratio"] is None
     assert report.metrics["sharpe_unavailable_reason"] == "Calendario desconocido."
@@ -386,4 +444,3 @@ def test_short_trade_result_and_funding_serialization():
     assert d["side"] == "SHORT"
     assert d["funding_fees"] == 1.0
     assert d["direction"] == "SHORT"
-

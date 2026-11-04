@@ -54,8 +54,7 @@ def test_prompt_builder_basic_construction():
     assert "Stop Loss: $63,000.00" in prompt
     assert "Take Profit: $67,500.00" in prompt
     assert "POC: 64200.0" in prompt
-    assert "Query: \"Analyze BTC right now\"" in prompt
-
+    assert 'Query: "Analyze BTC right now"' in prompt
 
 
 def test_prompt_builder_with_reports_and_anomalies():
@@ -100,7 +99,10 @@ def test_prompt_builder_with_reports_and_anomalies():
     assert "DAILY MARKET BRIEFING CONTEXT" in prompt
     assert "Overview: Executive macro overview" in prompt
     assert "PASSIVE MARKET ANOMALY ALERTS DETECTED" in prompt
-    assert "[WARNING] BTC Volatility Expansion (+35%): ATR jumped from 900 to 1200" in prompt
+    assert (
+        "[WARNING] BTC Volatility Expansion (+35%): ATR jumped from 900 to 1200"
+        in prompt
+    )
 
 
 def test_prompt_builder_multimodal_single_and_multiple_images():
@@ -127,7 +129,9 @@ def test_prompt_builder_multimodal_single_and_multiple_images():
     )
     assert "(3 imágenes adjuntas)" in prompt_multi
     assert "El operador ha subido 3 captura(s)" in prompt_multi
-    assert "Si se adjuntaron múltiples imágenes, compáralas o relaciónalas" in prompt_multi
+    assert (
+        "Si se adjuntaron múltiples imágenes, compáralas o relaciónalas" in prompt_multi
+    )
 
 
 def test_prompt_separates_verified_engine_levels_from_image_observations():
@@ -136,16 +140,18 @@ def test_prompt_separates_verified_engine_levels_from_image_observations():
         ctx,
         risk=replace(ctx.risk, risk_ratio=2.0),
         metadata={
-            "signal_status": "CANDIDATA", "entry_confirmed": False,
-            "entry_price": 64500.0, "risk_reward_ratio": 2.0,
+            "signal_status": "CANDIDATA",
+            "entry_confirmed": False,
+            "entry_price": 64500.0,
+            "risk_reward_ratio": 2.0,
         },
     )
     prompt = PromptBuilder().build_copilot_prompt(
         ctx, "La imagen muestra SL 61,000 y TP 70,000", has_image=True
     )
-    verified_section = prompt.split("Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1)[1].split(
-        "DESCRIPTIVE TECHNICAL LEVELS", 1
-    )[0]
+    verified_section = prompt.split(
+        "Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1
+    )[1].split("DESCRIPTIVE TECHNICAL LEVELS", 1)[0]
     assert "Stop Loss: $63,000.00" in verified_section
     assert "Take Profit: $67,500.00" in verified_section
     assert "61,000" not in verified_section
@@ -164,11 +170,12 @@ def test_prompt_rejects_inverted_or_missing_levels_in_verified_section():
     ):
         prompt = PromptBuilder().build_copilot_prompt(
             replace(ctx, risk=risk, metadata={"signal_status": "NO DISPONIBLE"}),
-            "Analiza el mercado", has_image=True,
+            "Analiza el mercado",
+            has_image=True,
         )
-        section = prompt.split("Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1)[1].split(
-            "DESCRIPTIVE TECHNICAL LEVELS", 1
-        )[0]
+        section = prompt.split("Risk Parameters — VERIFIED BY RiskEngine ONLY:", 1)[
+            1
+        ].split("DESCRIPTIVE TECHNICAL LEVELS", 1)[0]
         assert "Stop Loss: None" in section
         assert "Take Profit: None" in section
         assert "Gross R:R without costs: N/A" in section

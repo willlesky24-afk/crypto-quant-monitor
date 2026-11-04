@@ -72,11 +72,15 @@ class SignalEvent:
         metadata: dict[str, Any] | None = None,
     ) -> SignalEvent:
         """Factory method to build a SignalEvent from a DecisionResult and candle data."""
-        ts = candle.get("timestamp") if isinstance(candle, dict) else candle["timestamp"]
+        ts = (
+            candle.get("timestamp") if isinstance(candle, dict) else candle["timestamp"]
+        )
         if not isinstance(ts, pd.Timestamp):
             ts = pd.to_datetime(ts)
 
-        close_price = float(candle.get("close") if isinstance(candle, dict) else candle["close"])
+        close_price = float(
+            candle.get("close") if isinstance(candle, dict) else candle["close"]
+        )
         action_val = str(getattr(decision_result, "decision", "WAIT"))
         direction_val = str(getattr(decision_result, "direction", "NEUTRAL"))
         conf_val = float(getattr(decision_result, "confidence", 0.0))
@@ -164,27 +168,32 @@ class NotificationPayload:
                 ratio_mismatch = (
                     not math.isfinite(reported_ratio)
                     or actual_ratio is None
-                    or not math.isclose(reported_ratio, actual_ratio, rel_tol=1e-6, abs_tol=0.005)
+                    or not math.isclose(
+                        reported_ratio, actual_ratio, rel_tol=1e-6, abs_tol=0.005
+                    )
                 )
 
         validation_error = (
             "R:R reportado no coincide con los niveles efectivos."
-            if ratio_mismatch else levels["reason"]
+            if ratio_mismatch
+            else levels["reason"]
         )
         if ratio_mismatch or (
             levels["reason"] is not None
             and (event.stop_loss is not None or event.take_profit is not None)
         ):
             metadata["risk_validation_error"] = validation_error
-        invalid_operational = event.action in ("BUY", "SELL") and validation_error is not None
+        invalid_operational = (
+            event.action in ("BUY", "SELL") and validation_error is not None
+        )
         has_status = "signal_status" in metadata
         unconfirmed = (
-            (has_status and not (
+            has_status
+            and not (
                 metadata["signal_status"] == "ACTIVADA"
                 and metadata.get("entry_confirmed") is True
-            ))
-            or metadata.get("entry_confirmed") is False
-        )
+            )
+        ) or metadata.get("entry_confirmed") is False
         action = "WAIT" if invalid_operational or unconfirmed else event.action
         direction = "NEUTRAL" if invalid_operational else event.direction
         stop_loss = levels["stop_loss"] if not ratio_mismatch else None
@@ -200,7 +209,11 @@ class NotificationPayload:
             else:
                 prio = NotificationPriority.LOW
         else:
-            prio = NotificationPriority.LOW if invalid_operational or unconfirmed else priority
+            prio = (
+                NotificationPriority.LOW
+                if invalid_operational or unconfirmed
+                else priority
+            )
 
         try:
             summary_price = float(event.price)
@@ -251,7 +264,8 @@ class NotificationResult:
         """Convert dispatch result to a JSON-serializable dictionary."""
         d = asdict(self)
         d["channel"] = self.channel.value
-        d["delivered_at"] = str(self.delivered_at) if self.delivered_at is not None else None
+        d["delivered_at"] = (
+            str(self.delivered_at) if self.delivered_at is not None else None
+        )
         d["latency_ms"] = self.latency_ms
         return d
-

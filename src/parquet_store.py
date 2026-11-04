@@ -68,23 +68,43 @@ class ParquetStore:
         """Check saved bytes before load_dataset can sort or deduplicate rows."""
         manifest = self.read_manifest(symbol, interval)
         evidence = manifest.get("controlled_provenance") if manifest else None
-        if not isinstance(evidence, dict) or evidence.get("status") != "CONTROLLED_INGESTION":
-            return DatasetProvenance(reason="Dataset sin evidencia de ingestión controlada.")
-        if manifest.get("symbol") != symbol.strip().upper() or manifest.get("interval") != interval.strip().lower():
-            return DatasetProvenance(reason="Identidad del dataset no coincide con el manifiesto.")
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("status") != "CONTROLLED_INGESTION"
+        ):
+            return DatasetProvenance(
+                reason="Dataset sin evidencia de ingestión controlada."
+            )
+        if (
+            manifest.get("symbol") != symbol.strip().upper()
+            or manifest.get("interval") != interval.strip().lower()
+        ):
+            return DatasetProvenance(
+                reason="Identidad del dataset no coincide con el manifiesto."
+            )
         files = sorted(self.get_dataset_dir(symbol, interval).glob("*.parquet"))
         file_hashes = evidence.get("file_sha256")
-        if not isinstance(file_hashes, dict) or set(file_hashes) != {path.name for path in files}:
-            return DatasetProvenance(reason="Conjunto de particiones distinto al registrado.")
+        if not isinstance(file_hashes, dict) or set(file_hashes) != {
+            path.name for path in files
+        }:
+            return DatasetProvenance(
+                reason="Conjunto de particiones distinto al registrado."
+            )
         if set(file_hashes) != set(manifest.get("partitions", {})):
-            return DatasetProvenance(reason="Particiones del manifiesto no corresponden al contenido.")
+            return DatasetProvenance(
+                reason="Particiones del manifiesto no corresponden al contenido."
+            )
         if any(self._file_sha256(path) != file_hashes[path.name] for path in files):
-            return DatasetProvenance(reason="Integridad de Parquet no coincide con la referencia registrada.")
+            return DatasetProvenance(
+                reason="Integridad de Parquet no coincide con la referencia registrada."
+            )
         fingerprint = hashlib.sha256(
             json.dumps(file_hashes, sort_keys=True).encode("utf-8")
         ).hexdigest()
         if fingerprint != evidence.get("content_sha256"):
-            return DatasetProvenance(reason="Huella del contenido no coincide con el manifiesto.")
+            return DatasetProvenance(
+                reason="Huella del contenido no coincide con el manifiesto."
+            )
         return DatasetProvenance(
             status="CONTROLLED_INGESTION",
             reason=evidence.get("reason", ""),
@@ -199,7 +219,9 @@ class ParquetStore:
         if extra_manifest_metadata:
             manifest = self.read_manifest(symbol, interval)
             if manifest:
-                manifest.setdefault("extra_metadata", {}).update(extra_manifest_metadata)
+                manifest.setdefault("extra_metadata", {}).update(
+                    extra_manifest_metadata
+                )
                 self._write_manifest(symbol, interval, manifest)
 
         return saved_files
@@ -297,7 +319,9 @@ class ParquetStore:
 
         if "timestamp" in combined.columns:
             combined["timestamp"] = pd.to_datetime(combined["timestamp"], utc=True)
-            combined = combined.drop_duplicates(subset=["timestamp"]).sort_values("timestamp")
+            combined = combined.drop_duplicates(subset=["timestamp"]).sort_values(
+                "timestamp"
+            )
 
             if start_time is not None:
                 start_ts = pd.to_datetime(start_time, utc=True)

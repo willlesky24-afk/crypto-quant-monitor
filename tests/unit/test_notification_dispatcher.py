@@ -107,6 +107,7 @@ def _create_sample_payload(
 # 1. COOLDOWN MANAGER TESTS
 # =====================================================================
 
+
 def test_cooldown_manager_flow():
     cm = CooldownManager(default_cooldown_seconds=10.0)
 
@@ -142,6 +143,7 @@ def test_cooldown_manager_flow():
 # 2. NOTIFICATION DISPATCHER TESTS
 # =====================================================================
 
+
 def test_dispatcher_channel_registration():
     dispatcher = NotificationDispatcher()
     discord = DiscordWebhookChannel(name="Discord1", dry_run=True)
@@ -172,16 +174,23 @@ def test_dispatcher_empty_channels():
 def test_dispatcher_multi_channel_success_and_cooldown():
     discord = DiscordWebhookChannel(name="Discord", dry_run=True)
     telegram = TelegramChannel(name="Telegram", dry_run=True)
-    dispatcher = NotificationDispatcher(channels=[discord, telegram], cooldown_seconds=60.0)
+    dispatcher = NotificationDispatcher(
+        channels=[discord, telegram], cooldown_seconds=60.0
+    )
 
-    payload = _create_sample_payload(action="TEST", predictive_score=0.85, confidence=0.90)
+    payload = _create_sample_payload(
+        action="TEST", predictive_score=0.85, confidence=0.90
+    )
 
     # 1. First dispatch succeeds on both channels
     results = dispatcher.dispatch(payload)
     assert len(results) == 2
     assert all(r.success for r in results)
     channel_types = {r.channel for r in results}
-    assert channel_types == {NotificationChannelType.DISCORD, NotificationChannelType.TELEGRAM}
+    assert channel_types == {
+        NotificationChannelType.DISCORD,
+        NotificationChannelType.TELEGRAM,
+    }
 
     # 2. Immediate second dispatch is suppressed due to cooldown
     results_cooldown = dispatcher.dispatch(payload)
@@ -231,19 +240,25 @@ def test_dispatcher_filtering_by_thresholds_and_ignored_actions():
     )
 
     # 1. Ignored action (WAIT)
-    payload_wait = _create_sample_payload(action="WAIT", predictive_score=0.80, confidence=0.80)
+    payload_wait = _create_sample_payload(
+        action="WAIT", predictive_score=0.80, confidence=0.80
+    )
     res_wait = dispatcher.dispatch(payload_wait)
     assert res_wait[0].success is False
     assert "configured to be ignored" in str(res_wait[0].error_message)
 
     # 2. Low predictive score
-    payload_low_score = _create_sample_payload(action="TEST", predictive_score=0.55, confidence=0.80)
+    payload_low_score = _create_sample_payload(
+        action="TEST", predictive_score=0.55, confidence=0.80
+    )
     res_low_score = dispatcher.dispatch(payload_low_score)
     assert res_low_score[0].success is False
     assert "predictive score" in str(res_low_score[0].error_message).lower()
 
     # 3. Low confidence
-    payload_low_conf = _create_sample_payload(action="TEST", predictive_score=0.80, confidence=0.50)
+    payload_low_conf = _create_sample_payload(
+        action="TEST", predictive_score=0.80, confidence=0.50
+    )
     res_low_conf = dispatcher.dispatch(payload_low_conf)
     assert res_low_conf[0].success is False
     assert "confidence" in str(res_low_conf[0].error_message).lower()
@@ -278,7 +293,9 @@ def test_direct_operational_dispatch_is_blocked_without_tracking():
 
 
 @pytest.mark.parametrize("action,direction", [("BUY", "LONG"), ("SELL", "SHORT")])
-def test_generic_dispatch_rejects_operational_payload_even_with_forged_tracking(action, direction):
+def test_generic_dispatch_rejects_operational_payload_even_with_forged_tracking(
+    action, direction
+):
     channel = DiscordWebhookChannel(name="Discord", dry_run=True)
     channel.send = MagicMock()
     dispatcher = NotificationDispatcher(channels=[channel])
@@ -377,19 +394,23 @@ def test_duplicate_id_with_different_plan_cannot_dispatch(tmp_path):
 def test_all_channels_fail_but_tracking_status_remains_open(tmp_path):
     tracker = AlertOutcomeTracker(db_path=tmp_path / "alerts.db")
     discord = DiscordWebhookChannel(name="Discord", dry_run=True)
-    discord.send = MagicMock(return_value=NotificationResult(
-        success=False,
-        channel=NotificationChannelType.DISCORD,
-        error_message="mocked Discord failure",
-        event_id="tracked-001",
-    ))
+    discord.send = MagicMock(
+        return_value=NotificationResult(
+            success=False,
+            channel=NotificationChannelType.DISCORD,
+            error_message="mocked Discord failure",
+            event_id="tracked-001",
+        )
+    )
     telegram = TelegramChannel(name="Telegram", dry_run=True)
-    telegram.send = MagicMock(return_value=NotificationResult(
-        success=False,
-        channel=NotificationChannelType.TELEGRAM,
-        error_message="mocked Telegram failure",
-        event_id="tracked-001",
-    ))
+    telegram.send = MagicMock(
+        return_value=NotificationResult(
+            success=False,
+            channel=NotificationChannelType.TELEGRAM,
+            error_message="mocked Telegram failure",
+            event_id="tracked-001",
+        )
+    )
     dispatcher = NotificationDispatcher(channels=[discord, telegram])
 
     record, results = dispatcher.dispatch_tracked_signal(
@@ -400,7 +421,8 @@ def test_all_channels_fail_but_tracking_status_remains_open(tmp_path):
     assert tracker.get_all_alerts()[0]["status"] == "OPEN"
     assert len(results) == 2 and all(result.success is False for result in results)
     assert {result.channel for result in results} == {
-        NotificationChannelType.DISCORD, NotificationChannelType.TELEGRAM,
+        NotificationChannelType.DISCORD,
+        NotificationChannelType.TELEGRAM,
     }
     discord.send.assert_called_once()
     telegram.send.assert_called_once()
@@ -412,7 +434,9 @@ def test_tracker_rejection_prevents_operational_send(tmp_path):
     dispatcher = NotificationDispatcher(channels=[channel])
 
     with pytest.raises(ValueError, match="R reportado no coincide"):
-        dispatcher.dispatch_tracked_signal(_operational_signal(), tracker, risk_reward=3.0)
+        dispatcher.dispatch_tracked_signal(
+            _operational_signal(), tracker, risk_reward=3.0
+        )
 
     assert channel.payloads == []
     assert tracker.get_all_alerts() == []
@@ -434,7 +458,9 @@ def test_informational_event_does_not_dispatch_or_register(
         metadata={"signal_status": status, "entry_confirmed": confirmed},
     )
 
-    record, results = dispatcher.dispatch_tracked_signal(signal, tracker, risk_reward=2.0)
+    record, results = dispatcher.dispatch_tracked_signal(
+        signal, tracker, risk_reward=2.0
+    )
 
     assert record is None and results == []
     assert channel.payloads == []
@@ -446,17 +472,23 @@ def test_persistence_error_prevents_operational_send(tmp_path):
     channel = InspectingChannel(tracker)
     dispatcher = NotificationDispatcher(channels=[channel])
     failing_tracker = MagicMock()
-    failing_tracker.record_alert.side_effect = sqlite3.OperationalError("database is locked")
+    failing_tracker.record_alert.side_effect = sqlite3.OperationalError(
+        "database is locked"
+    )
 
     with pytest.raises(sqlite3.OperationalError, match="database is locked"):
-        dispatcher.dispatch_tracked_signal(_operational_signal(), failing_tracker, risk_reward=2.0)
+        dispatcher.dispatch_tracked_signal(
+            _operational_signal(), failing_tracker, risk_reward=2.0
+        )
 
     assert channel.payloads == []
     assert tracker.get_all_alerts() == []
 
 
 def test_dispatcher_fault_isolation_unexpected_exception():
-    faulty = FaultyChannel(name="CrashingChannel", channel_type=NotificationChannelType.LOG)
+    faulty = FaultyChannel(
+        name="CrashingChannel", channel_type=NotificationChannelType.LOG
+    )
     healthy = DiscordWebhookChannel(name="DiscordHealthy", dry_run=True)
     dispatcher = NotificationDispatcher(channels=[faulty, healthy])
 

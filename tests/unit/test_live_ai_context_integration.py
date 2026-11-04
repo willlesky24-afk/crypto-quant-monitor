@@ -70,7 +70,9 @@ def test_signal_event_updates_context_provider_and_service():
 
     # Verify retrieval through OperatorService
     req_expl = SignalExplanationRequest(symbol="BTCUSDT", timeframe="1h")
-    resp_expl = pytest.importorskip("asyncio").run(service.get_signal_explanation(req_expl))
+    resp_expl = pytest.importorskip("asyncio").run(
+        service.get_signal_explanation(req_expl)
+    )
 
     assert resp_expl.success is True
     assert resp_expl.explanation is not None

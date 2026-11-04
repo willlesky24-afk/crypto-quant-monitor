@@ -190,12 +190,22 @@ def test_notification_payload_priority_and_neutral():
     ("direction", "stop", "target"),
     [("LONG", 95.0, 110.0), ("SHORT", 105.0, 90.0)],
 )
-def test_payload_validates_direction_and_uses_effective_gross_r(direction, stop, target):
+def test_payload_validates_direction_and_uses_effective_gross_r(
+    direction, stop, target
+):
     event = SignalEvent(
         timestamp=pd.Timestamp("2026-03-15 12:00:00"),
-        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
-        direction=direction, confidence=0.8, predictive_score=0.7, regime="TRENDING",
-        reasoning="Fixture", price=100.0, stop_loss=stop, take_profit=target,
+        symbol="BTCUSDT",
+        timeframe="1h",
+        action="BUY" if direction == "LONG" else "SELL",
+        direction=direction,
+        confidence=0.8,
+        predictive_score=0.7,
+        regime="TRENDING",
+        reasoning="Fixture",
+        price=100.0,
+        stop_loss=stop,
+        take_profit=target,
         metadata={"risk_reward_ratio": 2.0},
     )
     payload = NotificationPayload.from_signal_event(event)
@@ -227,12 +237,22 @@ def test_invalid_operational_event_is_not_upgraded_to_valid_payload(
 ):
     event = SignalEvent(
         timestamp=pd.Timestamp("2026-03-15 12:00:00"),
-        symbol="BTCUSDT", timeframe="1h", action="BUY" if direction == "LONG" else "SELL",
-        direction=direction, confidence=0.9, predictive_score=0.7, regime="TRENDING",
-        reasoning="Fixture", price=price, stop_loss=stop, take_profit=target,
+        symbol="BTCUSDT",
+        timeframe="1h",
+        action="BUY" if direction == "LONG" else "SELL",
+        direction=direction,
+        confidence=0.9,
+        predictive_score=0.7,
+        regime="TRENDING",
+        reasoning="Fixture",
+        price=price,
+        stop_loss=stop,
+        take_profit=target,
         metadata={"risk_reward_ratio": reported} if reported is not None else {},
     )
-    payload = NotificationPayload.from_signal_event(event, priority=NotificationPriority.HIGH)
+    payload = NotificationPayload.from_signal_event(
+        event, priority=NotificationPriority.HIGH
+    )
     assert payload.action == "WAIT"
     assert payload.direction == "NEUTRAL"
     assert payload.priority == NotificationPriority.LOW
@@ -248,9 +268,17 @@ def test_invalid_operational_event_is_not_upgraded_to_valid_payload(
 def test_candidate_payload_keeps_indicative_levels_but_not_operational_action():
     event = SignalEvent(
         timestamp=pd.Timestamp("2026-03-15 12:00:00"),
-        symbol="BTCUSDT", timeframe="1h", action="BUY", direction="LONG",
-        confidence=0.9, predictive_score=0.7, regime="TRENDING", reasoning="Fixture",
-        price=100.0, stop_loss=95.0, take_profit=110.0,
+        symbol="BTCUSDT",
+        timeframe="1h",
+        action="BUY",
+        direction="LONG",
+        confidence=0.9,
+        predictive_score=0.7,
+        regime="TRENDING",
+        reasoning="Fixture",
+        price=100.0,
+        stop_loss=95.0,
+        take_profit=110.0,
         metadata={"signal_status": "CANDIDATA", "entry_confirmed": False},
     )
     payload = NotificationPayload.from_signal_event(event)
@@ -420,6 +448,3 @@ def test_base_notification_channel_abstract_method_bodies():
     )
     assert raw.format_message(dummy_payload) is None
     assert raw.send(dummy_payload) is None
-
-
-

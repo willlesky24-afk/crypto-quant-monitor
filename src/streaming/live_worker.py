@@ -52,7 +52,9 @@ class LiveMarketWorker:
     ) -> None:
         self.symbols = [s.strip().upper() for s in (symbols or ["BTCUSDT"])]
         self.interval = interval.strip().lower()
-        self.db_path = Path(db_path or os.getenv("DATABASE_PATH", "data/market_contexts.db"))
+        self.db_path = Path(
+            db_path or os.getenv("DATABASE_PATH", "data/market_contexts.db")
+        )
         self.warm_up_bars = warm_up_bars
         self.dispatcher = dispatcher
         self.dry_run = dry_run
@@ -116,7 +118,9 @@ class LiveMarketWorker:
                 dry_run=self.dry_run,
             )
 
-            def _handle_kline(payload: dict[str, Any], agg: CandleAggregator = aggregator) -> None:
+            def _handle_kline(
+                payload: dict[str, Any], agg: CandleAggregator = aggregator
+            ) -> None:
                 agg.process_kline(KlineEvent.from_binance_payload(payload))
 
             ws_client.on_kline(_handle_kline)
@@ -126,13 +130,17 @@ class LiveMarketWorker:
             self._bridges[symbol] = bridge
             self._ws_clients[symbol] = ws_client
 
-    def bootstrap_warmup(self, loader: BinanceDataLoader | None = None) -> dict[str, int]:
+    def bootstrap_warmup(
+        self, loader: BinanceDataLoader | None = None
+    ) -> dict[str, int]:
         """Pre-fetch closed historical candles to warm up technical indicators from bar 0."""
         results: dict[str, int] = {}
         data_loader = loader or BinanceDataLoader()
 
         for symbol in self.symbols:
-            logger.info(f"[{symbol} {self.interval}] Fetching {self.warm_up_bars} warm-up bars...")
+            logger.info(
+                f"[{symbol} {self.interval}] Fetching {self.warm_up_bars} warm-up bars..."
+            )
             try:
                 df = data_loader.get_klines(
                     symbol=symbol,
@@ -144,14 +152,20 @@ class LiveMarketWorker:
                     self._aggregators[symbol].seed(df)
                     loaded = len(self._aggregators[symbol].get_dataframe())
                     results[symbol] = loaded
-                    logger.info(f"[{symbol} {self.interval}] Successfully bootstrapped {loaded} warm-up bars.")
+                    logger.info(
+                        f"[{symbol} {self.interval}] Successfully bootstrapped {loaded} warm-up bars."
+                    )
                 else:
                     results[symbol] = 0
-                    logger.warning(f"[{symbol} {self.interval}] No warm-up bars received from data loader.")
+                    logger.warning(
+                        f"[{symbol} {self.interval}] No warm-up bars received from data loader."
+                    )
 
             except Exception as exc:
                 results[symbol] = 0
-                logger.error(f"[{symbol} {self.interval}] Failed to bootstrap warm-up bars: {exc}")
+                logger.error(
+                    f"[{symbol} {self.interval}] Failed to bootstrap warm-up bars: {exc}"
+                )
 
         return results
 
@@ -161,7 +175,9 @@ class LiveMarketWorker:
             logger.warning("LiveMarketWorker is already running.")
             return
 
-        logger.info(f"Starting LiveMarketWorker for symbols={self.symbols} interval={self.interval} db={self.db_path}...")
+        logger.info(
+            f"Starting LiveMarketWorker for symbols={self.symbols} interval={self.interval} db={self.db_path}..."
+        )
         if bootstrap:
             self.bootstrap_warmup()
 
@@ -201,7 +217,9 @@ class LiveMarketWorker:
         self.start(bootstrap=bootstrap)
 
         def _signal_handler(sig: int, _frame: Any) -> None:
-            logger.info(f"Received termination signal ({sig}). Initiating graceful shutdown...")
+            logger.info(
+                f"Received termination signal ({sig}). Initiating graceful shutdown..."
+            )
             self.stop()
             sys.exit(0)
 
@@ -219,4 +237,3 @@ class LiveMarketWorker:
             pass
         finally:
             self.stop()
-

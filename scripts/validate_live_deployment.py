@@ -21,11 +21,21 @@ def main() -> int:
         description="Crypto Quant Monitor — Production Live Deployment & Market Validator",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--symbol", default="BTCUSDT", help="Cryptocurrency symbol to validate")
+    parser.add_argument(
+        "--symbol", default="BTCUSDT", help="Cryptocurrency symbol to validate"
+    )
     parser.add_argument("--interval", default="1h", help="Candle timeframe interval")
-    parser.add_argument("--db-path", default=":memory:", help="SQLite test database path")
-    parser.add_argument("--dry-run", action="store_true", help="Run in dry-run mode without external exchange ping")
-    parser.add_argument("--json", action="store_true", help="Output report in JSON format")
+    parser.add_argument(
+        "--db-path", default=":memory:", help="SQLite test database path"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run in dry-run mode without external exchange ping",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Output report in JSON format"
+    )
 
     args = parser.parse_args()
 
@@ -51,9 +61,15 @@ def main() -> int:
         return 0 if report.overall_status in ("PASS", "WARN") else 1
 
     for check in report.checks:
-        icon = "✅" if check.status == "PASS" else ("⚠️" if check.status == "WARN" else "❌")
+        icon = (
+            "✅"
+            if check.status == "PASS"
+            else ("⚠️" if check.status == "WARN" else "❌")
+        )
         latency_str = f"({check.latency_ms:.1f}ms)" if check.latency_ms > 0 else ""
-        print(f"[{icon} {check.status:4s}] {check.name:<28s} {latency_str:<10s} {check.message}")
+        print(
+            f"[{icon} {check.status:4s}] {check.name:<28s} {latency_str:<10s} {check.message}"
+        )
 
     print("\n=======================================================")
     print(f"OVERALL STATUS: {report.overall_status} — {report.summary}")

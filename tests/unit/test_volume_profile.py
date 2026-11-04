@@ -72,7 +72,9 @@ def test_vectorized_matches_exact_step_by_step_reference():
 
 def test_vectorized_identical_to_iterative_reference(synthetic_ohlcv):
     # Iterative baseline reference
-    prices = (synthetic_ohlcv["high"] + synthetic_ohlcv["low"] + synthetic_ohlcv["close"]) / 3.0
+    prices = (
+        synthetic_ohlcv["high"] + synthetic_ohlcv["low"] + synthetic_ohlcv["close"]
+    ) / 3.0
     volume = synthetic_ohlcv["volume"]
 
     for bins in [5, 10, 24, 50]:
@@ -93,4 +95,3 @@ def test_vectorized_identical_to_iterative_reference(synthetic_ohlcv):
 
         res_opt = VolumeProfile().calculate(synthetic_ohlcv, bins=bins)
         assert res_opt["poc"] == pytest.approx(round(poc_ref, 2), abs=0.01)
-

@@ -69,13 +69,23 @@ def market_context_from_dict(data: dict[str, Any] | str) -> MarketContext:
         # Reconstruct RiskMetrics
         risk_data = raw_dict.get("risk", {})
         risk = RiskMetrics(
-            stop_loss=float(risk_data["stop_loss"]) if risk_data.get("stop_loss") is not None else None,
-            take_profit=float(risk_data["take_profit"]) if risk_data.get("take_profit") is not None else None,
-            risk_ratio=float(risk_data["risk_ratio"]) if risk_data.get("risk_ratio") is not None else None,
+            stop_loss=float(risk_data["stop_loss"])
+            if risk_data.get("stop_loss") is not None
+            else None,
+            take_profit=float(risk_data["take_profit"])
+            if risk_data.get("take_profit") is not None
+            else None,
+            risk_ratio=float(risk_data["risk_ratio"])
+            if risk_data.get("risk_ratio") is not None
+            else None,
             risk_category=str(risk_data.get("risk_category", "")),
             atr=float(risk_data["atr"]) if risk_data.get("atr") is not None else None,
-            tp_multiplier=float(risk_data["tp_multiplier"]) if risk_data.get("tp_multiplier") is not None else None,
-            sl_multiplier=float(risk_data["sl_multiplier"]) if risk_data.get("sl_multiplier") is not None else None,
+            tp_multiplier=float(risk_data["tp_multiplier"])
+            if risk_data.get("tp_multiplier") is not None
+            else None,
+            sl_multiplier=float(risk_data["sl_multiplier"])
+            if risk_data.get("sl_multiplier") is not None
+            else None,
         )
 
         # Parse timestamp safely

@@ -19,7 +19,9 @@ class DatabaseMigrator:
 
     CURRENT_VERSION = 1
 
-    def __init__(self, connection: sqlite3.Connection, database_name: str | Path = "signals.db"):
+    def __init__(
+        self, connection: sqlite3.Connection, database_name: str | Path = "signals.db"
+    ):
         self.connection = connection
         self.database_name = str(database_name)
 
@@ -211,7 +213,9 @@ class DatabaseMigrator:
         except Exception as error:
             self.connection.rollback()
             self._restore_backup(backup_path)
-            raise MigrationError(f"Error durante la migración de esquema: {error}") from error
+            raise MigrationError(
+                f"Error durante la migración de esquema: {error}"
+            ) from error
 
     def _record_version(self, version: int, description: str):
         cursor = self.connection.cursor()

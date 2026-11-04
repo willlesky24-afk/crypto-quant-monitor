@@ -30,9 +30,15 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
        drawdown calculations, and JSON serialization.
     """
     # 1. Multi-year dataset (600 closed hourly candles across 2023, 2024, 2025)
-    candles_2023 = make_synthetic_candles(start="2023-11-15", periods=200, freq="1h", base_price=30000.0)
-    candles_2024 = make_synthetic_candles(start="2024-01-01", periods=200, freq="1h", base_price=42000.0)
-    candles_2025 = make_synthetic_candles(start="2025-01-01", periods=200, freq="1h", base_price=60000.0)
+    candles_2023 = make_synthetic_candles(
+        start="2023-11-15", periods=200, freq="1h", base_price=30000.0
+    )
+    candles_2024 = make_synthetic_candles(
+        start="2024-01-01", periods=200, freq="1h", base_price=42000.0
+    )
+    candles_2025 = make_synthetic_candles(
+        start="2025-01-01", periods=200, freq="1h", base_price=60000.0
+    )
     full_df = pd.concat([candles_2023, candles_2024, candles_2025], ignore_index=True)
 
     # 2. Persist in Parquet store
@@ -83,14 +89,20 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
             initial_equity=cfg.initial_capital,
         )
     )
-    assert [point.drawdown_pct for point in report.equity_curve] == pytest.approx(expected_dd)
+    assert [point.drawdown_pct for point in report.equity_curve] == pytest.approx(
+        expected_dd
+    )
     assert report.max_drawdown_pct == round(expected_max_pct, 2)
     assert report.max_drawdown_usd == round(expected_max_usd, 2)
     assert report.max_drawdown_duration_bars == expected_duration
 
     # Verify trades and strict execution rules
     assert report.total_trades > 0
-    assert report.total_trades == (report.winning_trades + report.losing_trades + (report.total_trades - report.winning_trades - report.losing_trades))
+    assert report.total_trades == (
+        report.winning_trades
+        + report.losing_trades
+        + (report.total_trades - report.winning_trades - report.losing_trades)
+    )
 
     for trade in report.trades:
         # Strict T -> T+1 entry
@@ -99,9 +111,15 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
         assert trade.bars_held >= 1
         assert trade.fee_entry > 0
         assert trade.fee_exit > 0
-        assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
-        assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
-        assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+        assert trade.net_pnl == pytest.approx(
+            trade.gross_pnl - trade.fee_entry - trade.fee_exit
+        )
+        assert trade.r_multiple == pytest.approx(
+            trade.gross_pnl / trade.initial_risk_amount
+        )
+        assert trade.net_r_multiple == pytest.approx(
+            trade.net_pnl / trade.initial_risk_amount
+        )
         assert trade.mfe_pct >= 0.0
         assert trade.mae_pct >= 0.0
         assert trade.execution_trace_status is not None
@@ -111,12 +129,16 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
     assert report.r_verified_trades == report.total_trades
     assert report.r_excluded_trades == 0
     assert report.gross_expectancy_r == pytest.approx(
-        sum(t.gross_pnl / t.initial_risk_amount for t in report.trades) / report.total_trades
+        sum(t.gross_pnl / t.initial_risk_amount for t in report.trades)
+        / report.total_trades
     )
     assert report.net_expectancy_r == pytest.approx(
-        sum(t.net_pnl / t.initial_risk_amount for t in report.trades) / report.total_trades
+        sum(t.net_pnl / t.initial_risk_amount for t in report.trades)
+        / report.total_trades
     )
-    assert report.total_net_pnl == pytest.approx(sum(t.net_pnl for t in report.trades), abs=0.01)
+    assert report.total_net_pnl == pytest.approx(
+        sum(t.net_pnl for t in report.trades), abs=0.01
+    )
     assert report.data_provenance.status == "UNKNOWN"
     assert report.sharpe_ratio is None
 
@@ -129,16 +151,24 @@ def test_full_multi_year_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_ca
     assert deserialized["total_candles"] == 600
     assert deserialized["config"]["initial_capital"] == 10_000.0
     assert len(deserialized["trades"]) == report.total_trades
-    assert all(row["execution_trace_status"] is not None for row in deserialized["trades"])
-    assert all(row["execution_policy_version"] == "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
-               for row in deserialized["trades"])
+    assert all(
+        row["execution_trace_status"] is not None for row in deserialized["trades"]
+    )
+    assert all(
+        row["execution_policy_version"] == "SPOT_LONG_C1_OPEN_PRIORITY_TP_LIMIT"
+        for row in deserialized["trades"]
+    )
     assert len(deserialized["equity_curve"]) == 600
     assert deserialized["r_coverage_status"] == "COMPLETE"
-    assert deserialized["gross_expectancy_r"] == pytest.approx(report.gross_expectancy_r)
+    assert deserialized["gross_expectancy_r"] == pytest.approx(
+        report.gross_expectancy_r
+    )
     assert deserialized["net_expectancy_r"] == pytest.approx(report.net_expectancy_r)
 
 
-def test_backtest_pipeline_determinism_and_no_lookahead_bias(tmp_path: Path, make_synthetic_candles):
+def test_backtest_pipeline_determinism_and_no_lookahead_bias(
+    tmp_path: Path, make_synthetic_candles
+):
     """Verifies that:
 
     1. Two successive runs over the exact same historical dataset produce bit-identical results.
@@ -146,7 +176,9 @@ def test_backtest_pipeline_determinism_and_no_lookahead_bias(tmp_path: Path, mak
        and analysis as was observed in the full multi-year run at bar T (absolute zero look-ahead bias).
     """
     store = ParquetStore(base_dir=tmp_path / "historical_determinism")
-    df = make_synthetic_candles(start="2024-01-01", periods=300, freq="1h", base_price=50000.0)
+    df = make_synthetic_candles(
+        start="2024-01-01", periods=300, freq="1h", base_price=50000.0
+    )
     store.write_dataset(df, "ETHUSDT", "1h")
 
     manager = HistoricalDatasetManager(store=store)
@@ -181,10 +213,14 @@ def test_backtest_pipeline_determinism_and_no_lookahead_bias(tmp_path: Path, mak
     isolated_df = df.iloc[: test_bar_idx + 1].copy()
     isolated_enriched = runner.indicators.calculate_all(isolated_df)
     isolated_profile = runner.volume_profile.calculate(isolated_enriched)
-    isolated_analysis = runner.market_engine.analyze(isolated_enriched, isolated_profile)
+    isolated_analysis = runner.market_engine.analyze(
+        isolated_enriched, isolated_profile
+    )
     isolated_signal = runner.signal_engine.evaluate(isolated_analysis, isolated_profile)
     isolated_risk = runner.risk_engine.evaluate(isolated_analysis, isolated_profile)
-    isolated_score = runner.quant_score.calculate(isolated_analysis, isolated_signal, isolated_risk)
+    isolated_score = runner.quant_score.calculate(
+        isolated_analysis, isolated_signal, isolated_risk
+    )
 
     # Assert exact match
     assert full_analysis["score"] == isolated_analysis["score"]
@@ -267,7 +303,7 @@ def test_400_candle_prefix_keeps_indicators_signals_and_initial_risk_at_800(
     assert len(long_signals) == 601
     assert short_signals[0].candle_timestamp == prefix.iloc[199]["timestamp"]
     assert [signal.to_dict() for signal in short_signals] == [
-        signal.to_dict() for signal in long_signals[:len(short_signals)]
+        signal.to_dict() for signal in long_signals[: len(short_signals)]
     ]
     columns = ["rsi", "atr", "volume_average", "ema_50", "ema_200"]
     pd.testing.assert_frame_equal(
@@ -288,25 +324,40 @@ def test_400_candle_prefix_keeps_indicators_signals_and_initial_risk_at_800(
 def test_extending_horizon_can_change_only_forced_final_liquidation():
     timestamps = pd.date_range("2024-01-01", periods=800, freq="1h", tz="UTC")
     prices = [100.0] * 400 + [105.0] * 400
-    candles = pd.DataFrame({
-        "timestamp": timestamps,
-        "open": prices,
-        "high": prices,
-        "low": prices,
-        "close": prices,
-        "volume": [1000.0] * 800,
-    })
-    signal = SignalEvent(
-        signal_id="warmup-end", symbol="BTCUSDT", timeframe="1h",
-        candle_timestamp=timestamps[199], price_at_signal=100.0,
-        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
-        quant_score=100.0, risk_level="BAJO", atr=2.0,
-        poc=100.0, vah=101.0, val=99.0,
+    candles = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": prices,
+            "high": prices,
+            "low": prices,
+            "close": prices,
+            "volume": [1000.0] * 800,
+        }
     )
-    engine = BacktestEngine(BacktestConfig(
-        taker_fee_pct=0.0, slippage_pct=0.0, max_holding_bars=1000,
-        tp_atr_multiple=10.0,
-    ))
+    signal = SignalEvent(
+        signal_id="warmup-end",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        candle_timestamp=timestamps[199],
+        price_at_signal=100.0,
+        signal_state="BULLISH",
+        confidence=80.0,
+        decision="FAVORABLE",
+        quant_score=100.0,
+        risk_level="BAJO",
+        atr=2.0,
+        poc=100.0,
+        vah=101.0,
+        val=99.0,
+    )
+    engine = BacktestEngine(
+        BacktestConfig(
+            taker_fee_pct=0.0,
+            slippage_pct=0.0,
+            max_holding_bars=1000,
+            tp_atr_multiple=10.0,
+        )
+    )
 
     short_trades, _ = engine.run(candles.iloc[:400], [signal])
     long_trades, _ = engine.run(candles, [signal])
@@ -323,24 +374,39 @@ def test_extending_horizon_can_change_only_forced_final_liquidation():
 
 def test_causal_trailing_execution_reconciles_report_metrics_and_equity():
     timestamps = pd.date_range("2024-01-01", periods=4, freq="1h", tz="UTC")
-    candles = pd.DataFrame({
-        "timestamp": timestamps,
-        "open": [100.0, 100.0, 100.0, 101.0],
-        "high": [101.0, 101.0, 103.0, 101.5],
-        "low": [99.0, 99.0, 99.0, 99.0],
-        "close": [100.0, 100.0, 101.0, 100.0],
-    })
+    candles = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": [100.0, 100.0, 100.0, 101.0],
+            "high": [101.0, 101.0, 103.0, 101.5],
+            "low": [99.0, 99.0, 99.0, 99.0],
+            "close": [100.0, 100.0, 101.0, 100.0],
+        }
+    )
     signal = SignalEvent(
-        signal_id="trailing-causal", symbol="BTCUSDT", timeframe="1h",
-        candle_timestamp=timestamps[0], price_at_signal=100.0,
-        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
-        quant_score=100.0, risk_level="BAJO", atr=2.0,
-        poc=100.0, vah=101.0, val=99.0,
+        signal_id="trailing-causal",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        candle_timestamp=timestamps[0],
+        price_at_signal=100.0,
+        signal_state="BULLISH",
+        confidence=80.0,
+        decision="FAVORABLE",
+        quant_score=100.0,
+        risk_level="BAJO",
+        atr=2.0,
+        poc=100.0,
+        vah=101.0,
+        val=99.0,
     )
     config = BacktestConfig(
-        initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0,
-        tp_atr_multiple=5.0, sl_atr_multiple=1.0,
-        enable_trailing_stop=True, trailing_stop_activation_r=1.0,
+        initial_capital=1000.0,
+        taker_fee_pct=0.001,
+        slippage_pct=0.0,
+        tp_atr_multiple=5.0,
+        sl_atr_multiple=1.0,
+        enable_trailing_stop=True,
+        trailing_stop_activation_r=1.0,
     )
 
     trades, equity = BacktestEngine(config).run(candles, [signal])
@@ -355,7 +421,9 @@ def test_causal_trailing_execution_reconciles_report_metrics_and_equity():
     assert trade.sl_price == trade.exit_price == pytest.approx(100.0)
     assert trade.initial_stop_price == pytest.approx(98.0)
     assert trade.r_multiple == pytest.approx(0.0)
-    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert trade.net_r_multiple == pytest.approx(
+        trade.net_pnl / trade.initial_risk_amount
+    )
     assert equity[-1].cash == equity[-1].equity == pytest.approx(1000.0 + trade.net_pnl)
     assert metrics["total_net_pnl"] == pytest.approx(trade.net_pnl, abs=0.01)
     assert metrics["gross_expectancy_r"] == pytest.approx(trade.r_multiple)
@@ -364,14 +432,17 @@ def test_causal_trailing_execution_reconciles_report_metrics_and_equity():
 
 
 def test_runner_propagates_invalid_take_profit_instead_of_returning_a_report(
-    tmp_path: Path, make_synthetic_candles,
+    tmp_path: Path,
+    make_synthetic_candles,
 ):
     candles = make_synthetic_candles(
         start="2024-01-01", periods=205, freq="1h", base_price=100.0
     )
     config = BacktestConfig(
-        initial_capital=1000.0, min_quant_score=0.0,
-        tp_atr_multiple=-1e6, sl_atr_multiple=1.0,
+        initial_capital=1000.0,
+        min_quant_score=0.0,
+        tp_atr_multiple=-1e6,
+        sl_atr_multiple=1.0,
     )
     runner = BacktestRunner(
         config=config,
@@ -386,19 +457,30 @@ def test_runner_propagates_invalid_take_profit_instead_of_returning_a_report(
 
 def test_opening_gap_excursions_flow_to_aggregate_metrics_without_changing_pnl():
     timestamps = pd.date_range("2024-01-01", periods=3, freq="1h", tz="UTC")
-    candles = pd.DataFrame({
-        "timestamp": timestamps,
-        "open": [100.0, 100.0, 95.0],
-        "high": [101.0, 101.0, 105.0],
-        "low": [99.0, 99.0, 94.0],
-        "close": [100.0, 100.0, 101.0],
-    })
+    candles = pd.DataFrame(
+        {
+            "timestamp": timestamps,
+            "open": [100.0, 100.0, 95.0],
+            "high": [101.0, 101.0, 105.0],
+            "low": [99.0, 99.0, 94.0],
+            "close": [100.0, 100.0, 101.0],
+        }
+    )
     signal = SignalEvent(
-        signal_id="opening-gap-excursions", symbol="BTCUSDT", timeframe="1h",
-        candle_timestamp=timestamps[0], price_at_signal=100.0,
-        signal_state="BULLISH", confidence=80.0, decision="FAVORABLE",
-        quant_score=100.0, risk_level="BAJO", atr=2.0,
-        poc=100.0, vah=101.0, val=99.0,
+        signal_id="opening-gap-excursions",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        candle_timestamp=timestamps[0],
+        price_at_signal=100.0,
+        signal_state="BULLISH",
+        confidence=80.0,
+        decision="FAVORABLE",
+        quant_score=100.0,
+        risk_level="BAJO",
+        atr=2.0,
+        poc=100.0,
+        vah=101.0,
+        val=99.0,
     )
     config = BacktestConfig(
         initial_capital=1000.0, taker_fee_pct=0.001, slippage_pct=0.0
@@ -417,10 +499,18 @@ def test_opening_gap_excursions_flow_to_aggregate_metrics_without_changing_pnl()
     assert trade.mae_pct == pytest.approx(5.0)
     assert metrics["avg_mfe_pct"] == pytest.approx(1.0)
     assert metrics["avg_mae_pct"] == pytest.approx(5.0)
-    assert trade.net_pnl == pytest.approx(trade.gross_pnl - trade.fee_entry - trade.fee_exit)
-    assert trade.r_multiple == pytest.approx(trade.gross_pnl / trade.initial_risk_amount)
-    assert trade.net_r_multiple == pytest.approx(trade.net_pnl / trade.initial_risk_amount)
+    assert trade.net_pnl == pytest.approx(
+        trade.gross_pnl - trade.fee_entry - trade.fee_exit
+    )
+    assert trade.r_multiple == pytest.approx(
+        trade.gross_pnl / trade.initial_risk_amount
+    )
+    assert trade.net_r_multiple == pytest.approx(
+        trade.net_pnl / trade.initial_risk_amount
+    )
     assert metrics["total_net_pnl"] == pytest.approx(round(trade.net_pnl, 2))
-    assert equity[-1].cash == equity[-1].equity == pytest.approx(
-        config.initial_capital + trade.net_pnl
+    assert (
+        equity[-1].cash
+        == equity[-1].equity
+        == pytest.approx(config.initial_capital + trade.net_pnl)
     )

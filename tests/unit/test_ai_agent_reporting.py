@@ -95,11 +95,17 @@ def test_generate_bullish_market_summary():
     assert "System stance is BUY (LONG)" in report.overview
 
     assert "Bullish trend regime identified" in report.regime_interpretation
-    assert "trading above the Value Area (VAH at 66,000.00)" in report.regime_interpretation
+    assert (
+        "trading above the Value Area (VAH at 66,000.00)"
+        in report.regime_interpretation
+    )
 
     assert "Operational focus: Bullish continuation pattern." in report.outlook
     assert "Risk environment is assessed as Bajo." in report.outlook
-    assert "Stop Loss at 62,000.00 and Take Profit at 71,000.00 (R:R 2.00)" in report.outlook
+    assert (
+        "Stop Loss at 62,000.00 and Take Profit at 71,000.00 (R:R 2.00)"
+        in report.outlook
+    )
 
     assert report.key_levels["CurrentPrice"] == 67000.0
     assert report.key_levels["POC"] == 64500.0
@@ -139,7 +145,9 @@ def test_generate_bearish_market_summary():
     assert "ETHUSDT Market Intelligence Report (4h)" == report.title
     assert "System stance is SELL (SHORT)" in report.overview
     assert "Bearish trend regime identified" in report.regime_interpretation
-    assert "trading below the Value Area (VAL at 3,200.00)" in report.regime_interpretation
+    assert (
+        "trading below the Value Area (VAL at 3,200.00)" in report.regime_interpretation
+    )
     assert "Stop Loss at 3,350.00 and Take Profit at 2,700.00" in report.outlook
     assert report.key_levels["StopLoss"] == 3350.0
     assert report.key_levels["TakeProfit"] == 2700.0
@@ -170,9 +178,18 @@ def test_generate_ranging_market_summary():
     report = gen.generate_report(ctx)
 
     assert "Consolidation/Range regime identified" in report.regime_interpretation
-    assert "trading within the Value Area (145.00 - 155.00)" in report.regime_interpretation
-    assert "confirming fair value acceptance centered at POC (150.00)" in report.regime_interpretation
-    assert "No explicit Stop Loss or Take Profit targets defined for this posture." in report.outlook
+    assert (
+        "trading within the Value Area (145.00 - 155.00)"
+        in report.regime_interpretation
+    )
+    assert (
+        "confirming fair value acceptance centered at POC (150.00)"
+        in report.regime_interpretation
+    )
+    assert (
+        "No explicit Stop Loss or Take Profit targets defined for this posture."
+        in report.outlook
+    )
 
 
 def test_generate_high_volatility_summary():
@@ -223,9 +240,15 @@ def test_generate_custom_regime_and_missing_optional_fields():
 
     report = gen.generate_report(ctx)
 
-    assert "Market is operating under an unclassified or custom UNKNOWN_ANOMALY regime." in report.regime_interpretation
+    assert (
+        "Market is operating under an unclassified or custom UNKNOWN_ANOMALY regime."
+        in report.regime_interpretation
+    )
     assert "Point of Control (POC) is situated at 0.14." in report.regime_interpretation
-    assert "Operational focus: Quantitative parameters monitor for confirmed setups." in report.outlook
+    assert (
+        "Operational focus: Quantitative parameters monitor for confirmed setups."
+        in report.outlook
+    )
     assert "Target Take Profit is set at 0.20." in report.outlook
     assert report.key_levels["TakeProfit"] == 0.20
     assert report.key_levels["POC"] == 0.14

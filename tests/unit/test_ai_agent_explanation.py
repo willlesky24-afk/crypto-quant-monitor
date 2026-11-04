@@ -85,11 +85,16 @@ def test_explain_buy_signal():
     explanation = service.explain(ctx)
 
     assert isinstance(explanation, AgentExplanation)
-    assert "BUY signal identified for BTCUSDT (1h) with LONG bias at 65,000.00 under TRENDING_BULL regime." in explanation.summary
+    assert (
+        "BUY signal identified for BTCUSDT (1h) with LONG bias at 65,000.00 under TRENDING_BULL regime."
+        in explanation.summary
+    )
     assert "Quant Score of 85.0/100" in explanation.rationale
     assert "Predictive Score of 0.82" in explanation.rationale
     assert "established bullish trend" in explanation.rationale
-    assert "trading above the high-volume node (POC at 64,000.00)" in explanation.rationale
+    assert (
+        "trading above the high-volume node (POC at 64,000.00)" in explanation.rationale
+    )
 
     # Key drivers
     assert "EMA crossover" in explanation.key_drivers
@@ -101,7 +106,9 @@ def test_explain_buy_signal():
     assert "Protective Stop Loss set at 62,000.00." in explanation.risk_assessment
     assert "Target Take Profit set at 71,000.00." in explanation.risk_assessment
     assert "Risk/Reward ratio is calculated at 2.00." in explanation.risk_assessment
-    assert "Local volatility measured by ATR is 1,500.00." in explanation.risk_assessment
+    assert (
+        "Local volatility measured by ATR is 1,500.00." in explanation.risk_assessment
+    )
     assert "Dynamic ATR bounds: 3.0x TP / 1.0x SL." in explanation.risk_assessment
 
     assert explanation.confidence == 0.88
@@ -109,7 +116,6 @@ def test_explain_buy_signal():
     assert explanation.metadata["action"] == "BUY"
     assert explanation.metadata["deterministic"] is True
     assert explanation.metadata["context_metadata"]["test_run"] == "alpha_1"
-
 
 
 def test_explain_sell_signal():
@@ -133,9 +139,17 @@ def test_explain_sell_signal():
 
     explanation = service.explain(ctx)
 
-    assert "SELL signal identified for BTCUSDT (1h) with SHORT bias at 3,200.00 under TRENDING_BEAR regime." in explanation.summary
-    assert "established bearish trend with downward pressure dominant" in explanation.rationale
-    assert "trading below the high-volume node (POC at 3,300.00)" in explanation.rationale
+    assert (
+        "SELL signal identified for BTCUSDT (1h) with SHORT bias at 3,200.00 under TRENDING_BEAR regime."
+        in explanation.summary
+    )
+    assert (
+        "established bearish trend with downward pressure dominant"
+        in explanation.rationale
+    )
+    assert (
+        "trading below the high-volume node (POC at 3,300.00)" in explanation.rationale
+    )
     assert "Protective Stop Loss set at 3,400.00." in explanation.risk_assessment
     assert "Target Take Profit set at 2,800.00." in explanation.risk_assessment
 
@@ -164,10 +178,19 @@ def test_explain_wait_signal():
 
     explanation = service.explain(ctx)
 
-    assert "WAIT condition for BTCUSDT (1h) at 150.00 under RANGING_CONSOLIDATION regime; awaiting clear market confirmation." in explanation.summary
+    assert (
+        "WAIT condition for BTCUSDT (1h) at 150.00 under RANGING_CONSOLIDATION regime; awaiting clear market confirmation."
+        in explanation.summary
+    )
     assert "consolidating in a range; caution is advised" in explanation.rationale
-    assert "trading directly at the Point of Control (POC at 150.00)." in explanation.rationale
-    assert "No explicit Stop Loss or Take Profit targets defined." in explanation.risk_assessment
+    assert (
+        "trading directly at the Point of Control (POC at 150.00)."
+        in explanation.rationale
+    )
+    assert (
+        "No explicit Stop Loss or Take Profit targets defined."
+        in explanation.risk_assessment
+    )
 
     # Drivers fallback when no positives/warnings
     assert "Regime: RANGING_CONSOLIDATION" in explanation.key_drivers
@@ -196,7 +219,10 @@ def test_explain_volatility_expansion_and_custom_regimes():
     )
     expl_custom = service.explain(ctx_custom)
     assert "No explicit qualitative reason provided" in expl_custom.rationale
-    assert "The market regime is categorized as CUSTOM_CHOPPY_REGIME." in expl_custom.rationale
+    assert (
+        "The market regime is categorized as CUSTOM_CHOPPY_REGIME."
+        in expl_custom.rationale
+    )
 
 
 def test_explain_missing_optional_fields():
@@ -217,7 +243,10 @@ def test_explain_missing_optional_fields():
     explanation = service.explain(ctx)
     assert explanation.summary.startswith("BUY signal identified")
     assert "Risk profile: Standard." in explanation.risk_assessment
-    assert "No explicit Stop Loss or Take Profit targets defined." in explanation.risk_assessment
+    assert (
+        "No explicit Stop Loss or Take Profit targets defined."
+        in explanation.risk_assessment
+    )
     assert "Regime: TRENDING_BULL" in explanation.key_drivers
 
 

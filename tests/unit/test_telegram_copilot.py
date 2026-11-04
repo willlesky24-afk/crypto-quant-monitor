@@ -49,8 +49,12 @@ def test_telegram_channel_send_copilot_response_missing_credentials():
 
 
 def test_telegram_channel_send_copilot_response_live_post():
-    channel = TelegramChannel(bot_token="valid_token", chat_id="valid_chat", dry_run=False)
-    with patch.object(channel, "http_post_with_retry", return_value=(True, 200, None, 0, 15.0)) as mock_post:
+    channel = TelegramChannel(
+        bot_token="valid_token", chat_id="valid_chat", dry_run=False
+    )
+    with patch.object(
+        channel, "http_post_with_retry", return_value=(True, 200, None, 0, 15.0)
+    ) as mock_post:
         res = channel.send_copilot_response(
             symbol="BTCUSDT",
             timeframe="1h",

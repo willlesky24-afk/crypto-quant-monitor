@@ -35,8 +35,16 @@ class KlineEvent:
         t_val = k.get("t", 0)
         t_close = k.get("T", t_val)
 
-        start_ts = pd.to_datetime(t_val, unit="ms", utc=True) if isinstance(t_val, (int, float)) else pd.to_datetime(t_val)
-        close_ts = pd.to_datetime(t_close, unit="ms", utc=True) if isinstance(t_close, (int, float)) else pd.to_datetime(t_close)
+        start_ts = (
+            pd.to_datetime(t_val, unit="ms", utc=True)
+            if isinstance(t_val, (int, float))
+            else pd.to_datetime(t_val)
+        )
+        close_ts = (
+            pd.to_datetime(t_close, unit="ms", utc=True)
+            if isinstance(t_close, (int, float))
+            else pd.to_datetime(t_close)
+        )
 
         return cls(
             symbol=sym,
@@ -115,13 +123,19 @@ class CandleAggregator:
         if not pd.api.types.is_datetime64_any_dtype(clean_df["timestamp"]):
             clean_df["timestamp"] = pd.to_datetime(clean_df["timestamp"], utc=True)
 
-        clean_df = clean_df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+        clean_df = (
+            clean_df.sort_values("timestamp")
+            .drop_duplicates(subset=["timestamp"])
+            .reset_index(drop=True)
+        )
 
         if len(clean_df) > self.max_bars:
             clean_df = clean_df.iloc[-self.max_bars :].reset_index(drop=True)
 
         self._df = clean_df
-        logger.info(f"[{self.symbol} {self.interval}] Seeded {len(self._df)} historical bars into rolling buffer.")
+        logger.info(
+            f"[{self.symbol} {self.interval}] Seeded {len(self._df)} historical bars into rolling buffer."
+        )
 
     def process_kline(self, event: KlineEvent) -> bool:
         """Process an incoming kline event.
@@ -144,7 +158,9 @@ class CandleAggregator:
             try:
                 self._on_candle_update(event)
             except Exception as exc:
-                logger.error(f"Error in on_candle_update callback: {exc}", exc_info=True)
+                logger.error(
+                    f"Error in on_candle_update callback: {exc}", exc_info=True
+                )
 
         # If the candle has closed, integrate into buffer
         if event.is_closed:
@@ -152,7 +168,9 @@ class CandleAggregator:
 
             if not self._df.empty and (self._df["timestamp"] == event.start_time).any():
                 # Replace existing row if timestamp matches exactly
-                idx = self._df.index[self._df["timestamp"] == event.start_time].tolist()[0]
+                idx = self._df.index[
+                    self._df["timestamp"] == event.start_time
+                ].tolist()[0]
                 self._df.iloc[idx] = new_row.iloc[0]
             else:
                 self._df = pd.concat([self._df, new_row], ignore_index=True)
@@ -167,7 +185,9 @@ class CandleAggregator:
                 try:
                     self._on_candle_close(self.get_dataframe(), event)
                 except Exception as exc:
-                    logger.error(f"Error in on_candle_close callback: {exc}", exc_info=True)
+                    logger.error(
+                        f"Error in on_candle_close callback: {exc}", exc_info=True
+                    )
 
             return True
 

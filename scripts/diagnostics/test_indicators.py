@@ -5,11 +5,7 @@ from src.indicators import TechnicalIndicators
 
 loader = BinanceDataLoader()
 
-df = loader.get_klines(
-    symbol="BTCUSDT",
-    interval="1h",
-    limit=100
-)
+df = loader.get_klines(symbol="BTCUSDT", interval="1h", limit=100)
 
 
 indicators = TechnicalIndicators()
@@ -17,13 +13,4 @@ indicators = TechnicalIndicators()
 df = indicators.calculate_all(df)
 
 
-print(
-    df[
-        [
-            "timestamp",
-            "close",
-            "ema_50",
-            "ema_200"
-        ]
-    ].tail()
-)
+print(df[["timestamp", "close", "ema_50", "ema_200"]].tail())

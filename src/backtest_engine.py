@@ -47,10 +47,15 @@ class BacktestEngine:
         self.config = config or BacktestConfig()
 
     @staticmethod
-    def _coherent_ohlc(open_price: float, high: float, low: float, close: float) -> bool:
+    def _coherent_ohlc(
+        open_price: float, high: float, low: float, close: float
+    ) -> bool:
         """Local evidence check; does not change the engine's dataset acceptance policy."""
         return (
-            all(math.isfinite(value) and value > 0 for value in (open_price, high, low, close))
+            all(
+                math.isfinite(value) and value > 0
+                for value in (open_price, high, low, close)
+            )
             and low <= min(open_price, close) <= max(open_price, close) <= high
         )
 
@@ -74,9 +79,12 @@ class BacktestEngine:
         unknown: dict[str, float | str | None] = {
             "mfe_observability": ExcursionObservability.UNDETERMINED.value,
             "mae_observability": ExcursionObservability.UNDETERMINED.value,
-            "mfe_exact_pct": None, "mae_exact_pct": None,
-            "mfe_lower_bound_pct": None, "mfe_upper_bound_pct": None,
-            "mae_lower_bound_pct": None, "mae_upper_bound_pct": None,
+            "mfe_exact_pct": None,
+            "mae_exact_pct": None,
+            "mfe_lower_bound_pct": None,
+            "mfe_upper_bound_pct": None,
+            "mae_lower_bound_pct": None,
+            "mae_upper_bound_pct": None,
         }
         if (
             not position.excursion_data_valid
@@ -115,7 +123,8 @@ class BacktestEngine:
                 lower, upper, rel_tol=1e-12, abs_tol=1e-12
             )
             result[f"{name}_observability"] = (
-                ExcursionObservability.EXACT_OHLC.value if exact
+                ExcursionObservability.EXACT_OHLC.value
+                if exact
                 else ExcursionObservability.BOUNDED_OHLC.value
             )
             result[f"{name}_lower_bound_pct"] = lower
@@ -149,16 +158,22 @@ class BacktestEngine:
                 )
 
         try:
-            timestamps = pd.to_datetime(values, utc=True, format="mixed", errors="raise")
+            timestamps = pd.to_datetime(
+                values, utc=True, format="mixed", errors="raise"
+            )
         except (ValueError, TypeError, OverflowError) as exc:
             raise BacktestValidationError(f"timestamp inválido: {exc}") from exc
         if timestamps.isna().any():
             raise BacktestValidationError("timestamp contiene valores nulos o NaT.")
         deltas = timestamps.diff().iloc[1:]
         if (deltas == pd.Timedelta(0)).any():
-            raise BacktestValidationError("timestamp duplicado: cada vela requiere un instante distinto.")
+            raise BacktestValidationError(
+                "timestamp duplicado: cada vela requiere un instante distinto."
+            )
         if (deltas < pd.Timedelta(0)).any():
-            raise BacktestValidationError("timestamp desordenado: se requiere orden estrictamente creciente.")
+            raise BacktestValidationError(
+                "timestamp desordenado: se requiere orden estrictamente creciente."
+            )
         return timestamps
 
     def validate_config(self) -> None:
@@ -181,7 +196,12 @@ class BacktestEngine:
                 f"leverage={cfg.leverage!r} no disponible para SPOT: "
                 "no se simula apalancamiento. Disponible: SPOT LONG 1x."
             )
-        for name in ("initial_capital", "position_size_pct", "taker_fee_pct", "slippage_pct"):
+        for name in (
+            "initial_capital",
+            "position_size_pct",
+            "taker_fee_pct",
+            "slippage_pct",
+        ):
             value = getattr(cfg, name)
             if not math.isfinite(value):
                 raise BacktestValidationError(f"{name} debe ser finito.")
@@ -190,9 +210,13 @@ class BacktestEngine:
         if not 0 <= cfg.position_size_pct <= 1:
             raise BacktestValidationError("position_size_pct debe estar entre 0 y 1.")
         if not 0 <= cfg.taker_fee_pct < 1:
-            raise BacktestValidationError("taker_fee_pct debe estar entre 0 y 1 (exclusivo).")
+            raise BacktestValidationError(
+                "taker_fee_pct debe estar entre 0 y 1 (exclusivo)."
+            )
         if not 0 <= cfg.slippage_pct < 1:
-            raise BacktestValidationError("slippage_pct debe estar entre 0 y 1 (exclusivo).")
+            raise BacktestValidationError(
+                "slippage_pct debe estar entre 0 y 1 (exclusivo)."
+            )
 
     def run(
         self,
@@ -214,7 +238,9 @@ class BacktestEngine:
 
         required_cols = {"timestamp", "open", "high", "low", "close"}
         if not required_cols.issubset(set(df.columns)):
-            raise ValueError(f"El DataFrame debe contener las columnas: {required_cols}")
+            raise ValueError(
+                f"El DataFrame debe contener las columnas: {required_cols}"
+            )
 
         candles = df.copy()
         candles["timestamp"] = self.validate_chronology(candles)
@@ -260,24 +286,32 @@ class BacktestEngine:
                         f"Señal {sig_dir!r} no disponible para SPOT LONG 1x."
                     )
                 is_short = ("SHORT" in sig_dir) or ("SELL" in sig_dir)
-                pos_side = PositionSide.SHORT.value if is_short else PositionSide.LONG.value
+                pos_side = (
+                    PositionSide.SHORT.value if is_short else PositionSide.LONG.value
+                )
 
                 if not is_short:
                     entry_price = bar_open * (1.0 + slip)
                 else:
                     entry_price = bar_open * (1.0 - slip)
                 if not math.isfinite(entry_price) or entry_price <= 0:
-                    raise BacktestValidationError("Precio de entrada SPOT no positivo o no finito.")
+                    raise BacktestValidationError(
+                        "Precio de entrada SPOT no positivo o no finito."
+                    )
 
                 # Position sizing based on available cash and leverage
-                allocated_cash = current_cash * max(0.0, min(1.0, self.config.position_size_pct))
+                allocated_cash = current_cash * max(
+                    0.0, min(1.0, self.config.position_size_pct)
+                )
                 lev = max(1.0, float(self.config.leverage))
                 if allocated_cash > 0 and entry_price > 0:
                     if not math.isfinite(pending_signal.atr):
                         raise BacktestValidationError("ATR de señal no finito.")
 
                     # Multipliers based on signal ATR (custom signal multiples or config defaults)
-                    atr_val = max(pending_signal.atr, entry_price * 0.005)  # Safe fallback if ATR is 0
+                    atr_val = max(
+                        pending_signal.atr, entry_price * 0.005
+                    )  # Safe fallback if ATR is 0
                     tp_mult = (
                         pending_signal.tp_atr_multiple
                         if getattr(pending_signal, "tp_atr_multiple", None) is not None
@@ -290,7 +324,9 @@ class BacktestEngine:
                     )
                     if not is_short:
                         try:
-                            valid_tp_multiplier = not isinstance(tp_mult, bool) and math.isfinite(tp_mult)
+                            valid_tp_multiplier = not isinstance(
+                                tp_mult, bool
+                            ) and math.isfinite(tp_mult)
                         except (TypeError, ValueError):
                             valid_tp_multiplier = False
                         if not valid_tp_multiplier:
@@ -298,7 +334,9 @@ class BacktestEngine:
                                 "Multiplicador Take Profit SPOT LONG no numérico o no finito."
                             )
                     if not all(math.isfinite(value) for value in (tp_mult, sl_mult)):
-                        raise BacktestValidationError("Multiplicadores de niveles no finitos.")
+                        raise BacktestValidationError(
+                            "Multiplicadores de niveles no finitos."
+                        )
 
                     if not is_short:
                         tp_price = entry_price + (tp_mult * atr_val)
@@ -322,7 +360,9 @@ class BacktestEngine:
                     actual_capital_invested = (allocated_cash * lev) - fee_entry
                     size_units = actual_capital_invested / entry_price
                     if not math.isfinite(size_units) or size_units <= 0:
-                        raise BacktestValidationError("Unidades SPOT no positivas o no finitas.")
+                        raise BacktestValidationError(
+                            "Unidades SPOT no positivas o no finitas."
+                        )
                     if not is_short and not math.isfinite(size_units * tp_price):
                         raise BacktestValidationError(
                             "Take Profit SPOT LONG inválido: notional de salida no finito."
@@ -379,13 +419,18 @@ class BacktestEngine:
                     if bar_ts > active_position.entry_timestamp:
                         # Check 8h settlement boundary (00:00, 08:00, 16:00 UTC)
                         if (bar_ts.hour % 8 == 0 and bar_ts.minute == 0) and (
-                            active_position.last_funding_time is None or bar_ts > active_position.last_funding_time
+                            active_position.last_funding_time is None
+                            or bar_ts > active_position.last_funding_time
                         ):
                             current_notional = active_position.size_units * bar_close
                             if not is_short_pos:
-                                funding_fee = current_notional * self.config.funding_rate_8h
+                                funding_fee = (
+                                    current_notional * self.config.funding_rate_8h
+                                )
                             else:
-                                funding_fee = -current_notional * self.config.funding_rate_8h
+                                funding_fee = (
+                                    -current_notional * self.config.funding_rate_8h
+                                )
                             active_position.funding_fees_accumulated += funding_fee
                             active_position.last_funding_time = bar_ts
 
@@ -434,7 +479,10 @@ class BacktestEngine:
                         exit_price = active_target
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
 
-                    elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
+                    elif (
+                        active_position.bars_held >= self.config.max_holding_bars
+                        or i == total_bars - 1
+                    ):
                         # Time Horizon expired
                         exit_triggered = True
                         exit_price = bar_close * (1.0 - self.config.slippage_pct)
@@ -442,9 +490,14 @@ class BacktestEngine:
 
                 else:
                     # SHORT Case A: Intrabar conflict (Both SL and TP touched) -> Worst-case: SL executed first
-                    if bar_high >= active_position.sl_price and bar_low <= active_position.tp_price:
+                    if (
+                        bar_high >= active_position.sl_price
+                        and bar_low <= active_position.tp_price
+                    ):
                         exit_triggered = True
-                        exit_price = active_position.sl_price * (1.0 + self.config.slippage_pct)
+                        exit_price = active_position.sl_price * (
+                            1.0 + self.config.slippage_pct
+                        )
                         exit_reason = TradeExitReason.STOP_LOSS.value
 
                     # SHORT Case B: Stop Loss touched
@@ -462,7 +515,10 @@ class BacktestEngine:
                         exit_reason = TradeExitReason.TAKE_PROFIT.value
 
                     # SHORT Case D: Time Horizon expired (Max holding bars reached or end of series)
-                    elif active_position.bars_held >= self.config.max_holding_bars or i == total_bars - 1:
+                    elif (
+                        active_position.bars_held >= self.config.max_holding_bars
+                        or i == total_bars - 1
+                    ):
                         exit_triggered = True
                         exit_price = bar_close * (1.0 + self.config.slippage_pct)
                         exit_reason = TradeExitReason.TIME_HORIZON.value
@@ -478,9 +534,17 @@ class BacktestEngine:
                     # Describe only what the exit candle can establish. A pre-existing
                     # position opening at/beyond a level is resolved immediately at Open;
                     # subsequent intrabar extremes do not override the opening exit.
-                    if (is_short_pos or not all(math.isfinite(level) for level in
-                                                (active_stop, active_target))
-                            or not 0 < active_stop <= active_position.entry_price < active_target):
+                    if (
+                        is_short_pos
+                        or not all(
+                            math.isfinite(level)
+                            for level in (active_stop, active_target)
+                        )
+                        or not 0
+                        < active_stop
+                        <= active_position.entry_price
+                        < active_target
+                    ):
                         trace_status = ExecutionTraceStatus.UNDETERMINED.value
                     elif not active_stop < bar_open < active_target:
                         trace_status = (
@@ -497,13 +561,25 @@ class BacktestEngine:
                     fee_exit = notional_exit * self.config.taker_fee_pct
 
                     if not is_short_pos:
-                        gross_pnl = active_position.size_units * (exit_price - active_position.entry_price)
+                        gross_pnl = active_position.size_units * (
+                            exit_price - active_position.entry_price
+                        )
                     else:
-                        gross_pnl = active_position.size_units * (active_position.entry_price - exit_price)
+                        gross_pnl = active_position.size_units * (
+                            active_position.entry_price - exit_price
+                        )
 
                     funding_fee_total = active_position.funding_fees_accumulated
-                    net_pnl = gross_pnl - active_position.fee_entry - fee_exit - funding_fee_total
-                    if not all(math.isfinite(value) for value in (notional_exit, fee_exit, net_pnl)):
+                    net_pnl = (
+                        gross_pnl
+                        - active_position.fee_entry
+                        - fee_exit
+                        - funding_fee_total
+                    )
+                    if not all(
+                        math.isfinite(value)
+                        for value in (notional_exit, fee_exit, net_pnl)
+                    ):
                         raise BacktestValidationError("Liquidación SPOT no finita.")
 
                     # SPOT: sale proceeds less exit fee. Entry fee was paid inside
@@ -520,45 +596,90 @@ class BacktestEngine:
 
                     # Both R values use the immutable, effective risk at entry.
                     initial_risk_amount = active_position.initial_risk_amount
-                    if initial_risk_amount is None or not math.isfinite(initial_risk_amount) or initial_risk_amount <= 0:
-                        raise BacktestValidationError("Riesgo inicial de posición no disponible o inválido.")
+                    if (
+                        initial_risk_amount is None
+                        or not math.isfinite(initial_risk_amount)
+                        or initial_risk_amount <= 0
+                    ):
+                        raise BacktestValidationError(
+                            "Riesgo inicial de posición no disponible o inválido."
+                        )
                     r_multiple = gross_pnl / initial_risk_amount
                     net_r_multiple = net_pnl / initial_risk_amount
-                    if not all(math.isfinite(value) for value in (r_multiple, net_r_multiple)):
+                    if not all(
+                        math.isfinite(value) for value in (r_multiple, net_r_multiple)
+                    ):
                         raise BacktestValidationError("R de operación no finito.")
 
                     net_return_pct = (
-                        (net_pnl / active_position.notional_entry * 100.0) if active_position.notional_entry > 0 else 0.0
+                        (net_pnl / active_position.notional_entry * 100.0)
+                        if active_position.notional_entry > 0
+                        else 0.0
                     )
 
                     if not is_short_pos:
                         mfe_pct = (
-                            ((active_position.highest_price - active_position.entry_price) / active_position.entry_price * 100.0)
+                            (
+                                (
+                                    active_position.highest_price
+                                    - active_position.entry_price
+                                )
+                                / active_position.entry_price
+                                * 100.0
+                            )
                             if active_position.entry_price > 0
                             else 0.0
                         )
                         mae_pct = (
-                            ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
+                            (
+                                (
+                                    active_position.entry_price
+                                    - active_position.lowest_price
+                                )
+                                / active_position.entry_price
+                                * 100.0
+                            )
                             if active_position.entry_price > 0
                             else 0.0
                         )
 
                     else:
                         mfe_pct = (
-                            ((active_position.entry_price - active_position.lowest_price) / active_position.entry_price * 100.0)
+                            (
+                                (
+                                    active_position.entry_price
+                                    - active_position.lowest_price
+                                )
+                                / active_position.entry_price
+                                * 100.0
+                            )
                             if active_position.entry_price > 0
                             else 0.0
                         )
                         mae_pct = (
-                            ((active_position.highest_price - active_position.entry_price) / active_position.entry_price * 100.0)
+                            (
+                                (
+                                    active_position.highest_price
+                                    - active_position.entry_price
+                                )
+                                / active_position.entry_price
+                                * 100.0
+                            )
                             if active_position.entry_price > 0
                             else 0.0
                         )
 
                     excursion_evidence = self._excursion_evidence(
-                        active_position, bar_open, bar_high, bar_low, bar_close,
+                        active_position,
+                        bar_open,
+                        bar_high,
+                        bar_low,
+                        bar_close,
                         opening_exit=opening_exit,
-                        intrabar_exit=(exit_reason != TradeExitReason.TIME_HORIZON.value and not opening_exit),
+                        intrabar_exit=(
+                            exit_reason != TradeExitReason.TIME_HORIZON.value
+                            and not opening_exit
+                        ),
                     )
 
                     trade_result = TradeResult(
@@ -596,7 +717,8 @@ class BacktestEngine:
                         execution_trace_status=trace_status,
                         execution_policy_version=(
                             ExecutionPolicyVersion.SPOT_LONG_C1.value
-                            if not is_short_pos else None
+                            if not is_short_pos
+                            else None
                         ),
                         excursion_policy_version=EXCURSION_POLICY_VERSION,
                         atr_entry=active_position.signal.atr,
@@ -616,13 +738,23 @@ class BacktestEngine:
                 if active_position is not None and self.config.enable_trailing_stop:
                     initial_risk = active_position.initial_risk_per_unit
                     if initial_risk is None:
-                        raise BacktestValidationError("Riesgo inicial de posición no disponible.")
+                        raise BacktestValidationError(
+                            "Riesgo inicial de posición no disponible."
+                        )
                     if not is_short_pos:
-                        if bar_high >= active_position.entry_price + (self.config.trailing_stop_activation_r * initial_risk):
-                            active_position.sl_price = max(active_position.sl_price, active_position.entry_price)
+                        if bar_high >= active_position.entry_price + (
+                            self.config.trailing_stop_activation_r * initial_risk
+                        ):
+                            active_position.sl_price = max(
+                                active_position.sl_price, active_position.entry_price
+                            )
                     else:
-                        if bar_low <= active_position.entry_price - (self.config.trailing_stop_activation_r * initial_risk):
-                            active_position.sl_price = min(active_position.sl_price, active_position.entry_price)
+                        if bar_low <= active_position.entry_price - (
+                            self.config.trailing_stop_activation_r * initial_risk
+                        ):
+                            active_position.sl_price = min(
+                                active_position.sl_price, active_position.entry_price
+                            )
 
             # -----------------------------------------------------------------
             # 3. Record Mark-to-Market Equity Point

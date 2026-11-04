@@ -41,9 +41,15 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     # -------------------------------------------------------------------------
     # 1. Multi-Year Dataset (2023, 2024, 2025)
     # -------------------------------------------------------------------------
-    candles_2023 = make_synthetic_candles(start="2023-06-01", periods=150, freq="1h", base_price=28000.0)
-    candles_2024 = make_synthetic_candles(start="2024-01-01", periods=150, freq="1h", base_price=42000.0)
-    candles_2025 = make_synthetic_candles(start="2025-01-01", periods=150, freq="1h", base_price=65000.0)
+    candles_2023 = make_synthetic_candles(
+        start="2023-06-01", periods=150, freq="1h", base_price=28000.0
+    )
+    candles_2024 = make_synthetic_candles(
+        start="2024-01-01", periods=150, freq="1h", base_price=42000.0
+    )
+    candles_2025 = make_synthetic_candles(
+        start="2025-01-01", periods=150, freq="1h", base_price=65000.0
+    )
     full_df = pd.concat([candles_2023, candles_2024, candles_2025], ignore_index=True)
 
     # Persist in Parquet store
@@ -66,7 +72,9 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     optimizer = StrategyOptimizer(train_end="2025-01-01 00:00:00+00:00")
 
     # Run initial baseline run on TRAIN period to seed StrategyOptimizer
-    raw_train_df = manager.load_dataset("BTCUSDT", "1h", end_time="2024-12-31 23:59:59+00:00")
+    raw_train_df = manager.load_dataset(
+        "BTCUSDT", "1h", end_time="2024-12-31 23:59:59+00:00"
+    )
     baseline_cfg = BacktestConfig(
         initial_capital=10_000.0,
         position_size_pct=1.0,
@@ -99,7 +107,9 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     for regime in MarketRegime:
         if regime.value not in calibrated_params:
             fixture_trades = make_synthetic_trades(n_trades=20, regime=regime.value)
-            calibrated_params[regime.value] = optimizer.optimize_regime(regime, fixture_trades)
+            calibrated_params[regime.value] = optimizer.optimize_regime(
+                regime, fixture_trades
+            )
     assert set(calibrated_params) == {regime.value for regime in MarketRegime}
 
     # -------------------------------------------------------------------------
@@ -184,10 +194,18 @@ def test_predictive_backtest_pipeline_e2e(tmp_path: Path, make_synthetic_candles
     )
 
     assert enhanced_report.total_trades == enhanced_report_run2.total_trades
-    assert enhanced_report.total_net_pnl == pytest.approx(enhanced_report_run2.total_net_pnl)
-    assert enhanced_report.win_rate_pct == pytest.approx(enhanced_report_run2.win_rate_pct)
-    assert enhanced_report.max_drawdown_pct == pytest.approx(enhanced_report_run2.max_drawdown_pct)
-    assert [t.trade_id for t in enhanced_report.trades] == [t.trade_id for t in enhanced_report_run2.trades]
+    assert enhanced_report.total_net_pnl == pytest.approx(
+        enhanced_report_run2.total_net_pnl
+    )
+    assert enhanced_report.win_rate_pct == pytest.approx(
+        enhanced_report_run2.win_rate_pct
+    )
+    assert enhanced_report.max_drawdown_pct == pytest.approx(
+        enhanced_report_run2.max_drawdown_pct
+    )
+    assert [t.trade_id for t in enhanced_report.trades] == [
+        t.trade_id for t in enhanced_report_run2.trades
+    ]
 
     # -------------------------------------------------------------------------
     # 6. Strict Causal Integrity (No Look-Ahead Bias at Candle K)
@@ -272,8 +290,12 @@ def test_predictive_signals_before_last_candle_ignore_its_future_change(
         return [], []
 
     monkeypatch.setattr(runner.engine, "run", capture_signals)
-    runner.run_backtest("BTCUSDT", "1h", df=candles, warmup_bars=35, predictive_mode=True)
-    runner.run_backtest("BTCUSDT", "1h", df=revised, warmup_bars=35, predictive_mode=True)
+    runner.run_backtest(
+        "BTCUSDT", "1h", df=candles, warmup_bars=35, predictive_mode=True
+    )
+    runner.run_backtest(
+        "BTCUSDT", "1h", df=revised, warmup_bars=35, predictive_mode=True
+    )
 
     assert len(seen) == 2
     assert len(seen[0]) > 0
@@ -300,4 +322,4 @@ def test_predictive_signal_eligibility_is_stable_when_future_is_appended(
     assert len(captured[0]) == 41
     assert len(captured[1]) == 101
     assert captured[0][0]["candle_timestamp"] == str(prefix.iloc[199]["timestamp"])
-    assert captured[0] == captured[1][:len(captured[0])]
+    assert captured[0] == captured[1][: len(captured[0])]

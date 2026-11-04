@@ -68,7 +68,10 @@ def test_api_security_config_from_env(monkeypatch):
     monkeypatch.setenv("OPERATOR_API_SECURITY_ENABLED", "true")
     monkeypatch.setenv("OPERATOR_API_RATE_LIMIT_PER_MINUTE", "120")
     monkeypatch.setenv("OPERATOR_API_RATE_LIMIT_ENABLED", "yes")
-    monkeypatch.setenv("OPERATOR_API_CORS_ORIGINS", "https://app.cryptoquant.com, https://localhost:3000")
+    monkeypatch.setenv(
+        "OPERATOR_API_CORS_ORIGINS",
+        "https://app.cryptoquant.com, https://localhost:3000",
+    )
     monkeypatch.setenv("OPERATOR_API_REQUIRE_AUTH_FOR_HEALTH", "1")
 
     cfg = APISecurityConfig.from_env()
@@ -136,7 +139,6 @@ def test_rate_limiter_logic():
     r6 = limiter.check(key)
     assert r6.allowed is True
     assert 100.0 not in limiter._requests[key]
-
 
 
 def test_client_identifier_resolution():
@@ -236,7 +238,9 @@ async def test_health_check_requires_auth_when_configured():
         assert resp_unauth.status_code == 401
 
         # Accepted with valid key
-        resp_auth = await client.get("/health", headers={"X-API-Key": "health-secret-key"})
+        resp_auth = await client.get(
+            "/health", headers={"X-API-Key": "health-secret-key"}
+        )
         assert resp_auth.status_code == 200
         assert resp_auth.json()["status"] == "HEALTHY"
 
@@ -285,15 +289,21 @@ async def test_rate_limiting_enforcement():
         headers = {"X-API-Key": "rate-limited-key"}
 
         # Request 1: OK
-        r1 = await client.get("/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers)
+        r1 = await client.get(
+            "/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers
+        )
         assert r1.status_code == 200
 
         # Request 2: OK
-        r2 = await client.get("/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers)
+        r2 = await client.get(
+            "/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers
+        )
         assert r2.status_code == 200
 
         # Request 3: Rate limited -> 429
-        r3 = await client.get("/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers)
+        r3 = await client.get(
+            "/signals/latest?symbol=BTCUSDT&timeframe=1h", headers=headers
+        )
         assert r3.status_code == 429
         assert "Rate limit exceeded" in r3.json()["detail"]
         assert "retry-after" in r3.headers
@@ -321,4 +331,7 @@ async def test_cors_preflight_configuration():
             },
         )
         assert resp.status_code == 200
-        assert resp.headers.get("access-control-allow-origin") == "https://quant.cryptomonitor.io"
+        assert (
+            resp.headers.get("access-control-allow-origin")
+            == "https://quant.cryptomonitor.io"
+        )
