@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .constants import PREDICTIVE_MEMORY_BARS
 from .indicators import TechnicalIndicators
 from .regime_classifier import MarketRegime, RegimeClassifier, RegimeResult
 
@@ -55,11 +56,13 @@ class PredictiveEngine:
         indicators: TechnicalIndicators | None = None,
         horizon_bars: int = 5,
         min_history_bars: int = 35,
+        memory_bars: int = PREDICTIVE_MEMORY_BARS,
     ):
         self.regime_classifier = regime_classifier or RegimeClassifier()
         self.indicators = indicators or TechnicalIndicators()
         self.horizon_bars = horizon_bars
         self.min_history_bars = min_history_bars
+        self.memory_bars = memory_bars
 
     def evaluate(
         self,
@@ -162,6 +165,8 @@ class PredictiveEngine:
 
             start_idx = 24
             idx = start_idx + np.flatnonzero(regime_values == current_regime.value)
+            # Shared predictive memory: only the last ``memory_bars`` bars count.
+            idx = idx[idx >= n_bars - self.memory_bars]
             matches = int(idx.size)
             if matches:
                 closes = enriched["close"].to_numpy(dtype=float)

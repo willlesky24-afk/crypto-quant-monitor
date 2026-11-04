@@ -5,6 +5,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from src.constants import LIVE_HISTORY_BARS
 from src.data_loader import BinanceDataLoader
 from src.decision_engine import DecisionEngine
 from src.engine import MarketEngine
@@ -133,7 +134,7 @@ class MarketScanner:
         self,
         symbols: list[str] | tuple[str, ...] | None = None,
         timeframe: str = "1h",
-        limit: int = 100,
+        limit: int = LIVE_HISTORY_BARS,
     ) -> list[ScannedPairResult]:
         """Scan candidate symbols and rank descending by composite quantitative score."""
         symbols = symbols or self.DEFAULT_PAIRS

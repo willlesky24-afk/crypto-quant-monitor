@@ -8,6 +8,7 @@ import pandas as pd
 
 from src.ai_agent.context_builder import ContextBuilder
 from src.ai_agent.models import MarketContext
+from src.constants import LIVE_HISTORY_BARS
 from src.data_loader import BinanceDataLoader
 from src.decision_engine import DecisionEngine
 from src.engine import MarketEngine
@@ -139,12 +140,15 @@ def build_on_demand_context(
         if is_fx:
             f_loader = ForexDataLoader()
             raw_df = f_loader.get_forex_klines(
-                symbol=symbol, interval=timeframe, limit=200
+                symbol=symbol, interval=timeframe, limit=LIVE_HISTORY_BARS
             )
         else:
             b_loader = BinanceDataLoader()
             raw_df = b_loader.get_klines(
-                symbol=symbol, interval=timeframe, limit=200, include_open_candle=False
+                symbol=symbol,
+                interval=timeframe,
+                limit=LIVE_HISTORY_BARS,
+                include_open_candle=False,
             )
 
         if raw_df.empty or len(raw_df) < 35:

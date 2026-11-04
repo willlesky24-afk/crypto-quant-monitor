@@ -42,6 +42,7 @@ try:
         evaluate_backtest_verdict,
     )
     from src.backtest_runner import BacktestRunner
+    from src.constants import LIVE_HISTORY_BARS
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
     from src.engine import MarketEngine
@@ -90,6 +91,7 @@ except ImportError:
         evaluate_backtest_verdict,
     )
     from backtest_runner import BacktestRunner
+    from constants import LIVE_HISTORY_BARS
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
     from engine import MarketEngine
@@ -783,7 +785,7 @@ else:
 
 interval = st.sidebar.selectbox("Temporalidad", ["15m", "1h", "4h", "1d"], index=1)
 limit = st.sidebar.slider(
-    "Velas Históricas", min_value=150, max_value=1000, value=300, step=50
+    "Velas en el gráfico", min_value=150, max_value=1000, value=300, step=50
 )
 
 # Caption under title
@@ -832,17 +834,19 @@ if is_manual_mode:
 try:
     if is_forex:
         forex_loader = ForexDataLoader()
+        # Analysis always uses the shared history (v3.0); the slider only
+        # sets how many candles the chart displays.
         df_raw = forex_loader.get_forex_klines(
             symbol=symbol,
             interval=interval,
-            limit=limit,
+            limit=max(limit, LIVE_HISTORY_BARS),
         )
     else:
         loader = BinanceDataLoader()
         df_raw = loader.get_klines(
             symbol=symbol,
             interval=interval,
-            limit=limit,
+            limit=max(limit, LIVE_HISTORY_BARS),
             include_open_candle=False,
         )
 except Exception as exc:
@@ -1003,16 +1007,17 @@ with tab_live:
         )
 
     # 3. Interactive Plotly Chart (Candles, EMAs, Volume Profile)
+    df_chart = df.tail(limit)
     fig_live = go.Figure()
 
     # Candlestick with Fluorescent Green and Neon Coral
     fig_live.add_trace(
         go.Candlestick(
-            x=df["timestamp"],
-            open=df["open"],
-            high=df["high"],
-            low=df["low"],
-            close=df["close"],
+            x=df_chart["timestamp"],
+            open=df_chart["open"],
+            high=df_chart["high"],
+            low=df_chart["low"],
+            close=df_chart["close"],
             name="Precio",
             increasing_line_color="#00FF88",
             increasing_fillcolor="#00FF88",
@@ -1025,8 +1030,8 @@ with tab_live:
     if "ema_50" in df.columns:
         fig_live.add_trace(
             go.Scatter(
-                x=df["timestamp"],
-                y=df["ema_50"],
+                x=df_chart["timestamp"],
+                y=df_chart["ema_50"],
                 name="EMA 50",
                 line={"color": "#00E5FF", "width": 2},
             )
@@ -1034,8 +1039,8 @@ with tab_live:
     if "ema_200" in df.columns:
         fig_live.add_trace(
             go.Scatter(
-                x=df["timestamp"],
-                y=df["ema_200"],
+                x=df_chart["timestamp"],
+                y=df_chart["ema_200"],
                 name="EMA 200",
                 line={"color": "#BD00FF", "width": 2},
             )

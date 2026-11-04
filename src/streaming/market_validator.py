@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.ai_agent.context_builder import ContextBuilder
 from src.ai_providers.factory import ProviderFactory
+from src.constants import LIVE_HISTORY_BARS
 from src.data_loader import BinanceDataLoader
 from src.decision_engine import DecisionEngine
 from src.engine import MarketEngine
@@ -153,7 +154,7 @@ class RealMarketValidator:
             df = data_loader.get_klines(
                 symbol=self.symbol,
                 interval=self.interval,
-                limit=250,
+                limit=LIVE_HISTORY_BARS,
                 include_open_candle=False,
             )
             latency = (time.perf_counter() - t0) * 1000

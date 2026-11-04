@@ -50,3 +50,14 @@ DECISION_WEAK_CONTEXT = "🔴 Contexto débil"
 INTELLIGENCE_HIGH_CONFLUENCE = "🟢 Alta confluencia"
 INTELLIGENCE_INTERESTING = "🟡 Contexto interesante"
 INTELLIGENCE_WEAK = "🔴 Contexto débil"
+
+# Analysis windows shared by every route (backtest, live, dashboard, scanner,
+# copilot, validator). Approved by the supervisor in v3.0 so the backtest
+# evaluates exactly the strategy that runs live.
+# - Volume Profile / market reading: last 300 bars (dashboard default; a usual
+#   intraday volume-profile window).
+# - Predictive memory: historical matches from the last 2000 bars.
+# - Live history: memory + 24 regime warm-up bars + horizon + margin.
+ANALYSIS_WINDOW_BARS = 300
+PREDICTIVE_MEMORY_BARS = 2000
+LIVE_HISTORY_BARS = 2100

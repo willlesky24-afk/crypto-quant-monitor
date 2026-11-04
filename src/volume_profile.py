@@ -1,9 +1,16 @@
 import numpy as np
 import pandas as pd
 
+try:
+    from .constants import ANALYSIS_WINDOW_BARS
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from constants import ANALYSIS_WINDOW_BARS
+
 
 class VolumeProfile:
-    def calculate(self, df: pd.DataFrame, bins: int = 24):
+    def calculate(
+        self, df: pd.DataFrame, bins: int = 24, window: int = ANALYSIS_WINDOW_BARS
+    ):
         """
         Calcula POC, VAH y VAL
         usando distribución de volumen por precio.
@@ -25,7 +32,13 @@ class VolumeProfile:
         if bins < 2:
             raise ValueError("bins debe ser un entero mayor o igual a 2")
 
-        values = df[["high", "low", "close", "volume"]].to_numpy(dtype=float)
+        # Only the shared analysis window: older bars must not shape today's
+        # value area (and every route must see the same profile).
+        if window < 1:
+            raise ValueError("window debe ser >= 1")
+        values = (
+            df[["high", "low", "close", "volume"]].tail(window).to_numpy(dtype=float)
+        )
 
         if not np.isfinite(values).all():
             raise ValueError("Los precios y el volumen deben ser valores finitos")

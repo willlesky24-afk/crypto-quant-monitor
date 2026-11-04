@@ -28,12 +28,40 @@ class BinanceDataLoader:
             "https://api3.binance.com/api/v3",
         ]
 
+        if limit > self.MAX_LIMIT:
+            # Binance serves at most 1000 klines per request: page backwards with
+            # endTime until ``limit`` candles (+1 to absorb a dropped open one).
+            candles = []
+            end_time = None
+            while len(candles) < limit + 1:
+                chunk = self._fetch_raw(
+                    mirrors,
+                    {
+                        "symbol": symbol,
+                        "interval": interval,
+                        "limit": min(self.MAX_LIMIT, limit + 1 - len(candles)),
+                        **({"endTime": end_time} if end_time is not None else {}),
+                    },
+                )
+                if not chunk:
+                    break
+                candles = chunk + candles
+                end_time = int(chunk[0][0]) - 1
+            return self._to_frame(candles, include_open_candle, keep_last=limit)
+
         params = {
             "symbol": symbol,
             "interval": interval,
             "limit": limit,
         }
+        return self._to_frame(
+            self._fetch_raw(mirrors, params), include_open_candle, keep_last=None
+        )
 
+    MAX_LIMIT = 1000
+
+    @staticmethod
+    def _fetch_raw(mirrors, params):
         candles = None
         last_error = None
 
@@ -58,7 +86,10 @@ class BinanceDataLoader:
             if last_error:
                 raise last_error
             candles = []
+        return candles
 
+    @staticmethod
+    def _to_frame(candles, include_open_candle, keep_last):
         if not candles:
             return pd.DataFrame(
                 columns=["timestamp", "open", "high", "low", "close", "volume"]
@@ -69,6 +100,8 @@ class BinanceDataLoader:
             last_close_time = int(candles[-1][6])
             if last_close_time > now_ms:
                 candles = candles[:-1]
+        if keep_last is not None:
+            candles = candles[-keep_last:]
 
         if not candles:
             return pd.DataFrame(

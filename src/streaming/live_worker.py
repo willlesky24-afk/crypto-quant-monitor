@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from src.constants import LIVE_HISTORY_BARS
 from src.data_loader import BinanceDataLoader
 from src.notifications.dispatcher import NotificationDispatcher
 from src.operator_service.live_bridge import LiveAIContextBridge
@@ -98,7 +99,7 @@ class LiveMarketWorker:
             aggregator = CandleAggregator(
                 symbol=symbol,
                 interval=self.interval,
-                max_bars=max(self.warm_up_bars + 50, 300),
+                max_bars=max(self.warm_up_bars + 50, LIVE_HISTORY_BARS),
             )
             engine = LiveExecutionEngine(
                 symbol=symbol,
@@ -145,7 +146,7 @@ class LiveMarketWorker:
                 df = data_loader.get_klines(
                     symbol=symbol,
                     interval=self.interval,
-                    limit=self.warm_up_bars + 10,
+                    limit=max(self.warm_up_bars + 10, LIVE_HISTORY_BARS),
                     include_open_candle=False,
                 )
                 if df is not None and not df.empty:
