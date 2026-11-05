@@ -127,6 +127,35 @@ class RegimeClassifier:
         # Causal slope of EMA 50 over last 5 bars
         slope_lookback = min(5, len(enriched) - 1)
         ema_50_prev = float(enriched["ema_50"].iloc[-1 - slope_lookback])
+        return self._decide(
+            last_ts,
+            price,
+            ema_50,
+            ema_200,
+            rsi,
+            atr,
+            volume,
+            vol_ma,
+            atr_ma,
+            ema_50_prev,
+            slope_lookback,
+        )
+
+    @staticmethod
+    def _decide(
+        timestamp: pd.Timestamp,
+        price: float,
+        ema_50: float,
+        ema_200: float,
+        rsi: float,
+        atr: float,
+        volume: float,
+        vol_ma: float,
+        atr_ma: float,
+        ema_50_prev: float,
+        slope_lookback: int,
+    ) -> RegimeResult:
+        """Single home of the regime rules, shared by classify and classify_series."""
         ema_slope_50 = (ema_50 - ema_50_prev) / (slope_lookback * max(atr, 1e-6))
 
         # Normalized feature metrics
@@ -211,7 +240,7 @@ class RegimeClassifier:
         clamped_confidence = min(1.0, max(0.0, float(conf)))
 
         return RegimeResult(
-            timestamp=last_ts,
+            timestamp=timestamp,
             regime=regime,
             confidence=clamped_confidence,
             features_used=features,
@@ -239,10 +268,45 @@ class RegimeClassifier:
         enriched = self.indicators.calculate_all(candles)
         results: list[RegimeResult] = []
 
-        total_bars = len(enriched)
-        for t_idx in range(warmup_bars - 1, total_bars):
-            sub_df = enriched.iloc[: t_idx + 1]
-            res = self.classify(sub_df)
-            results.append(res)
+        # Same inputs classify() reads, taken once from whole columns: slicing the
+        # frame per bar was the slow part of the scanner (v3.1 D1).
+        timestamps = list(enriched["timestamp"])
+        price = enriched["close"].to_numpy(dtype=float)
+        ema_50 = enriched["ema_50"].to_numpy(dtype=float)
+        ema_200 = enriched["ema_200"].to_numpy(dtype=float)
+        rsi = enriched["rsi"].to_numpy(dtype=float)
+        atr = enriched["atr"].to_numpy(dtype=float)
+        volume = enriched["volume"].to_numpy(dtype=float)
+        vol_ma = enriched["volume_average"].to_numpy(dtype=float)
+        atr_ma = enriched["atr"].rolling(50, min_periods=1).mean().to_numpy(dtype=float)
+
+        for t_idx in range(warmup_bars - 1, len(enriched)):
+            if t_idx + 1 < self.min_bars:
+                results.append(self.classify(enriched.iloc[: t_idx + 1]))
+                continue
+            p = float(price[t_idx])
+            rsi_v = 50.0 if np.isnan(rsi[t_idx]) else float(rsi[t_idx])
+            atr_v = p * 0.01 if np.isnan(atr[t_idx]) else float(atr[t_idx])
+            vol_v = float(volume[t_idx])
+            vol_ma_v = vol_v if np.isnan(vol_ma[t_idx]) else float(vol_ma[t_idx])
+            atr_ma_v = float(atr_ma[t_idx])
+            if np.isnan(atr_ma_v) or atr_ma_v <= 0:
+                atr_ma_v = atr_v
+            lookback = min(5, t_idx)
+            results.append(
+                self._decide(
+                    timestamps[t_idx],
+                    p,
+                    float(ema_50[t_idx]),
+                    float(ema_200[t_idx]),
+                    rsi_v,
+                    atr_v,
+                    vol_v,
+                    vol_ma_v,
+                    atr_ma_v,
+                    float(ema_50[t_idx - lookback]),
+                    lookback,
+                )
+            )
 
         return results
