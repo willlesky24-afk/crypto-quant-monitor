@@ -768,7 +768,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("📊 Crypto & Forex Quant Monitor")
+st.title("Quant Monitor")
 
 # =====================================================================
 # SIDEBAR: MASTER MARKET SELECTOR (CRYPTO VS FOREX)
@@ -859,21 +859,13 @@ limit = st.sidebar.slider(
 )
 
 # Caption under title
-market_desc = (
-    "💱 Divisas Forex Globales (Interbancario)"
-    if is_forex
-    else "🪙 Criptomonedas (Binance Spot & Futuros)"
-)
-st.caption(
-    f"{market_desc} • Quantitative Engine • Predictive Intelligence • Real-Time Monitoring & Backtesting"
-)
+st.caption("Antes de arriesgar tu dinero, compruébalo.")
 
 # =====================================================================
 # SIDEBAR: MODO DE ANÁLISIS (AUTOMÁTICO VS MANUAL / WHAT-IF)
 # =====================================================================
-st.sidebar.markdown("---")
-st.sidebar.subheader("🎛️ Modo de Análisis")
-sim_mode = st.sidebar.radio(
+advanced_options = st.sidebar.expander("Opciones avanzadas", expanded=False)
+sim_mode = advanced_options.radio(
     "Fuente de Parámetros",
     ["🕹️ Manual (Simulador de Escenarios)", "🟢 Automático (En Vivo)"],
     index=1,
@@ -882,21 +874,25 @@ sim_mode = st.sidebar.radio(
 is_manual_mode = "Manual" in sim_mode
 
 if is_manual_mode:
-    st.sidebar.markdown("##### ⚙️ Parámetros Forzados")
+    advanced_options.markdown("##### ⚙️ Parámetros Forzados")
     from src.regime_classifier import MarketRegime
     from src.strategy_optimizer import OptimizedParameters
 
     regime_options = [r.value for r in MarketRegime]
-    manual_regime_str = st.sidebar.selectbox(
+    manual_regime_str = advanced_options.selectbox(
         "Régimen de Mercado", regime_options, index=0
     )
     manual_regime = MarketRegime(manual_regime_str)
 
-    manual_pred_score = st.sidebar.slider("Predictive Score", 0.0, 1.0, 0.65, 0.05)
-    manual_prob_cont = st.sidebar.slider("P(Continuación)", 0.0, 1.0, 0.60, 0.05)
-    manual_tp_mult = st.sidebar.slider("Target TP (x ATR)", 1.0, 6.0, 3.0, 0.25)
-    manual_sl_mult = st.sidebar.slider("Stop Loss SL (x ATR)", 0.5, 4.0, 1.5, 0.25)
-    manual_tech_weight = st.sidebar.slider(
+    manual_pred_score = advanced_options.slider(
+        "Predictive Score", 0.0, 1.0, 0.65, 0.05
+    )
+    manual_prob_cont = advanced_options.slider("P(Continuación)", 0.0, 1.0, 0.60, 0.05)
+    manual_tp_mult = advanced_options.slider("Target TP (x ATR)", 1.0, 6.0, 3.0, 0.25)
+    manual_sl_mult = advanced_options.slider(
+        "Stop Loss SL (x ATR)", 0.5, 4.0, 1.5, 0.25
+    )
+    manual_tech_weight = advanced_options.slider(
         "Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05
     )
 
@@ -937,34 +933,40 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-(
-    tab_live,
-    tab_risk,
-    tab_radar,
-    tab_verifier,
-    tab_copilot,
-    tab_backtest,
-    tab_settings,
-    tab_guide,
-) = st.tabs(
-    [
-        "📡 Live Monitor",
-        "🛡️ Calculadora de Riesgo",
-        "🛰️ Radar",
-        "🔬 Verificador",
-        "🤖 AI Copilot",
-        "📈 Backtest Analytics",
-        "⚙️ Notification Settings",
-        "📖 Guía & Glosario",
-    ]
+tab_today, tab_risk, tab_verifier, tab_advanced = st.tabs(
+    ["Hoy", "Mi riesgo", "Probar mi idea", "Avanzado"]
 )
+tab_radar = tab_today
+with tab_today:
+    today_summary = st.container()
+with tab_advanced:
+    st.caption(
+        "Herramientas técnicas. Las señales de este apartado no demostraron ventaja "
+        "estadística: consulta el informe de evidencia."
+    )
+    tab_live, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs(
+        [
+            "Monitor técnico",
+            "Copiloto IA",
+            "Simulador histórico",
+            "Notificaciones",
+            "Guía y glosario",
+        ]
+    )
 
 
 # =====================================================================
 # TAB: CALCULADORA DE RIESGO (v3.1)
 # =====================================================================
+REGIME_LABELS = {
+    "TRENDING_BULL": "Tendencia alcista",
+    "TRENDING_BEAR": "Tendencia bajista",
+    "RANGING_CONSOLIDATION": "Sin tendencia",
+    "HIGH_VOLATILITY_EXPANSION": "Expansión de volatilidad",
+}
+
 with tab_risk:
-    st.subheader("🛡️ ¿Cuánto puedo operar sin arriesgar de más?")
+    st.subheader("¿Cuánto puedo operar sin arriesgar de más?")
     st.caption(
         f"{symbol}: elige cuánto aceptas perder y calculamos el tamaño. Es información "
         "de tamaño, no una recomendación de entrar. Cuenta en USD y sin apalancamiento."
@@ -1090,7 +1092,7 @@ def _radar_fetch(radar_symbol):
 
 
 with tab_radar:
-    st.subheader("🛰️ ¿Qué está fuera de lo normal?")
+    st.subheader("¿Qué está fuera de lo normal?")
     st.caption(
         f"Compara {len(RADAR_CRYPTO)} criptos, forex y metales con su propia historia "
         f"en {interval}. Un aviso dice que algo es raro, no qué hacer. Mientras más "
@@ -1185,7 +1187,7 @@ ENTRY_LABELS = {
 }
 
 with tab_verifier:
-    st.subheader("🔬 Antes de arriesgar tu dinero, compruébalo")
+    st.subheader("¿Tu regla resiste los datos?")
     st.caption(
         f"Prueba una regla en {symbol} {interval} con costos reales. Reservamos el "
         "último 20 % de los datos y cada intento sube el listón, para que probar "
@@ -1321,7 +1323,8 @@ with tab_live:
     summary = build_market_summary(
         symbol, df, analysis, profile, RegimeClassifier().classify(df).regime
     )
-    with st.expander("☀️ ¿Qué está pasando hoy?", expanded=True):
+    with today_summary:
+        st.subheader("¿Qué está pasando hoy?")
         for summary_line in summary["lines"]:
             st.write(summary_line)
         conditions = market_conditions(df)
@@ -1432,7 +1435,7 @@ with tab_live:
     with col1:
         st.metric("Precio Actual", f"${format_price(curr_price)}")
     with col2:
-        st.metric("Régimen de Mercado", regime_res.regime.value)
+        st.metric("Régimen de Mercado", REGIME_LABELS[regime_res.regime.value])
     with col3:
         st.metric(
             "Estado de señal", f"{trade_plan['status']} ({trade_plan['direction']})"
@@ -1592,17 +1595,10 @@ with tab_live:
         market_badge_text = (
             "💱 Mercado Forex Global" if is_forex else "🪙 Mercado Criptomonedas 24/7"
         )
-        strategy_recommendation = (
-            "🏛️ <strong>Método Recomendado en Forex:</strong> Reversión a la Media en zonas de valor institucional (VAL/VAH) y Seguimiento de Tendencia macroeconómico."
-            if is_forex
-            else "🚀 <strong>Método Recomendado en Cripto:</strong> Rupturas de Volatilidad (Breakouts) y Modelo Híbrido Dinámico para expansiones de impulso 24/7."
-        )
-
         st.markdown(
             f"""
             <div style="background: rgba(16, 26, 46, 0.6); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;">
                 <span class="metric-pill metric-pill-gold">{market_badge_text}</span>
-                <span style="font-size: 0.85rem; color: #C9D1D9;">{strategy_recommendation}</span>
             </div>
             """,
             unsafe_allow_html=True,
