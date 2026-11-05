@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -115,3 +117,16 @@ def test_build_markets_reports_failures_instead_of_hiding_them():
     markets, failed = build_markets(fetch, ["OK", "BAD"])
     assert list(markets) == ["OK"]
     assert failed == {"BAD": "sin datos"}
+
+
+def test_build_markets_fetches_at_the_same_time_and_keeps_order():
+    # Both fetches wait for each other: run one by one, this would time out.
+    both_started = threading.Barrier(2, timeout=5)
+
+    def fetch(symbol):
+        both_started.wait()
+        return symbol
+
+    markets, failed = build_markets(fetch, ["AAA", "BBB"])
+    assert list(markets) == ["AAA", "BBB"]
+    assert failed == {}

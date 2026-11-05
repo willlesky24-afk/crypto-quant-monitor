@@ -20,6 +20,7 @@ Rules, fixed before seeing results (project choices, no published source):
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -32,6 +33,7 @@ BIG_MOVE_ATR = 2.0
 TYPICAL_ATR_BARS = 300
 RELATIVE_BARS = 30
 CORRELATION_BARS = 60
+MAX_DOWNLOADS = 6  # polite to the providers; a project choice
 
 _LABELS = {
     "compresion": "Volatilidad inusualmente comprimida",
@@ -199,9 +201,17 @@ def build_markets(
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """Fetch each market; a failure is reported, and the scan continues."""
     markets, failed = {}, {}
-    for symbol in symbols:
+
+    def attempt(symbol: str) -> tuple[str, pd.DataFrame | None, str | None]:
         try:
-            markets[symbol] = fetch(symbol)
+            return symbol, fetch(symbol), None
         except Exception as exc:  # shown to the user, never dropped silently
-            failed[symbol] = str(exc)
+            return symbol, None, str(exc)
+
+    with ThreadPoolExecutor(max_workers=MAX_DOWNLOADS) as pool:
+        for symbol, frame, error in pool.map(attempt, symbols):
+            if error is None:
+                markets[symbol] = frame
+            else:
+                failed[symbol] = error
     return markets, failed
