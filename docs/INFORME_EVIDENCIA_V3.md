@@ -50,6 +50,10 @@ sola vez.
   100 % del capital; ese 99.99 % exagera el riesgo.
 - Los filtrados usaron solo 4h. Los parámetros de las salidas son elecciones del proyecto, no
   valores de una publicación.
+- Durante estas corridas el análisis redondeaba precio y ATR a 2 decimales, lo que falseaba reglas
+  de riesgo y señal en forex. Se corrigió después. Al repetir forex y metales en 4h (validación
+  2024), 8 de 9 series quedaron iguales y GBP/USD pasó de PF 0.857 a 0.854. Forex en 1h y los filtrados no
+  se repitieron.
 - Un resultado negativo vale para estas reglas, no para cualquier estrategia posible.
 
 ## Reproducir

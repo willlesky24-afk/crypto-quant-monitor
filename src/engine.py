@@ -188,8 +188,9 @@ class MarketEngine:
 
         analysis["market_context"] = context
 
-        analysis["price"] = round(price, 2)
+        # Unrounded: forex moves in the 4th decimal; screens format for display.
+        analysis["price"] = price
         analysis["rsi"] = round(rsi, 2)
-        analysis["atr"] = round(atr, 2)
+        analysis["atr"] = atr
 
         return analysis
