@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import os
 import sys
@@ -63,6 +64,13 @@ try:
         FundingUnavailableError,
         funding_snapshot,
         provider_from_env,
+    )
+    from src.idea_agent import (
+        IdeaAgentError,
+        explain_prompt,
+        explanation_or_facts,
+        parse_translation,
+        translate_prompt,
     )
     from src.idea_verifier import (
         ENTRIES,
@@ -137,6 +145,13 @@ except ImportError:
         FundingUnavailableError,
         funding_snapshot,
         provider_from_env,
+    )
+    from idea_agent import (
+        IdeaAgentError,
+        explain_prompt,
+        explanation_or_facts,
+        parse_translation,
+        translate_prompt,
     )
     from idea_verifier import (
         ENTRIES,
@@ -1176,22 +1191,57 @@ with tab_verifier:
         "último 20 % de los datos y cada intento sube el listón, para que probar "
         "variantes hasta que una gane no cuente como evidencia."
     )
+    v_sides = ["AMBOS", "LONG", "SHORT"] if symbol.endswith("=X") else ["AMBOS", "LONG"]
+
+    def _ask_ai(prompt):
+        provider = ProviderFactory.create_provider()
+        if not hasattr(provider, "generate_response"):
+            raise IdeaAgentError("No hay un proveedor de IA configurado.")
+        response = asyncio.run(provider.generate_response(prompt))
+        if response.metadata.get("status") == "fallback":
+            raise IdeaAgentError(response.content)
+        return response.content
+
+    v_text = st.text_area(
+        "Describe tu idea (opcional)",
+        placeholder="Quiero entrar cuando rompa el máximo de 20 velas, con stop amplio",
+    )
+    if st.button("Interpretar con IA") and v_text.strip():
+        try:
+            v_rule = parse_translation(_ask_ai(translate_prompt(v_text)))
+        except IdeaAgentError as exc:
+            st.error(f"No se pudo interpretar: {exc}")
+        else:
+            if "no_cabe" in v_rule:
+                st.warning(f"Esa idea no cabe en las reglas: {v_rule['no_cabe']}")
+            elif v_rule["side"] not in v_sides:
+                st.warning("En cripto spot solo se puede probar en largo.")
+            else:
+                st.session_state.update(
+                    v_entry=v_rule["entry"],
+                    v_side=v_rule["side"],
+                    v_sl=v_rule["sl_atr"],
+                    v_tp=v_rule["tp_atr"],
+                    v_bars=v_rule["max_bars"],
+                )
+                st.info("Revisa abajo la regla propuesta antes de verificar.")
+
     v_col1, v_col2 = st.columns(2)
     with v_col1:
         v_entry = st.selectbox(
-            "Regla de entrada", list(ENTRIES), format_func=ENTRY_LABELS.get
+            "Regla de entrada",
+            list(ENTRIES),
+            format_func=ENTRY_LABELS.get,
+            key="v_entry",
         )
-        v_side = st.radio(
-            "Lado",
-            ["AMBOS", "LONG"]
-            if not symbol.endswith("=X")
-            else ["AMBOS", "LONG", "SHORT"],
-            horizontal=True,
-        )
+        v_side = st.radio("Lado", v_sides, horizontal=True, key="v_side")
     with v_col2:
-        v_sl = st.number_input("Stop (ATR)", min_value=0.5, value=2.0, step=0.5)
-        v_tp = st.number_input("Objetivo (ATR)", min_value=0.5, value=6.0, step=0.5)
-        v_bars = st.number_input("Máximo de velas", min_value=1, value=120, step=10)
+        st.session_state.setdefault("v_sl", 2.0)
+        st.session_state.setdefault("v_tp", 6.0)
+        st.session_state.setdefault("v_bars", 120)
+        v_sl = st.number_input("Stop (ATR)", min_value=0.5, step=0.5, key="v_sl")
+        v_tp = st.number_input("Objetivo (ATR)", min_value=0.5, step=0.5, key="v_tp")
+        v_bars = st.number_input("Máximo de velas", min_value=1, step=10, key="v_bars")
 
     if st.button("Verificar idea"):
         st.session_state["verifier_attempts"] = (
@@ -1238,6 +1288,19 @@ with tab_verifier:
                 f"{v_result['ci'][1]:+.3f}. Quedaron {v_result['reserved_bars']} velas "
                 "sin usar."
             )
+        if st.button("Explicar con IA"):
+            try:
+                v_text_out, v_used_ai = explanation_or_facts(
+                    _ask_ai(explain_prompt(v_result)), v_result
+                )
+            except IdeaAgentError as exc:
+                st.error(f"La IA no está disponible: {exc}")
+            else:
+                st.write(v_text_out)
+                if not v_used_ai:
+                    st.caption(
+                        "Se muestran los datos del motor: la IA no pasó el control."
+                    )
         st.caption(
             f"Datos: {st.session_state['verifier_source']}. Resultado histórico, "
             "no una recomendación de operar."

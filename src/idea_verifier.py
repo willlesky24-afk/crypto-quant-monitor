@@ -137,7 +137,7 @@ def _net_r(trades: list[Any]) -> list[float]:
 
 
 def verify_idea(
-    df: pd.DataFrame, spec: IdeaSpec, attempts: int, n_random: int = 20
+    df: pd.DataFrame, spec: IdeaSpec, attempts: int, n_random: int = 8
 ) -> dict[str, Any]:
     if spec.entry not in ENTRIES:
         raise IdeaVerifierError(f"Entrada no disponible: {spec.entry}")
