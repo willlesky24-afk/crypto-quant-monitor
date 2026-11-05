@@ -464,7 +464,7 @@ def _backtest_trade_table_for_ui(trades, config):
 
 
 st.set_page_config(
-    page_title="Crypto Quant Monitor",
+    page_title="Quant Monitor",
     page_icon="📊",
     layout="wide",
 )
@@ -510,6 +510,14 @@ st.markdown(
         box-shadow: 0 8px 24px rgba(0, 255, 136, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
     }
 
+    [data-testid="stMetric"] { height: 100%; }
+    [data-testid="stMetricValue"], [data-testid="stMetricValue"] *,
+    [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {
+        white-space: normal !important;
+        overflow-wrap: break-word;
+        text-overflow: clip !important;
+        min-width: 0;
+    }
     [data-testid="stMetricLabel"] {
         color: var(--text-sub) !important;
         font-size: 0.74rem !important;
@@ -521,7 +529,7 @@ st.markdown(
 
     [data-testid="stMetricValue"], [data-testid="stMetricValue"] * {
         color: #ffffff !important;
-        font-size: 1.25rem !important;
+        font-size: 1.05rem !important;
         font-weight: 700 !important;
         line-height: 1.25 !important;
         text-shadow: 0 0 10px rgba(0, 229, 255, 0.35) !important;
@@ -1197,7 +1205,7 @@ with tab_verifier:
         "último 20 % de los datos y cada intento sube el listón, para que probar "
         "variantes hasta que una gane no cuente como evidencia."
     )
-    v_sides = ["AMBOS", "LONG", "SHORT"] if symbol.endswith("=X") else ["AMBOS", "LONG"]
+    v_sides = ["AMBOS", "LONG", "SHORT"] if symbol.endswith("=X") else ["LONG"]
 
     def _ask_ai(prompt):
         provider = ProviderFactory.create_provider()
@@ -1542,7 +1550,7 @@ with tab_live:
             "linecolor": "rgba(0, 229, 255, 0.2)",
         },
     )
-    st.plotly_chart(fig_live, use_container_width=True)
+    st.plotly_chart(fig_live, width="stretch")
 
     # 4. Contextual Diagnostics & Modular Layer Navigation
     c_layer1, c_layer2, c_layer3, c_layer4, c_layer5 = st.tabs(
@@ -1734,9 +1742,9 @@ with tab_live:
 # TAB 2: AI COPILOT
 # =====================================================================
 with tab_copilot:
-    st.subheader("🤖 Institutional AI Quant Copilot")
+    st.subheader("Copiloto de mercado")
     st.caption(
-        "Asistente de inteligencia de mercado • Razonamiento contextual con Gemini • Sin ejecución automática"
+        "Conversa sobre el mercado actual. No ejecuta operaciones. Para probar una regla usa Probar mi idea."
     )
 
     try:
@@ -1914,21 +1922,17 @@ with tab_copilot:
                 "💱 Escanear Divisas Forex" if is_forex else "🚀 Escanear Criptomonedas"
             )
             with q_col1:
-                if st.button(
-                    scan_btn_label, key="btn_scan_market", use_container_width=True
-                ):
+                if st.button(scan_btn_label, key="btn_scan_market", width="stretch"):
                     scan_triggered = True
             with q_col2:
                 if st.button(
                     f"🗣️ Explicar {symbol} en Lenguaje Sencillo",
                     key="btn_explain_current",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     explain_triggered = True
             with q_col3:
-                if st.button(
-                    "🗑️ Limpiar", key="btn_clear_chat", use_container_width=True
-                ):
+                if st.button("🗑️ Limpiar", key="btn_clear_chat", width="stretch"):
                     st.session_state["copilot_chat_history"] = []
                     st.session_state["copilot_active_symbol"] = symbol
                     st.session_state["copilot_active_timeframe"] = interval
@@ -1979,7 +1983,7 @@ with tab_copilot:
                                 st.image(
                                     img_file,
                                     caption=f"📷 {img_file.name}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 )
                     for of in other_files:
                         st.info(f"📄 Archivo cargado: {of.name} ({of.size} bytes)")
@@ -2001,7 +2005,7 @@ with tab_copilot:
                                         caption=img_info.get(
                                             "name", f"📷 Gráfico {idx + 1}"
                                         ),
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                         elif msg.get("image_bytes"):
                             st.image(msg["image_bytes"], width=300)
@@ -2315,7 +2319,7 @@ with tab_copilot:
 # TAB 3: BACKTEST ANALYTICS
 with tab_backtest:
     market_name_cap = "Divisas Forex" if is_forex else "Criptomonedas"
-    st.subheader(f"📈 Simulación Histórica & Backtest Analytics ({market_name_cap})")
+    st.subheader(f"Simulador histórico ({market_name_cap})")
     st.caption(
         "Simulación sobre datos históricos cargados • No ejecuta operaciones ni acredita resultados futuros"
     )
@@ -2357,7 +2361,7 @@ with tab_backtest:
         for col, amt in zip(cap_cols, preset_caps):
             with col:
                 if st.button(
-                    f"${int(amt)}", key=f"cap_btn_{int(amt)}", use_container_width=True
+                    f"${int(amt)}", key=f"cap_btn_{int(amt)}", width="stretch"
                 ):
                     st.session_state["guided_capital"] = float(amt)
                     st.session_state["input_guided_cap"] = float(amt)
@@ -2438,7 +2442,7 @@ with tab_backtest:
         run_sim = st.button(
             "🚀 Simular Estrategia con Datos Históricos",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
         if run_sim:
@@ -2519,7 +2523,7 @@ with tab_backtest:
         run_sim = st.button(
             "🚀 Ejecutar Backtest Personalizado",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
         if run_sim:
@@ -2604,7 +2608,7 @@ with tab_backtest:
             if st.button(
                 "🤖 Preguntar al Copilot: ¿Qué significa este resultado para mí?",
                 key="btn_ask_copilot_backtest",
-                use_container_width=True,
+                width="stretch",
             ):
                 backtest_prompt = (
                     f"Acabo de ejecutar un backtest para {symbol} ({interval}) con los siguientes resultados cuantitativos:\n"
@@ -2878,7 +2882,7 @@ with tab_backtest:
                 xaxis2={"gridcolor": "rgba(255, 255, 255, 0.06)"},
                 yaxis2={"gridcolor": "rgba(255, 255, 255, 0.06)"},
             )
-            st.plotly_chart(fig_eq, use_container_width=True)
+            st.plotly_chart(fig_eq, width="stretch")
 
         # 3. MFE vs MAE Scatter Plot & Trades Table
         t_left, t_right = st.columns([1, 1])
@@ -2934,7 +2938,7 @@ with tab_backtest:
                         plot_bgcolor="#07090E",
                         margin={"l": 20, "r": 20, "t": 30, "b": 20},
                     )
-                    st.plotly_chart(fig_mfe, use_container_width=True)
+                    st.plotly_chart(fig_mfe, width="stretch")
                 else:
                     st.info(
                         "No hay operaciones con MFE y MAE exactas conjuntamente para el gráfico."
@@ -2950,7 +2954,7 @@ with tab_backtest:
                             for t in trade_rows
                         ]
                     ),
-                    use_container_width=True,
+                    width="stretch",
                 )
                 st.caption(
                     "Las cotas OHLC no revelan el orden intrabar ni prueban ejecución real. Los proxies históricos no se muestran como puntos exactos."
@@ -2967,7 +2971,7 @@ with tab_backtest:
                         report.trades, getattr(report, "config", None)
                     ),
                     height=350,
-                    use_container_width=True,
+                    width="stretch",
                 )
             else:
                 st.info("Sin transacciones.")
@@ -3050,7 +3054,7 @@ with tab_settings:
         if st.button(
             "🔔 Enviar Notificación de Prueba",
             type="secondary",
-            use_container_width=True,
+            width="stretch",
         ):
             test_channels = []
             if enable_discord and discord_url_input:
@@ -3120,7 +3124,7 @@ with tab_settings:
         if st.button(
             "🚀 Escanear Mercado y Enviar Alertas Reales",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             alert_channels = []
             if enable_discord and discord_url_input:
@@ -3317,7 +3321,7 @@ with tab_settings:
             if st.button(
                 "🔄 Actualizar Resultados (Verificar TP / SL)",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             ):
                 with st.spinner(
                     "Descargando velas recientes y evaluando TP / SL para cada alerta..."
@@ -3365,7 +3369,7 @@ with tab_settings:
                 }
             )
 
-        st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(display_rows), width="stretch")
     else:
         st.info(
             "ℹ️ Aún no hay señales registradas para seguimiento en la base de datos."
