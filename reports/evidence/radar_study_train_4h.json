@@ -1,0 +1,20 @@
+{
+  "compresion": {
+    "cases": 295,
+    "big_moves": 144,
+    "hit_pct": 48.813559322033896,
+    "baseline_pct": 50.59610626752805
+  },
+  "fuerza_relativa": {
+    "cases": 403,
+    "big_moves": 236,
+    "hit_pct": 58.56079404466501,
+    "baseline_pct": 50.85178834449216
+  },
+  "correlacion": {
+    "cases": 57,
+    "big_moves": 30,
+    "hit_pct": 52.63157894736842,
+    "baseline_pct": 52.4139403953342
+  }
+}

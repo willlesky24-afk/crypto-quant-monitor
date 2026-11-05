@@ -88,6 +88,7 @@ try:
     from src.report import MarketReport
     from src.risk_engine import RiskEngine
     from src.signal_engine import SignalEngine
+    from src.unusual_radar import build_markets, run_radar
     from src.volume_profile import VolumeProfile
 except ImportError:
     from ai_agent.context_builder import ContextBuilder
@@ -148,6 +149,7 @@ except ImportError:
     from report import MarketReport
     from risk_engine import RiskEngine
     from signal_engine import SignalEngine
+    from unusual_radar import build_markets, run_radar
     from volume_profile import VolumeProfile
 
 
@@ -894,15 +896,18 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_risk, tab_copilot, tab_backtest, tab_settings, tab_guide = st.tabs(
-    [
-        "📡 Live Monitor",
-        "🛡️ Calculadora de Riesgo",
-        "🤖 AI Copilot",
-        "📈 Backtest Analytics",
-        "⚙️ Notification Settings",
-        "📖 Guía & Glosario",
-    ]
+tab_live, tab_risk, tab_radar, tab_copilot, tab_backtest, tab_settings, tab_guide = (
+    st.tabs(
+        [
+            "📡 Live Monitor",
+            "🛡️ Calculadora de Riesgo",
+            "🛰️ Radar",
+            "🤖 AI Copilot",
+            "📈 Backtest Analytics",
+            "⚙️ Notification Settings",
+            "📖 Guía & Glosario",
+        ]
+    )
 )
 
 
@@ -995,6 +1000,84 @@ with tab_risk:
         st.info(
             "El stop no es una garantía: con un salto de precio la pérdida puede ser mayor."
         )
+
+
+# =====================================================================
+# TAB: RADAR DE COSAS INUSUALES (v3.1)
+# =====================================================================
+RADAR_CRYPTO = [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "LINKUSDT",
+]
+RADAR_PAIRS = [
+    ("BTCUSDT", "ETHUSDT"),
+    ("XAUUSD=X", "XAGUSD=X"),
+    ("AUDUSD=X", "NZDUSD=X"),
+    ("EURUSD=X", "GBPUSD=X"),
+]
+
+
+def _radar_fetch(radar_symbol):
+    if radar_symbol.endswith("=X"):
+        raw = ForexDataLoader().get_forex_klines(
+            symbol=radar_symbol, interval=interval, limit=LIVE_HISTORY_BARS
+        )
+    else:
+        raw = BinanceDataLoader().get_klines(
+            symbol=radar_symbol,
+            interval=interval,
+            limit=LIVE_HISTORY_BARS,
+            include_open_candle=False,
+        )
+    return TechnicalIndicators().add_atr(raw)
+
+
+with tab_radar:
+    st.subheader("🛰️ ¿Qué está fuera de lo normal?")
+    st.caption(
+        f"Compara {len(RADAR_CRYPTO)} criptos, forex y metales con su propia historia "
+        f"en {interval}. Un aviso dice que algo es raro, no qué hacer. Mientras más "
+        "mercados se revisan, más exigente es el listón."
+    )
+    if st.button("Escanear mercados"):
+        try:
+            radar_forex = list(ForexDataLoader().available_pairs().values())
+            radar_forex_error = {}
+        except ForexDataError as exc:
+            radar_forex = []
+            radar_forex_error = {"Forex": str(exc)}
+        with st.spinner("Revisando mercados..."):
+            radar_markets, radar_failed = build_markets(
+                _radar_fetch, RADAR_CRYPTO + radar_forex
+            )
+            st.session_state["radar_result"] = run_radar(
+                radar_markets,
+                [RADAR_CRYPTO, radar_forex],
+                RADAR_PAIRS,
+                {**radar_forex_error, **radar_failed},
+            )
+
+    radar_result = st.session_state.get("radar_result")
+    if radar_result is not None:
+        if radar_result.alpha is None:
+            st.warning("Ningún mercado tiene historia suficiente para medir.")
+        else:
+            st.write(
+                f"Se hicieron {radar_result.tests} mediciones; solo avisa lo que "
+                f"esté en el {radar_result.alpha * 100:.2f} % más extremo."
+            )
+        for radar_alert in radar_result.alerts:
+            st.warning(f"**{radar_alert.market}.** {radar_alert.text}")
+        if radar_result.alpha is not None and not radar_result.alerts:
+            st.success("Nada fuera de lo normal en este momento.")
+        for radar_market, radar_reason in radar_result.failed.items():
+            st.error(f"{radar_market} no se pudo revisar: {radar_reason}")
 
 
 # =====================================================================
