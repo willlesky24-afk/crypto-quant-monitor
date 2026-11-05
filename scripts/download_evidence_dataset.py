@@ -50,11 +50,14 @@ FX_METALS = (
     "XAGUSD=X",
 )
 EVIDENCE_DIR = Path("data/evidence")
+# Kept apart: the evidence universe was fixed before results and must not change.
+INDICES = ("SPX500=X", "NAS100=X", "US30=X")
+INDEX_DIR = Path("data/indices")
 
 
 def main() -> int:
     load_dotenv(".env")
-    store = ParquetStore(EVIDENCE_DIR)
+    evidence_store = ParquetStore(EVIDENCE_DIR)
     oanda = OandaProvider(
         token=os.getenv("OANDA_API_TOKEN", "").strip(),
         environment=os.getenv("OANDA_ENVIRONMENT", "practice"),
@@ -64,7 +67,10 @@ def main() -> int:
     jobs = [(s, "BINANCE", iv) for s in CRYPTO for iv in INTERVALS] + [
         (s, "OANDA", iv) for s in FX_METALS for iv in INTERVALS
     ]
+    jobs += [(s, "OANDA", iv) for s in INDICES for iv in INTERVALS]
+    index_store = ParquetStore(INDEX_DIR)
     for symbol, source, interval in jobs:
+        store = index_store if symbol in INDICES else evidence_store
         key = f"{symbol.replace('=X', '')}_{source}"
         if store.load_dataset(key, interval).shape[0] > 0:
             print(f"[skip] {key} {interval}", flush=True)

@@ -14,6 +14,7 @@ beating the best of the random runs.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -21,7 +22,9 @@ import pandas as pd
 
 from .backtest_engine import BacktestEngine
 from .backtest_models import BacktestConfig
-from .evidence_evaluation import bootstrap_mean_ci
+from .evidence_evaluation import PERIODS, bootstrap_mean_ci
+from .indicators import TechnicalIndicators
+from .parquet_store import ParquetStore
 from .signal_candidates import CANDIDATES, signal_random, signals_to_events
 
 EXPLORE_SHARE = 0.8
@@ -38,6 +41,8 @@ ENTRIES = (
     "reversion_rsi",
 )
 SIDES = ("LONG", "SHORT", "AMBOS")
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+_INDICES = ("SPX500", "NAS100", "US30")
 
 
 class IdeaVerifierError(ValueError):
@@ -53,6 +58,25 @@ class IdeaSpec:
     sl_atr: float
     tp_atr: float
     max_bars: int
+
+
+def load_history(
+    symbol: str, interval: str, data_dir: Path = DATA_DIR
+) -> pd.DataFrame | None:
+    """Multi-year local candles with indicators, or None if none are stored."""
+    base = symbol.removesuffix("=X")
+    folder, source = "evidence", "OANDA" if symbol.endswith("=X") else "BINANCE"
+    if base in _INDICES:
+        folder = "indices"
+    raw = ParquetStore(data_dir / folder).load_dataset(f"{base}_{source}", interval)
+    if raw.empty:
+        return None
+    # The v3.0 test period stays unseen until a method is fixed in advance.
+    protected = pd.Timestamp(PERIODS["test"][0], tz="UTC")
+    raw = raw[pd.to_datetime(raw["timestamp"], utc=True) < protected]
+    if raw.empty:
+        return None
+    return TechnicalIndicators().calculate_all(raw.copy()).reset_index(drop=True)
 
 
 def ci_level(attempts: int) -> float:

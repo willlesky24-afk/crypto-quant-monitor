@@ -14,9 +14,11 @@ from src.idea_verifier import (
     IdeaVerifierError,
     ci_level,
     config_for,
+    load_history,
     verdict_from,
     verify_idea,
 )
+from src.parquet_store import ParquetStore
 
 
 def test_each_attempt_tightens_the_level():
@@ -111,3 +113,25 @@ def test_unknown_entry_rejected():
 
 def test_entries_are_a_closed_list():
     assert "reversion_rsi" in ENTRIES and "control_random" not in ENTRIES
+
+
+def test_load_history_reads_each_universe_and_reports_absence(tmp_path):
+    df = _candles()[["timestamp", "open", "high", "low", "close", "volume"]]
+    df["timestamp"] = pd.date_range("2023-01-02", periods=len(df), freq="4h", tz="UTC")
+    ParquetStore(tmp_path / "indices").save_dataset(
+        df, "SPX500_OANDA", "4h", source="oanda"
+    )
+    loaded = load_history("SPX500=X", "4h", tmp_path)
+    assert len(loaded) == len(df)
+    assert {"atr", "rsi", "ema_50", "volume_average"} <= set(loaded.columns)
+    assert load_history("BTCUSDT", "4h", tmp_path) is None
+
+
+def test_load_history_never_returns_the_protected_test_period(tmp_path):
+    df = _candles()[["timestamp", "open", "high", "low", "close", "volume"]]
+    df["timestamp"] = pd.date_range("2024-11-01", periods=len(df), freq="4h", tz="UTC")
+    ParquetStore(tmp_path / "evidence").save_dataset(
+        df, "BTCUSDT_BINANCE", "4h", source="binance"
+    )
+    loaded = load_history("BTCUSDT", "4h", tmp_path)
+    assert loaded["timestamp"].max() < pd.Timestamp("2025-01-01", tz="UTC")

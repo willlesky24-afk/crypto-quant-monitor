@@ -68,6 +68,7 @@ try:
         ENTRIES,
         IdeaSpec,
         IdeaVerifierError,
+        load_history,
         verify_idea,
     )
     from src.indicators import TechnicalIndicators
@@ -141,6 +142,7 @@ except ImportError:
         ENTRIES,
         IdeaSpec,
         IdeaVerifierError,
+        load_history,
         verify_idea,
     )
     from indicators import TechnicalIndicators
@@ -1198,8 +1200,16 @@ with tab_verifier:
         v_spec = IdeaSpec(symbol, interval, v_entry, v_side, v_sl, v_tp, int(v_bars))
         try:
             with st.spinner("Probando contra el azar..."):
+                v_history = load_history(symbol, interval)
+                st.session_state["verifier_source"] = (
+                    "datos en vivo de la sesión (poca historia)"
+                    if v_history is None
+                    else f"{len(v_history):,} velas guardadas"
+                )
                 st.session_state["verifier_result"] = verify_idea(
-                    df, v_spec, st.session_state["verifier_attempts"]
+                    df if v_history is None else v_history,
+                    v_spec,
+                    st.session_state["verifier_attempts"],
                 )
         except IdeaVerifierError as exc:
             st.session_state.pop("verifier_result", None)
@@ -1228,7 +1238,10 @@ with tab_verifier:
                 f"{v_result['ci'][1]:+.3f}. Quedaron {v_result['reserved_bars']} velas "
                 "sin usar."
             )
-        st.caption("Resultado histórico, no una recomendación de operar.")
+        st.caption(
+            f"Datos: {st.session_state['verifier_source']}. Resultado histórico, "
+            "no una recomendación de operar."
+        )
 
 
 # =====================================================================
