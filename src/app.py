@@ -64,6 +64,12 @@ try:
         funding_snapshot,
         provider_from_env,
     )
+    from src.idea_verifier import (
+        ENTRIES,
+        IdeaSpec,
+        IdeaVerifierError,
+        verify_idea,
+    )
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
     from src.market_reports.generator import MarketReportService
@@ -130,6 +136,12 @@ except ImportError:
         FundingUnavailableError,
         funding_snapshot,
         provider_from_env,
+    )
+    from idea_verifier import (
+        ENTRIES,
+        IdeaSpec,
+        IdeaVerifierError,
+        verify_idea,
     )
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
@@ -908,18 +920,26 @@ profile = vp_service.calculate(df)
 # =====================================================================
 # MAIN MULTI-TAB INTERFACE
 # =====================================================================
-tab_live, tab_risk, tab_radar, tab_copilot, tab_backtest, tab_settings, tab_guide = (
-    st.tabs(
-        [
-            "📡 Live Monitor",
-            "🛡️ Calculadora de Riesgo",
-            "🛰️ Radar",
-            "🤖 AI Copilot",
-            "📈 Backtest Analytics",
-            "⚙️ Notification Settings",
-            "📖 Guía & Glosario",
-        ]
-    )
+(
+    tab_live,
+    tab_risk,
+    tab_radar,
+    tab_verifier,
+    tab_copilot,
+    tab_backtest,
+    tab_settings,
+    tab_guide,
+) = st.tabs(
+    [
+        "📡 Live Monitor",
+        "🛡️ Calculadora de Riesgo",
+        "🛰️ Radar",
+        "🔬 Verificador",
+        "🤖 AI Copilot",
+        "📈 Backtest Analytics",
+        "⚙️ Notification Settings",
+        "📖 Guía & Glosario",
+    ]
 )
 
 
@@ -1131,6 +1151,84 @@ with tab_radar:
             )
         for funding_market, funding_reason in funding_failed.items():
             st.error(f"Funding de {funding_market}: {funding_reason}")
+
+
+# =====================================================================
+# TAB: VERIFICADOR DE IDEAS (v3.2)
+# =====================================================================
+ENTRY_LABELS = {
+    "trend_ema": "Tendencia (precio y medias 50/200 alineados)",
+    "momentum_rsi": "Momentum RSI (50 a 70 sube, bajo 30 baja)",
+    "volume_direction": "Volumen alto con vela a favor",
+    "profile_value_area": "Precio fuera de la zona de valor",
+    "donchian_20": "Ruptura del canal de 20 velas",
+    "tsmom_180": "Dirección de las últimas 180 velas",
+    "bollinger_20_2": "Reversión desde bandas de Bollinger",
+    "reversion_rsi": "Reversión RSI (bajo 30 sube, sobre 70 baja)",
+}
+
+with tab_verifier:
+    st.subheader("🔬 Antes de arriesgar tu dinero, compruébalo")
+    st.caption(
+        f"Prueba una regla en {symbol} {interval} con costos reales. Reservamos el "
+        "último 20 % de los datos y cada intento sube el listón, para que probar "
+        "variantes hasta que una gane no cuente como evidencia."
+    )
+    v_col1, v_col2 = st.columns(2)
+    with v_col1:
+        v_entry = st.selectbox(
+            "Regla de entrada", list(ENTRIES), format_func=ENTRY_LABELS.get
+        )
+        v_side = st.radio(
+            "Lado",
+            ["AMBOS", "LONG"]
+            if not symbol.endswith("=X")
+            else ["AMBOS", "LONG", "SHORT"],
+            horizontal=True,
+        )
+    with v_col2:
+        v_sl = st.number_input("Stop (ATR)", min_value=0.5, value=2.0, step=0.5)
+        v_tp = st.number_input("Objetivo (ATR)", min_value=0.5, value=6.0, step=0.5)
+        v_bars = st.number_input("Máximo de velas", min_value=1, value=120, step=10)
+
+    if st.button("Verificar idea"):
+        st.session_state["verifier_attempts"] = (
+            st.session_state.get("verifier_attempts", 0) + 1
+        )
+        v_spec = IdeaSpec(symbol, interval, v_entry, v_side, v_sl, v_tp, int(v_bars))
+        try:
+            with st.spinner("Probando contra el azar..."):
+                st.session_state["verifier_result"] = verify_idea(
+                    df, v_spec, st.session_state["verifier_attempts"]
+                )
+        except IdeaVerifierError as exc:
+            st.session_state.pop("verifier_result", None)
+            st.error(f"No se puede probar: {exc}")
+
+    v_result = st.session_state.get("verifier_result")
+    if v_result is not None:
+        v_box = st.info if v_result["code"] == "MERECE_ESTUDIO" else st.warning
+        v_box(v_result["text"])
+        vm1, vm2, vm3, vm4 = st.columns(4)
+        vm1.metric("Operaciones", v_result["trades"])
+        vm2.metric(
+            "R neta media",
+            "N/D" if v_result["mean_r"] is None else f"{v_result['mean_r']:+.3f}",
+        )
+        vm3.metric(
+            "Mejor azar (R)",
+            "N/D"
+            if v_result["random_best"] is None
+            else f"{v_result['random_best']:+.3f}",
+        )
+        vm4.metric("Intento nº", v_result["attempts"])
+        if v_result["ci"] is not None:
+            st.write(
+                f"Intervalo de la R media: {v_result['ci'][0]:+.3f} a "
+                f"{v_result['ci'][1]:+.3f}. Quedaron {v_result['reserved_bars']} velas "
+                "sin usar."
+            )
+        st.caption("Resultado histórico, no una recomendación de operar.")
 
 
 # =====================================================================
