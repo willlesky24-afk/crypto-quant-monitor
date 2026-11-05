@@ -153,11 +153,11 @@ class GeminiProvider(BaseLLMProvider):
                         with urllib.request.urlopen(req, timeout=timeout) as resp:
                             resp_data = json.loads(resp.read().decode("utf-8"))
 
-                    text = (
-                        resp_data.get("candidates", [{}])[0]
-                        .get("content", {})
-                        .get("parts", [{}])[0]
-                        .get("text", "")
+                    candidate = resp_data.get("candidates", [{}])[0]
+                    # One answer can arrive split into several parts.
+                    text = "".join(
+                        part.get("text", "")
+                        for part in candidate.get("content", {}).get("parts", [])
                     )
                     usage = resp_data.get("usageMetadata", {}).get("totalTokenCount")
                     latency = (time.perf_counter() - t0) * 1000.0
@@ -167,7 +167,10 @@ class GeminiProvider(BaseLLMProvider):
                         model=current_model,
                         latency_ms=round(latency, 2),
                         tokens_used=usage,
-                        metadata=metadata or {},
+                        metadata={
+                            **(metadata or {}),
+                            "finish_reason": candidate.get("finishReason"),
+                        },
                     )
                 except urllib.error.HTTPError as http_err:
                     last_exc = http_err

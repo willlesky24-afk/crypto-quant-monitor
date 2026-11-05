@@ -32,6 +32,7 @@ class OpenAIProvider(BaseLLMProvider):
         self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
+        self.url = "https://api.openai.com/v1/chat/completions"
 
     async def generate_response(
         self,
@@ -46,7 +47,7 @@ class OpenAIProvider(BaseLLMProvider):
                 t0,
             )
 
-        url = "https://api.openai.com/v1/chat/completions"
+        url = self.url
         payload = {
             "model": self.model,
             "messages": [

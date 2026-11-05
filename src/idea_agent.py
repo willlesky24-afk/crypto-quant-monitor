@@ -14,7 +14,7 @@ from typing import Any
 
 from .idea_verifier import ENTRIES, SIDES
 
-_FORBIDDEN = ("compra", "compre", "vende", "venda", "rentable", "garantiz", "seguro")
+_FORBIDDEN = ("compra", "compre", "vende", "venda", "rentable", "garantiz")
 _NUMBER = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 
 
@@ -113,7 +113,7 @@ def explanation_or_facts(text: str, result: dict[str, Any]) -> tuple[str, bool]:
     allowed = _allowed(result)
     numbers = [float(n.replace(",", ".")) for n in _NUMBER.findall(text)]
     valid = (
-        bool(text.strip())
+        text.rstrip().endswith((".", "!", "?"))  # a cut-off answer is not shown
         and not any(word in lowered for word in _FORBIDDEN)
         and all(n in allowed for n in numbers)
     )

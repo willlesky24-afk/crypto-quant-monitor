@@ -87,3 +87,8 @@ def test_action_or_promise_words_fall_back(word):
 def test_empty_or_negative_mismatch_falls_back():
     assert explanation_or_facts("", RESULT)[1] is False
     assert explanation_or_facts("La media fue -0.129 R.", RESULT)[1] is False
+
+
+def test_cut_off_explanation_falls_back_to_facts():
+    text = "Tus resultados con 139 operaciones muestran una media de"
+    assert explanation_or_facts(text, RESULT)[1] is False

@@ -4,6 +4,7 @@ import logging
 import os
 
 from src.ai_agent.interfaces import BaseAIProvider, MockAIProvider
+from src.ai_providers.providers.deepseek import DeepSeekProvider
 from src.ai_providers.providers.gemini import GeminiProvider
 from src.ai_providers.providers.ollama import OllamaProvider
 from src.ai_providers.providers.openai import OpenAIProvider
@@ -35,6 +36,9 @@ class ProviderFactory:
         elif name == "openai":
             logger.info("Initializing OpenAI Provider.")
             return OpenAIProvider(**kwargs)
+        elif name == "deepseek":
+            logger.info("Initializing DeepSeek Provider.")
+            return DeepSeekProvider(**kwargs)
         elif name == "ollama":
             logger.info("Initializing Local Ollama Provider.")
             return OllamaProvider(**kwargs)

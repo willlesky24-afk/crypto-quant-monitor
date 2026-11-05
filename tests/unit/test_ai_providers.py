@@ -255,3 +255,51 @@ def test_ai_response_to_dict():
     assert d["content"] == "Market analysis text"
     assert d["provider"] == "gemini"
     assert "DECISION SUPPORT ONLY" in resp.disclaimer
+
+
+def test_gemini_joins_every_text_part_and_keeps_finish_reason():
+    """The API may split one answer into parts; only the first used to be read."""
+    import asyncio
+    import io
+    import json
+    from unittest.mock import MagicMock, patch
+
+    from src.ai_providers.providers.gemini import GeminiProvider
+
+    payload = {
+        "candidates": [
+            {
+                "content": {"parts": [{"text": "Primera parte, "}, {"text": "fin."}]},
+                "finishReason": "STOP",
+            }
+        ]
+    }
+    mock = MagicMock()
+    mock.return_value.__enter__.return_value = io.BytesIO(
+        json.dumps(payload).encode("utf-8")
+    )
+    with patch("urllib.request.urlopen", mock):
+        response = asyncio.run(GeminiProvider(api_key="x").generate_response("hola"))
+    assert response.content == "Primera parte, fin."
+    assert response.metadata["finish_reason"] == "STOP"
+
+
+def test_deepseek_uses_its_own_endpoint_key_and_model(monkeypatch):
+    from src.ai_providers.factory import ProviderFactory
+    from src.ai_providers.providers.deepseek import DEEPSEEK_URL
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "ds-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
+    p = ProviderFactory.create_provider("deepseek", model="gemini-2.5-flash")
+    assert p.url == DEEPSEEK_URL
+    assert p.api_key == "ds-key"
+    assert p.model == "deepseek-flash"
+
+
+def test_deepseek_never_sends_the_openai_key(monkeypatch):
+    from src.ai_providers.providers.deepseek import DeepSeekProvider
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    assert DeepSeekProvider().api_key == ""
