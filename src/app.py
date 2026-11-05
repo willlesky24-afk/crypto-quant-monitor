@@ -58,6 +58,12 @@ try:
     from src.engine import MarketEngine
     from src.forex_data_loader import FOREX_PAIRS, ForexDataError, ForexDataLoader
     from src.forex_sessions import get_forex_session_status
+    from src.funding_rates import (
+        FundingSource,
+        FundingUnavailableError,
+        funding_snapshot,
+        provider_from_env,
+    )
     from src.indicators import TechnicalIndicators
     from src.market_intelligence import MarketIntelligence
     from src.market_reports.generator import MarketReportService
@@ -119,6 +125,12 @@ except ImportError:
     from engine import MarketEngine
     from forex_data_loader import FOREX_PAIRS, ForexDataError, ForexDataLoader
     from forex_sessions import get_forex_session_status
+    from funding_rates import (
+        FundingSource,
+        FundingUnavailableError,
+        funding_snapshot,
+        provider_from_env,
+    )
     from indicators import TechnicalIndicators
     from market_intelligence import MarketIntelligence
     from market_reports.generator import MarketReportService
@@ -1056,6 +1068,17 @@ with tab_radar:
             radar_markets, radar_failed = build_markets(
                 _radar_fetch, RADAR_CRYPTO + radar_forex
             )
+            try:
+                radar_source = FundingSource(provider_from_env())
+                radar_funding, radar_funding_failed = build_markets(
+                    radar_source.fetch, RADAR_CRYPTO
+                )
+            except FundingUnavailableError as exc:
+                radar_funding, radar_funding_failed = {}, {"Funding": str(exc)}
+            st.session_state["radar_funding"] = (
+                {k: funding_snapshot(v) for k, v in radar_funding.items()},
+                radar_funding_failed,
+            )
             st.session_state["radar_result"] = run_radar(
                 radar_markets,
                 [RADAR_CRYPTO, radar_forex],
@@ -1078,6 +1101,30 @@ with tab_radar:
             st.success("Nada fuera de lo normal en este momento.")
         for radar_market, radar_reason in radar_result.failed.items():
             st.error(f"{radar_market} no se pudo revisar: {radar_reason}")
+
+    if "radar_funding" in st.session_state:
+        funding_rows, funding_failed = st.session_state["radar_funding"]
+        st.markdown(f"##### Apalancamiento en cripto ({provider_from_env().upper()})")
+        st.caption(
+            "Funding: lo que paga un lado de los contratos perpetuos al otro. Valores "
+            "grandes indican mucha gente apalancada igual. Compara solo con los "
+            "registros disponibles (unos 3 meses en OKX), así que no genera avisos."
+        )
+        if funding_rows:
+            st.dataframe(
+                [
+                    {
+                        "Mercado": k,
+                        "Funding (%)": round(v["rate_pct"], 4),
+                        "Mayor que el % de registros": round(v["size_percentile"]),
+                        "Registros": v["records"],
+                    }
+                    for k, v in funding_rows.items()
+                ],
+                hide_index=True,
+            )
+        for funding_market, funding_reason in funding_failed.items():
+            st.error(f"Funding de {funding_market}: {funding_reason}")
 
 
 # =====================================================================
