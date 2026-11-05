@@ -9,7 +9,12 @@ from src.constants import (
     PROFILE_ABOVE_VALUE_AREA,
     VOLUME_ABOVE_AVERAGE,
 )
-from src.daily_summary import atr_percentile, build_market_summary, format_price
+from src.daily_summary import (
+    atr_percentile,
+    build_market_summary,
+    format_price,
+    market_conditions,
+)
 from src.regime_classifier import MarketRegime
 
 
@@ -90,4 +95,47 @@ def test_spread_is_reported_as_percent_of_price():
 def test_no_action_words():
     text = " ".join(_summary(_df())["lines"]).lower()
     for word in ("compra", "vende", "oportunidad", "entra "):
+        assert word not in text
+
+
+def _conditions_df(atr_last=1.0, spread_last=None, n=100):
+    # ATR% cycles 0.5..1.5 so the last value can sit low, mid or high.
+    atr = [0.5 + (i % 11) * 0.1 for i in range(n - 1)] + [atr_last]
+    df = pd.DataFrame({"close": [100.0] * n, "atr": atr})
+    if spread_last is not None:
+        df["spread"] = [0.01] * (n - 1) + [spread_last]
+    return df
+
+
+def test_conditions_green_when_nothing_is_elevated():
+    # ATR 1.0 sits mid-cycle: about half the prior values are below it.
+    c = market_conditions(_conditions_df(1.0))
+    assert c["level"] == "VERDE"
+    assert c["spread_checked"] is False
+
+
+def test_conditions_yellow_with_high_volatility():
+    assert market_conditions(_conditions_df(9.0))["level"] == "AMARILLO"
+
+
+def test_conditions_red_when_volatility_and_spread_are_both_elevated():
+    # ATR 9: above all prior. Spread/ATR 2/9 = 0.22: above all prior (max 0.02).
+    c = market_conditions(_conditions_df(9.0, spread_last=2.0))
+    assert c["level"] == "ROJO"
+    assert c["spread_checked"] is True
+
+
+def test_conditions_yellow_with_only_spread_elevated():
+    assert (
+        market_conditions(_conditions_df(1.0, spread_last=2.0))["level"] == "AMARILLO"
+    )
+
+
+def test_conditions_unavailable_with_little_history():
+    assert market_conditions(_conditions_df(n=20))["level"] == "NO_DISPONIBLE"
+
+
+def test_conditions_text_never_suggests_action():
+    text = market_conditions(_conditions_df(9.0, spread_last=2.0))["text"].lower()
+    for word in ("compra", "vende", "oportunidad"):
         assert word not in text

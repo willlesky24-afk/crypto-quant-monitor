@@ -56,12 +56,49 @@ def format_price(value: float) -> str:
     return f"{value:,.2f}" if value >= 100 else f"{value:.5f}"
 
 
-def atr_percentile(df: pd.DataFrame) -> float | None:
-    """Share of the prior window's ATR% values below the current ATR%."""
-    series = (df["atr"] / df["close"]).dropna().tail(ANALYSIS_WINDOW_BARS)
-    if len(series) < MIN_PERCENTILE_BARS:
+def _own_percentile(series: pd.Series) -> float | None:
+    """Share of the prior window's values below the current value."""
+    window = series.dropna().tail(ANALYSIS_WINDOW_BARS)
+    if len(window) < MIN_PERCENTILE_BARS:
         return None
-    return float((series.iloc[:-1] < series.iloc[-1]).mean() * 100.0)
+    return float((window.iloc[:-1] < window.iloc[-1]).mean() * 100.0)
+
+
+def atr_percentile(df: pd.DataFrame) -> float | None:
+    return _own_percentile(df["atr"] / df["close"])
+
+
+def market_conditions(df: pd.DataFrame) -> dict[str, Any]:
+    """Traffic light for how demanding the market is, never for what to do.
+
+    Each market is compared with itself, so no absolute threshold is invented:
+    volatility is ATR%, and cost is spread/ATR, the share of a typical move
+    that the spread consumes. Elevated uses the summary's 80th-percentile band.
+    Green means nothing is elevated, not that a trade is good.
+    """
+    volatility = atr_percentile(df)
+    if volatility is None:
+        return {
+            "level": "NO_DISPONIBLE",
+            "text": "No hay historia suficiente para medir las condiciones.",
+            "spread_checked": False,
+        }
+    spread = None
+    if "spread" in df.columns:
+        spread = _own_percentile(df["spread"] / df["atr"])
+    reasons = []
+    if volatility >= AGITATED_PERCENTILE:
+        reasons.append("volatilidad alta")
+    if spread is not None and spread >= AGITATED_PERCENTILE:
+        reasons.append("spread caro frente al movimiento típico")
+    level = ("VERDE", "AMARILLO", "ROJO")[len(reasons)]
+    if reasons:
+        text = "Condiciones exigentes: " + " y ".join(reasons) + "."
+    else:
+        text = "Sin condiciones elevadas frente a la historia de este mercado."
+    if spread is None:
+        text += " Este proveedor no da spread: no se midió ese costo."
+    return {"level": level, "text": text, "spread_checked": spread is not None}
 
 
 def _change_24h_pct(df: pd.DataFrame) -> float | None:

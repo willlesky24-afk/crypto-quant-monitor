@@ -8,12 +8,17 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from dotenv import load_dotenv
 from plotly.subplots import make_subplots
 
 # Ensure project root directory is on sys.path for cloud deployment (Streamlit Cloud, Render, etc.)
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
+
+# Local credentials: without this the app silently used the default forex provider.
+if not os.getenv("CQM_SKIP_DOTENV"):  # tests must never read real credentials
+    load_dotenv(_ROOT / ".env")
 
 # Synchronize Streamlit Cloud secrets into os.environ
 try:
@@ -43,7 +48,11 @@ try:
     )
     from src.backtest_runner import BacktestRunner
     from src.constants import LIVE_HISTORY_BARS
-    from src.daily_summary import build_market_summary
+    from src.daily_summary import (
+        build_market_summary,
+        format_price,
+        market_conditions,
+    )
     from src.data_loader import BinanceDataLoader
     from src.decision_engine import DecisionEngine
     from src.engine import MarketEngine
@@ -99,7 +108,11 @@ except ImportError:
     )
     from backtest_runner import BacktestRunner
     from constants import LIVE_HISTORY_BARS
-    from daily_summary import build_market_summary
+    from daily_summary import (
+        build_market_summary,
+        format_price,
+        market_conditions,
+    )
     from data_loader import BinanceDataLoader
     from decision_engine import DecisionEngine
     from engine import MarketEngine
@@ -820,7 +833,7 @@ st.sidebar.subheader("🎛️ Modo de Análisis")
 sim_mode = st.sidebar.radio(
     "Fuente de Parámetros",
     ["🕹️ Manual (Simulador de Escenarios)", "🟢 Automático (En Vivo)"],
-    index=0,
+    index=1,
 )
 
 is_manual_mode = "Manual" in sim_mode
@@ -1001,6 +1014,14 @@ with tab_live:
     with st.expander("☀️ ¿Qué está pasando hoy?", expanded=True):
         for summary_line in summary["lines"]:
             st.write(summary_line)
+        conditions = market_conditions(df)
+        conditions_box = {
+            "VERDE": st.success,
+            "AMARILLO": st.warning,
+            "ROJO": st.error,
+            "NO_DISPONIBLE": st.info,
+        }[conditions["level"]]
+        conditions_box(conditions["text"])
         st.caption("Descripción del mercado, no una recomendación de operar.")
     intel_engine = MarketIntelligence()
     intel = intel_engine.evaluate(analysis)
@@ -1099,7 +1120,7 @@ with tab_live:
     # 2. Key Metrics Header
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("Precio Actual", f"${curr_price:,.2f}")
+        st.metric("Precio Actual", f"${format_price(curr_price)}")
     with col2:
         st.metric("Régimen de Mercado", regime_res.regime.value)
     with col3:
@@ -1344,13 +1365,15 @@ with tab_live:
         v_col1, v_col2, v_col3 = st.columns(3)
         with v_col1:
             if poc_val:
-                st.metric("🟡 POC (Control)", f"${poc_val:,.2f}", "Mayor liquidez")
+                st.metric(
+                    "🟡 POC (Control)", f"${format_price(poc_val)}", "Mayor liquidez"
+                )
         with v_col2:
             if vah_val:
-                st.metric("🟢 VAH (Techo)", f"${vah_val:,.2f}", "Resistencia")
+                st.metric("🟢 VAH (Techo)", f"${format_price(vah_val)}", "Resistencia")
         with v_col3:
             if val_val:
-                st.metric("🔴 VAL (Suelo)", f"${val_val:,.2f}", "Soporte")
+                st.metric("🔴 VAL (Suelo)", f"${format_price(val_val)}", "Soporte")
 
         pos_text = "dentro del Área de Valor"
         if vah_val and curr_price > vah_val:

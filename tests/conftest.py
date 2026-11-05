@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
 import pytest
+
+os.environ["CQM_SKIP_DOTENV"] = "1"  # src/app.py must not load the real .env
 
 
 @pytest.fixture
