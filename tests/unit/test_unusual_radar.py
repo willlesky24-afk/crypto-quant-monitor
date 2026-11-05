@@ -79,8 +79,9 @@ def test_compression_alert_fires_on_the_lowest_atr_ever():
     m["atr"] = m["close"] * (0.01 + 0.002 * np.sin(np.arange(n) / 5.0))
     m.loc[n - 1, "atr"] = m["close"].iloc[-1] * 0.0001
     r = run_radar({"AAA": m}, groups=[], pairs=[])
-    assert r.tests == 1
-    assert r.alpha == pytest.approx(0.05)
+    # Compression plus explosiveness on one market: two tests.
+    assert r.tests == 2
+    assert r.alpha == pytest.approx(0.025)
     assert [a.measure for a in r.alerts] == ["compresion"]
     assert "vez" in r.alerts[0].text or "veces" in r.alerts[0].text
 
@@ -89,9 +90,22 @@ def test_more_tests_mean_a_stricter_bar():
     n = MIN_HISTORY_BARS + 100  # the correlation needs 61 bars before its first value
     markets = {"AAA": _market(n, 1), "BBB": _market(n, 2), "CCC": _market(n, 3)}
     r = run_radar(markets, groups=[["AAA", "BBB", "CCC"]], pairs=[("AAA", "BBB")])
-    # 3 compression + 3 relative strength + 1 correlation.
-    assert r.tests == 7
-    assert r.alpha == pytest.approx(0.05 / 7)
+    # 3 compression + 3 relative strength + 1 correlation + 3 explosiveness.
+    assert r.tests == 10
+    assert r.alpha == pytest.approx(0.05 / 10)
+
+
+def test_explosive_market_raises_an_alert():
+    n = MIN_HISTORY_BARS + 50
+    rng = np.random.default_rng(5)
+    y = list(np.cumsum(rng.normal(0, 0.01, n - 60)))
+    for _ in range(60):
+        y.append(y[-1] + 0.03 * max(1.0, abs(y[-1])) + rng.normal(0, 0.01))
+    m = _market(n, 1)
+    m["close"] = np.exp(np.array(y))
+    m["atr"] = m["close"] * 0.01
+    measures = [a.measure for a in run_radar({"AAA": m}, [], []).alerts]
+    assert "explosividad" in measures
 
 
 def test_short_history_is_not_tested():

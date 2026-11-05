@@ -23,7 +23,23 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
+
+try:
+    from .stress_measures import (
+        LOOKBACK_BARS,
+        bsadf_series,
+        explosive_status,
+        min_window,
+    )
+except ImportError:  # Streamlit execution with ``src`` on sys.path.
+    from stress_measures import (
+        LOOKBACK_BARS,
+        bsadf_series,
+        explosive_status,
+        min_window,
+    )
 
 ALPHA = 0.05
 MIN_HISTORY_BARS = 500
@@ -33,12 +49,14 @@ BIG_MOVE_ATR = 2.0
 TYPICAL_ATR_BARS = 300
 RELATIVE_BARS = 30
 CORRELATION_BARS = 60
+EXPLOSIVE_MIN_BARS = LOOKBACK_BARS + int(np.log(LOOKBACK_BARS))
 MAX_DOWNLOADS = 6  # polite to the providers; a project choice
 
 _LABELS = {
     "compresion": "Volatilidad inusualmente comprimida",
     "fuerza_relativa": "Se mueve muy distinto a su grupo",
     "correlacion": "Se rompió su relación habitual",
+    "explosividad": "Precio en crecimiento explosivo",
 }
 
 
@@ -176,8 +194,27 @@ def run_radar(
         tail = tail_share(series, side)
         if tail is not None:
             tested.append((market, measure, series, side, tail))
-    alpha = ALPHA / len(tested) if tested else None
+    explosive_ready = [k for k, v in frames.items() if len(v) >= EXPLOSIVE_MIN_BARS]
+    total = len(tested) + len(explosive_ready)
+    alpha = ALPHA / total if total else None
     alerts = []
+    for market in explosive_ready:
+        status = explosive_status(frames[market]["close"], tests=total)
+        if status["explosive"]:
+            log_close = np.log(frames[market]["close"])
+            series = bsadf_series(log_close, LOOKBACK_BARS, min_window(LOOKBACK_BARS))
+            history = case_history(series, "high", frames[market])
+            alerts.append(
+                RadarAlert(
+                    market=market,
+                    measure="explosividad",
+                    tail_pct=(tail_share(series, "high", 2) or 0.0) * 100.0,
+                    cases=history["cases"],
+                    big_moves=history["big_moves"],
+                    baseline_pct=history["baseline_pct"],
+                    text=_text(_LABELS["explosividad"], history),
+                )
+            )
     for market, measure, series, side, tail in tested:
         if tail > alpha:
             continue
@@ -193,7 +230,7 @@ def run_radar(
                 text=_text(_LABELS[measure], history),
             )
         )
-    return RadarResult(alerts, len(tested), alpha, failed or {})
+    return RadarResult(alerts, total, alpha, failed or {})
 
 
 def build_markets(

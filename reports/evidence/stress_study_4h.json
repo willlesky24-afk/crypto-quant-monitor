@@ -1,0 +1,112 @@
+{
+  "critical_value": 1.6714525217207665,
+  "horizon_bars": 24,
+  "flagged_pct_of_bars": 0.5229417891696285,
+  "cases": 65,
+  "big_moves": 48,
+  "baseline_pct": 51.631696605513056,
+  "per_market": {
+    "ADAUSDT_BINANCE": {
+      "flagged_bars": 73,
+      "cases": 7,
+      "big_moves": 7,
+      "baseline_pct": 47.553305721736464
+    },
+    "AUDUSD_OANDA": {
+      "flagged_bars": 0,
+      "cases": 0,
+      "big_moves": 0,
+      "baseline_pct": 52.879929109437306
+    },
+    "AVAXUSDT_BINANCE": {
+      "flagged_bars": 23,
+      "cases": 3,
+      "big_moves": 3,
+      "baseline_pct": 50.36048473692284
+    },
+    "BNBUSDT_BINANCE": {
+      "flagged_bars": 43,
+      "cases": 8,
+      "big_moves": 6,
+      "baseline_pct": 49.3633992943703
+    },
+    "BTCUSDT_BINANCE": {
+      "flagged_bars": 101,
+      "cases": 12,
+      "big_moves": 7,
+      "baseline_pct": 50.54456204939408
+    },
+    "ETHUSDT_BINANCE": {
+      "flagged_bars": 19,
+      "cases": 6,
+      "big_moves": 3,
+      "baseline_pct": 49.42475839852738
+    },
+    "EURUSD_OANDA": {
+      "flagged_bars": 0,
+      "cases": 0,
+      "big_moves": 0,
+      "baseline_pct": 53.54452813469207
+    },
+    "GBPUSD_OANDA": {
+      "flagged_bars": 2,
+      "cases": 1,
+      "big_moves": 0,
+      "baseline_pct": 53.16792202038104
+    },
+    "LINKUSDT_BINANCE": {
+      "flagged_bars": 10,
+      "cases": 3,
+      "big_moves": 2,
+      "baseline_pct": 49.179321981899065
+    },
+    "NZDUSD_OANDA": {
+      "flagged_bars": 0,
+      "cases": 0,
+      "big_moves": 0,
+      "baseline_pct": 52.114235111799864
+    },
+    "SOLUSDT_BINANCE": {
+      "flagged_bars": 32,
+      "cases": 6,
+      "big_moves": 2,
+      "baseline_pct": 50.13038809633379
+    },
+    "USDCAD_OANDA": {
+      "flagged_bars": 0,
+      "cases": 0,
+      "big_moves": 0,
+      "baseline_pct": 52.41470979175897
+    },
+    "USDCHF_OANDA": {
+      "flagged_bars": 12,
+      "cases": 2,
+      "big_moves": 1,
+      "baseline_pct": 54.25343376163049
+    },
+    "USDJPY_OANDA": {
+      "flagged_bars": 39,
+      "cases": 6,
+      "big_moves": 6,
+      "baseline_pct": 57.53212228622064
+    },
+    "XAGUSD_OANDA": {
+      "flagged_bars": 1,
+      "cases": 1,
+      "big_moves": 1,
+      "baseline_pct": 56.83693954940888
+    },
+    "XAUUSD_OANDA": {
+      "flagged_bars": 1,
+      "cases": 1,
+      "big_moves": 1,
+      "baseline_pct": 55.36471113093911
+    },
+    "XRPUSDT_BINANCE": {
+      "flagged_bars": 131,
+      "cases": 9,
+      "big_moves": 9,
+      "baseline_pct": 43.07409111826968
+    }
+  }
+}
