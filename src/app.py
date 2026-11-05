@@ -896,25 +896,29 @@ if is_manual_mode:
         "Peso Análisis Técnico", 0.1, 0.9, 0.60, 0.05
     )
 
+
 # Fetch Market Data (Crypto vs Forex)
+@st.cache_data(ttl=60, show_spinner="Cargando mercado...")
+def _load_candles(market_symbol, market_interval, bars, forex_market):
+    """Streamlit reruns the script on every click; a minute-old closed candle is
+    still valid, and re-downloading took about 8 s each time. Errors are not cached.
+    """
+    if forex_market:
+        return ForexDataLoader().get_forex_klines(
+            symbol=market_symbol, interval=market_interval, limit=bars
+        )
+    return BinanceDataLoader().get_klines(
+        symbol=market_symbol,
+        interval=market_interval,
+        limit=bars,
+        include_open_candle=False,
+    )
+
+
 try:
-    if is_forex:
-        forex_loader = ForexDataLoader()
-        # Analysis always uses the shared history (v3.0); the slider only
-        # sets how many candles the chart displays.
-        df_raw = forex_loader.get_forex_klines(
-            symbol=symbol,
-            interval=interval,
-            limit=max(limit, LIVE_HISTORY_BARS),
-        )
-    else:
-        loader = BinanceDataLoader()
-        df_raw = loader.get_klines(
-            symbol=symbol,
-            interval=interval,
-            limit=max(limit, LIVE_HISTORY_BARS),
-            include_open_candle=False,
-        )
+    # Analysis always uses the shared history (v3.0); the slider only sets how
+    # many candles the chart displays.
+    df_raw = _load_candles(symbol, interval, max(limit, LIVE_HISTORY_BARS), is_forex)
 except Exception as exc:
     st.error(f"Error cargando datos de mercado para {symbol}: {exc}")
     st.stop()
