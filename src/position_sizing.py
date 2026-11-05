@@ -18,6 +18,7 @@ import math
 from dataclasses import dataclass
 
 _USD_QUOTES = ("USD", "USDT")
+_USD_INDICES = ("SPX500", "NAS100", "US30")
 
 
 class PositionSizingError(ValueError):
@@ -48,7 +49,7 @@ def quote_to_usd(symbol: str, price: float) -> float:
     """USD value of one unit of the quote currency, from this pair's own price."""
     _require_positive("price", price)
     pair = symbol.removesuffix("=X").upper()
-    if pair.endswith(_USD_QUOTES):
+    if pair.endswith(_USD_QUOTES) or pair in _USD_INDICES:
         return 1.0
     if pair.startswith("USD") and len(pair) == 6:
         return 1.0 / price

@@ -51,9 +51,19 @@ INTERVAL_DURATION: dict[str, timedelta] = {
 _MAX_COUNT = 5000
 
 
+# v3.1: index CFDs quoted in USD, offered only by OANDA in this system.
+INDEX_INSTRUMENTS: dict[str, str] = {
+    "SPX500": "SPX500_USD",
+    "NAS100": "NAS100_USD",
+    "US30": "US30_USD",
+}
+
+
 def canonical_pair(symbol: str) -> str:
     """Return the 6-letter pair (``EURUSD``) from ``EURUSD=X``, ``EUR/USD`` or ``EUR_USD``."""
     clean = symbol.strip().upper().replace("=X", "").replace("/", "").replace("_", "")
+    if clean in INDEX_INSTRUMENTS:
+        return clean
     if len(clean) != 6 or not clean.isalpha():
         raise ForexInvalidDataError(f"Simbolo forex/metal no reconocido: {symbol!r}")
     return clean
@@ -61,6 +71,12 @@ def canonical_pair(symbol: str) -> str:
 
 def provider_symbol(symbol: str, provider: str) -> str:
     pair = canonical_pair(symbol)
+    if pair in INDEX_INSTRUMENTS:
+        if provider != "oanda":
+            raise ForexProviderUnavailableError(
+                f"{pair}: los indices solo estan disponibles con OANDA."
+            )
+        return INDEX_INSTRUMENTS[pair]
     base, quote = pair[:3], pair[3:]
     if provider == "twelvedata":
         return f"{base}/{quote}"

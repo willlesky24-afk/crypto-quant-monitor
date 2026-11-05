@@ -804,7 +804,7 @@ if is_forex:
         st.sidebar.error(f"Proveedor forex no disponible: {exc}")
         st.stop()
     selected_label = st.sidebar.selectbox(
-        "Par de Divisas Forex / Metales",
+        "Forex, metales e índices",
         options=list(forex_pairs.keys()),
         index=0,
     )
@@ -1032,7 +1032,9 @@ RADAR_PAIRS = [
     ("XAUUSD=X", "XAGUSD=X"),
     ("AUDUSD=X", "NZDUSD=X"),
     ("EURUSD=X", "GBPUSD=X"),
+    ("SPX500=X", "NAS100=X"),
 ]
+RADAR_INDICES = ["SPX500=X", "NAS100=X", "US30=X"]
 
 
 def _radar_fetch(radar_symbol):
@@ -1081,7 +1083,11 @@ with tab_radar:
             )
             st.session_state["radar_result"] = run_radar(
                 radar_markets,
-                [RADAR_CRYPTO, radar_forex],
+                [
+                    RADAR_CRYPTO,
+                    [m for m in radar_forex if m not in RADAR_INDICES],
+                    [m for m in radar_forex if m in RADAR_INDICES],
+                ],
                 RADAR_PAIRS,
                 {**radar_forex_error, **radar_failed},
             )

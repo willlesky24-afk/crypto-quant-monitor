@@ -252,7 +252,7 @@ Discord Telegram Webhook
   forex mayor y metales (XAU/USD, XAG/USD), procedencia por vela y verificación cruzada.
 - **v2.3 — Simulador completo**: SHORT, spreads y sesiones forex.
 - **v3.0 — Prueba de ventaja (cerrada)**: no se demostró ventaja estadística; ver [el informe](docs/INFORME_EVIDENCIA_V3.md). El producto no promete señales rentables.
-- **v3.1 — Ranking de oportunidades** por contexto de mercado, sin promesa de rentabilidad, e índices bursátiles.
+- **v3.1 — Copiloto de riesgo (hecha)**: calculadora de riesgo, resumen diario, semáforo, radar de cosas inusuales, explosividad, funding e índices. Sin promesa de rentabilidad.
 - **v3.2 — Agente de IA de lectura de mercado**, verificado contra los cálculos del motor.
 - **v4.x — Producto**: usuarios, suscripciones, nube y marco legal.
 

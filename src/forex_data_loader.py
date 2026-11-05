@@ -31,6 +31,7 @@ except ImportError:  # Streamlit execution with ``src`` on sys.path.
 
 __all__ = [
     "FOREX_PAIRS",
+    "INDEX_PAIRS",
     "METAL_PAIRS",
     "ForexDataError",
     "ForexDataLoader",
@@ -57,6 +58,12 @@ METAL_PAIRS: dict[str, str] = {
     "🥈 XAG / USD (Plata)": "XAGUSD=X",
 }
 _METAL_CODES = {canonical_pair(s) for s in METAL_PAIRS.values()}
+# Index CFDs quoted in USD; only OANDA serves them here.
+INDEX_PAIRS: dict[str, str] = {
+    "📈 S&P 500": "SPX500=X",
+    "📈 Nasdaq 100": "NAS100=X",
+    "📈 Dow Jones 30": "US30=X",
+}
 
 PROVIDERS = ("yahoo", "twelvedata", "oanda")
 
@@ -108,6 +115,8 @@ class ForexDataLoader:
     def available_pairs(self) -> dict[str, str]:
         """Pairs this provider can actually serve (metals only with spot quotes)."""
         if self._provider is not None and self._provider.supports_metals:
+            if self._provider.name == "oanda":
+                return {**FOREX_PAIRS, **METAL_PAIRS, **INDEX_PAIRS}
             return {**FOREX_PAIRS, **METAL_PAIRS}
         return dict(FOREX_PAIRS)
 
@@ -130,6 +139,10 @@ class ForexDataLoader:
         """Fetch standardized OHLCV candles for a Forex pair or spot metal."""
         if self._provider is not None:
             return self._source.get_klines(symbol, interval, limit)
+        if canonical_pair(symbol) in {canonical_pair(s) for s in INDEX_PAIRS.values()}:
+            raise ForexProviderUnavailableError(
+                f"{symbol}: los indices requieren OANDA (FOREX_PROVIDER)."
+            )
         if canonical_pair(symbol) in _METAL_CODES:
             raise ForexProviderUnavailableError(
                 f"{symbol}: los metales al contado requieren Twelve Data u OANDA "

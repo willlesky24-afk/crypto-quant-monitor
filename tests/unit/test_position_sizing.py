@@ -84,6 +84,7 @@ def test_short_in_yen_is_converted_to_usd():
         ("BTCUSDT", 50_000.0, 1.0),
         ("EURUSD=X", 1.1, 1.0),
         ("XAUUSD=X", 2000.0, 1.0),
+        ("SPX500=X", 7000.0, 1.0),
         ("USDJPY=X", 150.0, 1.0 / 150.0),
         ("USDCHF=X", 0.8, 1.25),
     ],

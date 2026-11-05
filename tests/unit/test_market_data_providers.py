@@ -419,3 +419,10 @@ def test_oanda_history_rejects_inverted_range():
         OandaProvider(token="tok").get_history(
             "EURUSD=X", "1h", "2026-01-02", "2026-01-01"
         )
+
+
+def test_index_symbols_map_to_oanda_instruments_only():
+    assert provider_symbol("SPX500=X", "oanda") == "SPX500_USD"
+    assert provider_symbol("US30=X", "oanda") == "US30_USD"
+    with pytest.raises(ForexProviderUnavailableError):
+        provider_symbol("NAS100=X", "twelvedata")
