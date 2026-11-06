@@ -92,3 +92,17 @@ def test_empty_or_negative_mismatch_falls_back():
 def test_cut_off_explanation_falls_back_to_facts():
     text = "Tus resultados con 139 operaciones muestran una media de"
     assert explanation_or_facts(text, RESULT)[1] is False
+
+
+def test_thousands_separator_is_one_number():
+    result = dict(
+        RESULT, final_capital=1799.0, capital=1000.0, worst_streak=4, hold_final=1031.0
+    )
+    assert (
+        explanation_or_facts("Terminaste con $1,799 desde $1,000.", result)[1] is True
+    )
+    assert explanation_or_facts("Terminaste con $1,800.", result)[1] is False
+
+
+def test_decimal_comma_is_not_a_thousands_separator():
+    assert explanation_or_facts("La media fue +0,129 R.", RESULT)[1] is True

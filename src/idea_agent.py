@@ -15,6 +15,7 @@ from typing import Any
 from .idea_verifier import ENTRIES, SIDES
 
 _FORBIDDEN = ("compra", "compre", "vende", "venda", "rentable", "garantiz")
+_THOUSANDS = re.compile(r"\b[1-9]\d{0,2}(?:,\d{3})+\b")
 _NUMBER = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 
 
@@ -71,6 +72,13 @@ def parse_translation(raw: str) -> dict[str, Any]:
 
 def facts_text(result: dict[str, Any]) -> str:
     parts = [result["text"], f"Operaciones: {result['trades']}."]
+    if "final_capital" in result:
+        parts.append(
+            f"Capital inicial: {result['capital']:.0f}. "
+            f"Capital final en el pasado: {result['final_capital']:.0f}. "
+            f"Peor racha: {result['worst_streak']} perdidas. "
+            f"Solo mantener desde el inicio: {result['hold_final']:.0f}."
+        )
     if result.get("mean_r") is not None:
         parts.append(f"R neta media: {result['mean_r']:+.3f}.")
     if result.get("random_best") is not None:
@@ -96,6 +104,11 @@ def _allowed(result: dict[str, Any]) -> set[float]:
             "random_best",
             "attempts",
             "reserved_bars",
+            "capital",
+            "final_capital",
+            "worst_streak",
+            "max_drawdown_pct",
+            "hold_final",
         )
     ]
     values += list(result.get("ci") or ())
@@ -111,7 +124,8 @@ def explanation_or_facts(text: str, result: dict[str, Any]) -> tuple[str, bool]:
     """Return the AI text if it passes the guards, else the engine facts."""
     lowered = text.lower()
     allowed = _allowed(result)
-    numbers = [float(n.replace(",", ".")) for n in _NUMBER.findall(text)]
+    grouped = _THOUSANDS.sub(lambda m: m.group(0).replace(",", ""), text)
+    numbers = [float(n.replace(",", ".")) for n in _NUMBER.findall(grouped)]
     valid = (
         text.rstrip().endswith((".", "!", "?"))  # a cut-off answer is not shown
         and not any(word in lowered for word in _FORBIDDEN)

@@ -168,3 +168,11 @@ def alert_row(market: str, text: str) -> str:
         f'<div class="alert-row"><b>{escape(market)}</b>'
         f"<span>{escape(text)}</span></div>"
     )
+
+
+def method_card(name: str, idea: str, suffers: str) -> str:
+    return (
+        f'<div class="meter"><span class="meter-title">{escape(name)}</span>'
+        f'<div class="meter-note">{escape(idea)}</div>'
+        f'<div class="meter-note"><b>Sufre cuando:</b> {escape(suffers)}</div></div>'
+    )

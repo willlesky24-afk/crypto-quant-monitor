@@ -9,14 +9,17 @@ import pytest
 from src.idea_verifier import (
     ENTRIES,
     EXPLORE_SHARE,
+    METHODS,
     MIN_TRADES,
     IdeaSpec,
     IdeaVerifierError,
     ci_level,
     config_for,
     load_history,
+    past_story,
     verdict_from,
     verify_idea,
+    worst_streak,
 )
 from src.parquet_store import ParquetStore
 
@@ -135,3 +138,44 @@ def test_load_history_never_returns_the_protected_test_period(tmp_path):
     )
     loaded = load_history("BTCUSDT", "4h", tmp_path)
     assert loaded["timestamp"].max() < pd.Timestamp("2025-01-01", tz="UTC")
+
+
+def test_worst_streak_counts_consecutive_losses():
+    assert worst_streak([1.0, -1.0, -2.0, 3.0, -1.0, -1.0, -1.0, 0.0, -1.0]) == 3
+    assert worst_streak([]) == 0
+
+
+def test_gallery_only_uses_available_entries():
+    assert {m["entry"] for m in METHODS} <= set(ENTRIES)
+
+
+def test_story_is_in_the_past_and_promises_nothing():
+    text = past_story(
+        {
+            "trades": 10,
+            "capital": 1000.0,
+            "final_capital": 900.0,
+            "worst_streak": 4,
+            "max_drawdown_pct": 15.5,
+            "hold_final": 1200.0,
+            "first_date": "2022-01-01",
+            "last_date": "2024-01-01",
+        }
+    )
+    assert "habrías terminado con $900" in text and "4 pérdidas seguidas" in text
+    assert "15.5 %" in text and "$1,200" in text
+    assert "podría dar" not in text and "ganarás" not in text
+
+
+def test_story_with_no_trades():
+    assert "no habría operado" in past_story({"trades": 0})
+
+
+def test_final_capital_adds_the_trades_and_hold_uses_prices():
+    df = _candles()
+    spec = IdeaSpec("BTCUSDT", "4h", "reversion_rsi", "LONG", 1.0, 2.0, 24)
+    r = verify_idea(df, spec, attempts=1, n_random=1, capital=500.0)
+    explore = df.iloc[: int(len(df) * EXPLORE_SHARE)]
+    expected = 500.0 * explore["close"].iloc[-1] / explore["close"].iloc[0]
+    assert r["hold_final"] == pytest.approx(expected)
+    assert r["capital"] == 500.0

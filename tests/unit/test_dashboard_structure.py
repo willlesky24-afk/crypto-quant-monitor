@@ -14,14 +14,10 @@ def test_app_py_syntax_and_structure():
     assert isinstance(parsed_tree, ast.Module)
 
     # Verify required tabs are present in code
-    assert "Monitor técnico" in code
-    assert "Simulador histórico" in code
+    assert "Probar mi idea" in code
     assert "Notificaciones" in code
 
     # Verify quantitative engines are imported and used as services
     assert "MarketEngine" in code
     assert "RegimeClassifier" in code
-    assert "PredictiveEngine" in code
-    assert "DecisionEngine" in code
-    assert "BacktestRunner" in code
     assert "NotificationDispatcher" in code

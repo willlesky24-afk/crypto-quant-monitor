@@ -41,6 +41,46 @@ ENTRIES = (
     "reversion_rsi",
 )
 SIDES = ("LONG", "SHORT", "AMBOS")
+# Plain-language gallery. Exits are project choices sized to each style, not
+# recommendations, and using one counts as an attempt like any other.
+METHODS = (
+    {
+        "entry": "trend_ema",
+        "name": "Seguir la tendencia",
+        "idea": "Entrar a favor cuando el precio y sus medias apuntan al mismo lado.",
+        "suffers": "el mercado va de lado y cambia de dirección seguido.",
+        "sl_atr": 2.0,
+        "tp_atr": 6.0,
+        "max_bars": 120,
+    },
+    {
+        "entry": "donchian_20",
+        "name": "Comprar rupturas",
+        "idea": "Entrar cuando el precio rompe el máximo de las últimas 20 velas.",
+        "suffers": "las rupturas fallan y el precio vuelve al rango.",
+        "sl_atr": 2.0,
+        "tp_atr": 6.0,
+        "max_bars": 120,
+    },
+    {
+        "entry": "reversion_rsi",
+        "name": "Comprar caídas",
+        "idea": "Entrar cuando el precio cayó mucho, esperando un rebote.",
+        "suffers": "la caída continúa: lo barato se pone más barato.",
+        "sl_atr": 1.5,
+        "tp_atr": 3.0,
+        "max_bars": 48,
+    },
+    {
+        "entry": "momentum_rsi",
+        "name": "Montarse en el impulso",
+        "idea": "Entrar cuando la fuerza reciente del precio es positiva.",
+        "suffers": "el impulso se agota justo al entrar.",
+        "sl_atr": 2.0,
+        "tp_atr": 4.0,
+        "max_bars": 60,
+    },
+)
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 _INDICES = ("SPX500", "NAS100", "US30")
 
@@ -128,6 +168,30 @@ def verdict_from(
     return {"code": code, "text": text, "ci": (low, high)}
 
 
+def worst_streak(pnls: list[float]) -> int:
+    """Longest run of consecutive losing trades."""
+    worst = current = 0
+    for pnl in pnls:
+        current = current + 1 if pnl < 0 else 0
+        worst = max(worst, current)
+    return worst
+
+
+def past_story(result: dict[str, Any]) -> str:
+    """Past tense on purpose: a backtest describes what happened, not what will."""
+    if not result.get("trades"):
+        return "Esta regla no habría operado en estos datos."
+    capital = result["capital"]
+    return (
+        f"Entre {result['first_date']} y {result['last_date']}, con "
+        f"${capital:,.0f} habrías terminado con ${result['final_capital']:,.0f}. "
+        f"Tu peor racha habría sido de {result['worst_streak']} pérdidas seguidas y "
+        f"habrías llegado a estar {result['max_drawdown_pct']:.1f} % por debajo de "
+        f"tu máximo. Comprar y mantener habría dejado ${result['hold_final']:,.0f}. "
+        "Esto describe el pasado: no indica lo que pasará."
+    )
+
+
 def _net_r(trades: list[Any]) -> list[float]:
     return [
         float(t.net_r_multiple)
@@ -137,7 +201,11 @@ def _net_r(trades: list[Any]) -> list[float]:
 
 
 def verify_idea(
-    df: pd.DataFrame, spec: IdeaSpec, attempts: int, n_random: int = 8
+    df: pd.DataFrame,
+    spec: IdeaSpec,
+    attempts: int,
+    n_random: int = 8,
+    capital: float = 1000.0,
 ) -> dict[str, Any]:
     if spec.entry not in ENTRIES:
         raise IdeaVerifierError(f"Entrada no disponible: {spec.entry}")
@@ -147,20 +215,21 @@ def verify_idea(
         sl_atr_multiple=spec.sl_atr,
         tp_atr_multiple=spec.tp_atr,
         max_holding_bars=spec.max_bars,
+        initial_capital=capital,
     )
     cut = int(len(df) * EXPLORE_SHARE)
     explore = df.iloc[:cut].reset_index(drop=True)
     explore.attrs = {}
 
-    def run(signal: pd.Series) -> list[Any]:
+    def run(signal: pd.Series) -> tuple[list[Any], list[Any]]:
         events = signals_to_events(explore, signal, spec.symbol, spec.interval)
-        return BacktestEngine(config=config).run(explore, events)[0]
+        return BacktestEngine(config=config).run(explore, events)
 
-    trades = run(CANDIDATES[spec.entry](explore))
+    trades, equity = run(CANDIDATES[spec.entry](explore))
     r_values = _net_r(trades)
     random_means = []
     for seed in range(n_random):
-        sample = _net_r(run(signal_random(explore, seed=seed)))
+        sample = _net_r(run(signal_random(explore, seed=seed))[0])
         if sample:
             random_means.append(float(np.mean(sample)))
     verdict = verdict_from(r_values, random_means or [0.0], attempts)
@@ -173,6 +242,15 @@ def verify_idea(
         ),
         "random_best": max(random_means) if random_means else None,
         "attempts": attempts,
+        "capital": capital,
+        "final_capital": capital + sum(t.net_pnl for t in trades),
+        "worst_streak": worst_streak([t.net_pnl for t in trades]),
+        "max_drawdown_pct": max((p.drawdown_pct for p in equity), default=0.0),
+        "hold_final": capital
+        * float(explore["close"].iloc[-1])
+        / float(explore["close"].iloc[0]),
+        "first_date": str(explore["timestamp"].iloc[0])[:10],
+        "last_date": str(explore["timestamp"].iloc[-1])[:10],
         "last_entry": max(t.entry_timestamp for t in trades) if trades else None,
         "reserved_bars": len(df) - cut,
     }
