@@ -78,6 +78,7 @@ try:
     )
     from src.idea_verifier import (
         ENTRIES,
+        MIN_TRADES,
         IdeaSpec,
         IdeaVerifierError,
         load_history,
@@ -168,6 +169,7 @@ except ImportError:
     )
     from idea_verifier import (
         ENTRIES,
+        MIN_TRADES,
         IdeaSpec,
         IdeaVerifierError,
         load_history,
@@ -499,7 +501,7 @@ st.title("Quant Monitor")
 # =====================================================================
 # SIDEBAR: MASTER MARKET SELECTOR (CRYPTO VS FOREX)
 # =====================================================================
-st.sidebar.subheader("🌐 Mercado Activo")
+st.sidebar.subheader("Mercado Activo")
 market_choice = st.sidebar.radio(
     "Selecciona el Mercado:",
     ["🪙 Criptomonedas (24/7)", "💱 Divisas Forex (Lun - Vie)"],
@@ -536,7 +538,7 @@ else:
         unsafe_allow_html=True,
     )
 
-st.sidebar.header("🕹️ Parámetros de Selección")
+st.sidebar.header("Parámetros de Selección")
 
 POPULAR_PAIRS = {
     "🥇 BTC / USDT (Bitcoin)": "BTCUSDT",
@@ -600,7 +602,7 @@ sim_mode = advanced_options.radio(
 is_manual_mode = "Manual" in sim_mode
 
 if is_manual_mode:
-    advanced_options.markdown("##### ⚙️ Parámetros Forzados")
+    advanced_options.markdown("##### Parámetros Forzados")
     from src.regime_classifier import MarketRegime
     from src.strategy_optimizer import OptimizedParameters
 
@@ -822,10 +824,10 @@ with tab_risk:
         )
         risk_side_label = st.radio(
             "Tu idea",
-            ["Comprar (LONG)", "Vender (SHORT)"],
+            ["Comprar", "Vender (corto)"],
             horizontal=True,
         )
-        risk_side = "SHORT" if "SHORT" in risk_side_label else "LONG"
+        risk_side = "SHORT" if "corto" in risk_side_label else "LONG"
     with r_col2:
         risk_entry = st.number_input(
             "Precio de entrada", min_value=0.0, value=last_close, format="%.5f"
@@ -866,11 +868,36 @@ with tab_risk:
     except PositionSizingError as exc:
         st.error(f"No se puede calcular: {exc}")
     else:
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Tamaño (unidades)", f"{risk_plan.units:,.4f}")
-        m2.metric("Valor de la posición", f"${risk_plan.notional:,.2f}")
-        m3.metric("Pérdida si toca el stop", f"${risk_plan.max_loss:,.2f}")
-        m4.metric("Costos incluidos", f"${risk_plan.costs:,.2f}")
+        st.markdown(
+            '<div class="meter-grid">'
+            + meter_card(
+                "Tamaño",
+                f"{risk_plan.units:,.4f}",
+                "Unidades",
+                "Cantidad del activo para ese riesgo.",
+            )
+            + meter_card(
+                "Valor de la posición",
+                f"${risk_plan.notional:,.2f}",
+                "Sin apalancamiento",
+                f"De un capital de ${risk_capital:,.2f}.",
+            )
+            + meter_card(
+                "Pérdida si toca el stop",
+                f"${risk_plan.max_loss:,.2f}",
+                "Máximo previsto",
+                "Incluye los costos.",
+                tone="warn",
+            )
+            + meter_card(
+                "Costos incluidos",
+                f"${risk_plan.costs:,.2f}",
+                "Spread y comisión",
+                "Entrada y salida.",
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
         st.write(
             f"Stop en **{risk_stop:.5f}**, a {risk_plan.stop_distance_pct:.2f} % de la "
             f"entrada. {spread_note}"
@@ -1071,7 +1098,17 @@ with tab_verifier:
             format_func=ENTRY_LABELS.get,
             key="v_entry",
         )
-        v_side = st.radio("Lado", v_sides, horizontal=True, key="v_side")
+        v_side = st.radio(
+            "Lado",
+            v_sides,
+            horizontal=True,
+            key="v_side",
+            format_func={
+                "AMBOS": "Ambos lados",
+                "LONG": "Solo compras",
+                "SHORT": "Solo ventas",
+            }.get,
+        )
     with v_col2:
         st.session_state.setdefault("v_sl", 2.0)
         st.session_state.setdefault("v_tp", 6.0)
@@ -1106,19 +1143,37 @@ with tab_verifier:
     if v_result is not None:
         v_box = st.info if v_result["code"] == "MERECE_ESTUDIO" else st.warning
         v_box(v_result["text"])
-        vm1, vm2, vm3, vm4 = st.columns(4)
-        vm1.metric("Operaciones", v_result["trades"])
-        vm2.metric(
-            "R neta media",
-            "N/D" if v_result["mean_r"] is None else f"{v_result['mean_r']:+.3f}",
+        st.markdown(
+            '<div class="meter-grid">'
+            + meter_card(
+                "Operaciones",
+                str(v_result["trades"]),
+                "En datos explorados",
+                f"Mínimo para concluir: {MIN_TRADES}.",
+            )
+            + meter_card(
+                "R neta media",
+                None if v_result["mean_r"] is None else f"{v_result['mean_r']:+.3f}",
+                "Después de costos",
+                "Ganancia media por unidad de riesgo.",
+            )
+            + meter_card(
+                "Mejor azar (R)",
+                None
+                if v_result["random_best"] is None
+                else f"{v_result['random_best']:+.3f}",
+                "Referencia",
+                "Mejor resultado de entradas al azar.",
+            )
+            + meter_card(
+                "Intento",
+                str(v_result["attempts"]),
+                "Sube el listón",
+                "Cada intento exige más.",
+            )
+            + "</div>",
+            unsafe_allow_html=True,
         )
-        vm3.metric(
-            "Mejor azar (R)",
-            "N/D"
-            if v_result["random_best"] is None
-            else f"{v_result['random_best']:+.3f}",
-        )
-        vm4.metric("Intento nº", v_result["attempts"])
         if v_result["ci"] is not None:
             st.write(
                 f"Intervalo de la R media: {v_result['ci'][0]:+.3f} a "
@@ -1338,7 +1393,7 @@ with tab_live:
                 x=df_chart["timestamp"],
                 y=df_chart["ema_200"],
                 name="EMA 200",
-                line={"color": "#BD00FF", "width": 2},
+                line={"color": "#191D23", "width": 2},
             )
         )
 
@@ -1346,9 +1401,9 @@ with tab_live:
     if profile.get("poc"):
         fig_live.add_hline(
             y=profile["poc"],
-            line={"color": "#FFD600", "width": 2, "dash": "dash"},
+            line={"color": "#8A7A56", "width": 2, "dash": "dash"},
             annotation_text="POC",
-            annotation_font_color="#FFD600",
+            annotation_font_color="#8A7A56",
         )
     if profile.get("vah"):
         fig_live.add_hline(
@@ -1453,20 +1508,20 @@ with tab_live:
 
         col_pos, col_warn = st.columns(2)
         with col_pos:
-            st.markdown("##### 🟢 Confluencias Favorables")
+            st.markdown("##### Confluencias Favorables")
             if decision.positives:
                 for pos in decision.positives:
-                    st.markdown(f"- ✅ **{pos}**")
+                    st.markdown(f"- **{pos}**")
             else:
                 st.caption(
                     "Sin confluencias alcistas de alta significancia detectadas."
                 )
 
         with col_warn:
-            st.markdown("##### ⚠️ Factores de Riesgo")
+            st.markdown("##### Factores de Riesgo")
             if decision.warnings:
                 for warn in decision.warnings:
-                    st.markdown(f"- ⚠️ **{warn}**")
+                    st.markdown(f"- **{warn}**")
             else:
                 st.caption("No se registran factores de riesgo estructural inmediatos.")
 
@@ -2059,7 +2114,7 @@ with tab_copilot:
                         st.error(f"Error procesando la consulta: {cop_err}")
 
         with cop_tab2:
-            st.markdown("#### 📋 Briefing Diario del Mercado")
+            st.markdown("#### Briefing Diario del Mercado")
             daily_rep = market_report_svc.generate_daily_briefing(
                 current_market_context
             )
@@ -2080,10 +2135,10 @@ with tab_copilot:
             if daily_rep.main_risks:
                 st.markdown("**Riesgos Identificados:**")
                 for r in daily_rep.main_risks:
-                    st.markdown(f"- ⚠️ {r}")
+                    st.markdown(f"- {r}")
 
         with cop_tab3:
-            st.markdown("#### 🚨 Detección Pasiva de Anomalías Estructurales")
+            st.markdown("#### Detección Pasiva de Anomalías Estructurales")
             detected_anomalies = anomaly_detector.evaluate(current_market_context)
             if not detected_anomalies:
                 st.success(
@@ -2105,7 +2160,7 @@ with tab_copilot:
                         )
 
         with cop_tab4:
-            st.markdown("#### 🕒 Snapshot de Contexto Activo")
+            st.markdown("#### Snapshot de Contexto Activo")
             snap_col1, snap_col2, snap_col3, snap_col4 = st.columns(4)
             with snap_col1:
                 st.metric("Régimen Activo", current_market_context.market_regime)
@@ -2187,7 +2242,7 @@ with tab_backtest:
     b_cfg = None
 
     if is_guided:
-        st.markdown("##### 1️⃣ Define tu Capital Inicial Disponible")
+        st.markdown("##### 1. Define tu Capital Inicial Disponible")
         if "guided_capital" not in st.session_state:
             st.session_state["guided_capital"] = 100.0
 
@@ -2251,7 +2306,7 @@ with tab_backtest:
                     "backtests SPOT. La simulación rechazará esta selección; solo SPOT LONG 1x está validado."
                 )
 
-        st.markdown("##### 2️⃣ Elige un preset de estrategia para la simulación")
+        st.markdown("##### 2. Elige un preset de estrategia para la simulación")
         strategy_keys = list(PROVEN_STRATEGIES.keys())
         strategy_labels = [PROVEN_STRATEGIES[k]["name"] for k in strategy_keys]
         selected_strategy_label = st.selectbox(
@@ -2305,7 +2360,7 @@ with tab_backtest:
                 b_cfg.slippage_pct = 0.0
 
     else:
-        st.markdown("##### ⚙️ Parámetros Avanzados de Simulación")
+        st.markdown("##### Parámetros Avanzados de Simulación")
         b_col1, b_col2, b_col3, b_col4 = st.columns(4)
         with b_col1:
             initial_cap = st.number_input(
@@ -2573,7 +2628,7 @@ with tab_backtest:
         short_pnl = sum(_trade_field_for_ui(t, "net_pnl") or 0 for t in short_trades)
 
         st.markdown(
-            "##### ⚖️ ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)"
+            "##### ¿Qué Convino Más en Este Período? Compras (LONG) vs Ventas (SHORT)"
         )
         dir_c1, dir_c2 = st.columns(2)
         with dir_c1:
@@ -2723,7 +2778,7 @@ with tab_backtest:
         t_left, t_right = st.columns([1, 1])
 
         with t_left:
-            st.subheader("🎯 Distribución MFE vs MAE")
+            st.subheader("Distribución MFE vs MAE")
             if report.trades:
                 trade_rows = [
                     t.to_dict() if hasattr(t, "to_dict") else dict(t)
@@ -2798,7 +2853,7 @@ with tab_backtest:
                 st.info("No se registraron operaciones en este período de simulación.")
 
         with t_right:
-            st.subheader("📋 Registro de Transacciones")
+            st.subheader("Registro de Transacciones")
             if report.trades:
                 st.caption(_execution_trace_summary_for_ui(report.trades))
                 st.dataframe(
@@ -2816,12 +2871,12 @@ with tab_backtest:
 # TAB 3: NOTIFICATION SETTINGS
 # =====================================================================
 with tab_settings:
-    st.subheader("⚙️ Configuración del Sistema de Alertas Multicanal")
+    st.subheader("Configuración del Sistema de Alertas Multicanal")
 
     c_cfg1, c_cfg2 = st.columns([1, 1])
 
     with c_cfg1:
-        st.markdown("### 📢 Canales de Notificación")
+        st.markdown("### Canales de Notificación")
 
         def _get_sec(key: str, default: str = "") -> str:
             try:
@@ -2862,7 +2917,7 @@ with tab_settings:
         )
 
     with c_cfg2:
-        st.markdown("### 🛡️ Filtros y Anti-Spam (Cooldown)")
+        st.markdown("### Filtros y Anti-Spam (Cooldown)")
         min_pred_score = st.slider(
             "Umbral Mínimo de Predictive Score", 0.0, 1.0, 0.60, 0.05
         )
@@ -2877,12 +2932,12 @@ with tab_settings:
         )
 
     st.markdown("---")
-    st.subheader("⚡ Acciones de Despacho de Señales")
+    st.subheader("Acciones de Despacho de Señales")
 
     act_col1, act_col2 = st.columns([1, 1])
 
     with act_col1:
-        st.markdown("#### 🧪 1. Prueba de Conexión (Ping)")
+        st.markdown("#### 1. Prueba de Conexión (Ping)")
         st.caption(
             "Verifica si tu Bot de Telegram o Webhook de Discord responde correctamente."
         )
@@ -2948,7 +3003,7 @@ with tab_settings:
                 st.table(pd.DataFrame(result_rows))
 
     with act_col2:
-        st.markdown("#### 📡 2. Escanear y Despachar Alertas Reales")
+        st.markdown("#### 2. Escanear y Despachar Alertas Reales")
         st.caption(
             "Solo se despachan señales ACTIVADAS con entrada confirmada y niveles válidos. Las candidatas no se envían como operables."
         )
@@ -3124,7 +3179,7 @@ with tab_settings:
     all_alerts = tracker.get_all_alerts()
 
     st.markdown("---")
-    st.markdown("### 📋 Historial de señales registradas y auditoría de resultados")
+    st.markdown("### Historial de señales registradas y auditoría de resultados")
     st.caption(
         "OPEN indica seguimiento de mercado, no envío confirmado. "
         "El estado histórico de entrega no está disponible: no se persiste por registro."
@@ -3215,7 +3270,7 @@ with tab_settings:
 # TAB 5: GUÍA & GLOSARIO
 # =====================================================================
 with tab_guide:
-    st.subheader("📖 Guía Rápida & Glosario Cuantitativo")
+    st.subheader("Guía Rápida & Glosario Cuantitativo")
     st.caption(
         "Referencia institucional de términos, siglas y manual paso a paso de la plataforma."
     )
@@ -3228,7 +3283,7 @@ with tab_guide:
     )
 
     with g_tab1:
-        st.markdown("### 📚 Diccionario de Siglas Institucionales")
+        st.markdown("### Diccionario de Siglas Institucionales")
 
         g_col1, g_col2 = st.columns(2)
 
@@ -3289,7 +3344,7 @@ with tab_guide:
             """)
 
     with g_tab2:
-        st.markdown("### 🕹️ Manual Paso a Paso: Si tocas esto, obtienes esto")
+        st.markdown("### Manual Paso a Paso: Si tocas esto, obtienes esto")
 
         st.markdown("""
         | Sección | Control / Botón | Qué hace al interactuar | Qué obtienes en pantalla |

@@ -53,3 +53,21 @@ def test_signal_engine_sees_price_above_vah_in_fourth_decimal():
     above = SignalEngine().evaluate(_analysis(price=1.0834), PROFILE)
     inside = SignalEngine().evaluate(_analysis(price=1.0812), PROFILE)
     assert above != inside
+
+
+def test_volume_profile_keeps_forex_precision():
+    from src.volume_profile import VolumeProfile
+
+    # Prices around 1.1234: rounded to 2 decimals every level would be 1.12.
+    close = [1.1230 + 0.0001 * (i % 9) for i in range(60)]
+    df = pd.DataFrame(
+        {
+            "high": [c + 0.0002 for c in close],
+            "low": [c - 0.0002 for c in close],
+            "close": close,
+            "volume": [100.0] * 60,
+        }
+    )
+    profile = VolumeProfile().calculate(df)
+    assert profile["vah"] > profile["val"]
+    assert round(profile["poc"], 2) != profile["poc"]

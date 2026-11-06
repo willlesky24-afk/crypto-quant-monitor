@@ -54,7 +54,7 @@ class VolumeProfile:
         p_max = float(prices.max())
 
         if p_min == p_max:
-            price = round(float(prices[0]), 2)
+            price = float(prices[0])
 
             return {"poc": price, "vah": price, "val": price}
 
@@ -89,7 +89,7 @@ class VolumeProfile:
         vah = price_range[high_index + 1]
 
         return {
-            "poc": round(float(poc), 2),
-            "vah": round(float(vah), 2),
-            "val": round(float(val), 2),
+            "poc": float(poc),
+            "vah": float(vah),
+            "val": float(val),
         }

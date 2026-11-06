@@ -54,6 +54,10 @@ sola vez.
   de riesgo y señal en forex. Se corrigió después. Al repetir forex y metales en 4h (validación
   2024), 8 de 9 series quedaron iguales y GBP/USD pasó de PF 0.857 a 0.854. Forex en 1h y los filtrados no
   se repitieron.
+- El perfil de volumen también redondeaba POC, VAH y VAL a 2 decimales; se corrigió después. Con
+  la ronda de salidas repetida, perfil + tendencia larga pasó de 65 % a 59 % de series positivas y
+  de PF 1.25 a 1.25, y ninguna combinación pasó el listón. Forex y metales 4h en 2024 quedaron en
+  PF 0.96. Las rondas 1 y 2 del informe no se repitieron con esta corrección.
 - Exposición accidental, 2026-11-05: dos corridas del verificador leyeron datos de 2025 (BTC 4h
   tendencia con SL 2/TP 6 y 120 velas; SPX500 no pertenece al universo). Esa combinación ya no es
   una evaluación limpia del período de prueba. El verificador ahora corta en 2025-01-01.
