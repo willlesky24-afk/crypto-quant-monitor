@@ -4,10 +4,12 @@ import asyncio
 import math
 import os
 import sys
+from html import escape
 from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 from dotenv import load_dotenv
 from plotly.subplots import make_subplots
@@ -50,6 +52,8 @@ try:
     from src.backtest_runner import BacktestRunner
     from src.constants import LIVE_HISTORY_BARS
     from src.daily_summary import (
+        AGITATED_PERCENTILE,
+        CALM_PERCENTILE,
         build_market_summary,
         format_price,
         market_conditions,
@@ -109,6 +113,13 @@ try:
     from src.report import MarketReport
     from src.risk_engine import RiskEngine
     from src.signal_engine import SignalEngine
+    from src.ui_theme import (
+        THEME_CSS,
+        alert_row,
+        gauge_html,
+        meter_card,
+        value_area_position,
+    )
     from src.unusual_radar import build_markets, run_radar
     from src.volume_profile import VolumeProfile
 except ImportError:
@@ -131,6 +142,8 @@ except ImportError:
     from backtest_runner import BacktestRunner
     from constants import LIVE_HISTORY_BARS
     from daily_summary import (
+        AGITATED_PERCENTILE,
+        CALM_PERCENTILE,
         build_market_summary,
         format_price,
         market_conditions,
@@ -190,6 +203,13 @@ except ImportError:
     from report import MarketReport
     from risk_engine import RiskEngine
     from signal_engine import SignalEngine
+    from ui_theme import (
+        THEME_CSS,
+        alert_row,
+        gauge_html,
+        meter_card,
+        value_area_position,
+    )
     from unusual_radar import build_markets, run_radar
     from volume_profile import VolumeProfile
 
@@ -472,309 +492,7 @@ st.set_page_config(
 # =====================================================================
 # CUSTOM NEON CYBER FINANCE THEME & STYLING
 # =====================================================================
-st.markdown(
-    """
-    <style>
-    /* Neon Cyber Finance Dark Theme */
-    :root {
-        --bg-main: #07090e;
-        --card-bg: rgba(14, 22, 38, 0.85);
-        --neon-green: #00ff88;
-        --neon-cyan: #00e5ff;
-        --neon-coral: #ff2e63;
-        --neon-gold: #ffd600;
-        --neon-purple: #bd00ff;
-        --text-bright: #f0f6fc;
-        --text-sub: #8b949e;
-    }
-
-    /* Overall App Background & Typography */
-    .stApp {
-        background-color: var(--bg-main);
-        color: var(--text-bright);
-    }
-
-    /* Metric Cards: Futuristic Floating Glassmorphism - Compact & Balanced */
-    [data-testid="stMetric"] {
-        background: linear-gradient(135deg, rgba(16, 26, 46, 0.9) 0%, rgba(10, 16, 30, 0.95) 100%) !important;
-        border: 1px solid rgba(0, 229, 255, 0.22) !important;
-        border-radius: 18px !important;
-        padding: 10px 14px !important;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
-        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
-    }
-
-    [data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        border-color: var(--neon-green) !important;
-        box-shadow: 0 8px 24px rgba(0, 255, 136, 0.22), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
-    }
-
-    [data-testid="stMetric"] { height: 100%; }
-    [data-testid="stMetricValue"], [data-testid="stMetricValue"] *,
-    [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] * {
-        white-space: normal !important;
-        overflow-wrap: break-word;
-        text-overflow: clip !important;
-        min-width: 0;
-    }
-    [data-testid="stMetricLabel"] {
-        color: var(--text-sub) !important;
-        font-size: 0.74rem !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.5px !important;
-        text-transform: uppercase !important;
-        margin-bottom: 2px !important;
-    }
-
-    [data-testid="stMetricValue"], [data-testid="stMetricValue"] * {
-        color: #ffffff !important;
-        font-size: 1.05rem !important;
-        font-weight: 700 !important;
-        line-height: 1.25 !important;
-        text-shadow: 0 0 10px rgba(0, 229, 255, 0.35) !important;
-    }
-
-    [data-testid="stMetricDelta"] {
-        font-size: 0.75rem !important;
-    }
-
-    /* Sleek, Compact Rounded Pill Buttons with Fluorescent Glow */
-    .stButton > button {
-        border-radius: 20px !important;
-        font-weight: 600 !important;
-        font-size: 0.80rem !important;
-        letter-spacing: 0.3px !important;
-        padding: 6px 18px !important;
-        border: 1px solid rgba(0, 255, 136, 0.45) !important;
-        background: linear-gradient(135deg, rgba(0, 255, 136, 0.14) 0%, rgba(0, 229, 255, 0.10) 100%) !important;
-        color: #00ff88 !important;
-        box-shadow: 0 2px 12px rgba(0, 255, 136, 0.18) !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-
-    .stButton > button:hover {
-        border-color: #00ff88 !important;
-        color: #07090e !important;
-        background: linear-gradient(135deg, #00ff88 0%, #00e5ff 100%) !important;
-        box-shadow: 0 0 18px rgba(0, 255, 136, 0.65) !important;
-        transform: scale(1.01);
-    }
-
-    .stButton > button:active {
-        transform: scale(0.99);
-    }
-
-    /* Download Buttons */
-    .stDownloadButton > button {
-        border-radius: 20px !important;
-        font-weight: 600 !important;
-        font-size: 0.80rem !important;
-        padding: 6px 18px !important;
-        border: 1px solid rgba(0, 229, 255, 0.45) !important;
-        background: linear-gradient(135deg, rgba(0, 229, 255, 0.14) 0%, rgba(189, 0, 255, 0.10) 100%) !important;
-        color: #00e5ff !important;
-        box-shadow: 0 2px 12px rgba(0, 229, 255, 0.18) !important;
-        transition: all 0.2s ease !important;
-    }
-
-    .stDownloadButton > button:hover {
-        border-color: #00e5ff !important;
-        color: #07090e !important;
-        background: linear-gradient(135deg, #00e5ff 0%, #bd00ff 100%) !important;
-        box-shadow: 0 0 18px rgba(0, 229, 255, 0.65) !important;
-    }
-
-    /* Sleek, Compact Rounded Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: rgba(14, 22, 38, 0.65);
-        padding: 4px 6px;
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 18px !important;
-        padding: 5px 16px !important;
-        font-size: 0.80rem !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.2px !important;
-        color: var(--text-sub) !important;
-        border: none !important;
-        transition: all 0.2s ease !important;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, rgba(0, 255, 136, 0.22) 0%, rgba(0, 229, 255, 0.15) 100%) !important;
-        color: #00ff88 !important;
-        border: 1px solid rgba(0, 255, 136, 0.5) !important;
-        box-shadow: 0 0 12px rgba(0, 255, 136, 0.25) !important;
-    }
-
-    /* Inputs, Selectboxes, and Text Areas */
-    div[data-baseweb="select"] > div {
-        border-radius: 20px !important;
-        background-color: rgba(14, 22, 38, 0.9) !important;
-        border: 1px solid rgba(0, 229, 255, 0.25) !important;
-    }
-
-    div[data-baseweb="select"]:hover > div {
-        border-color: var(--neon-cyan) !important;
-        box-shadow: 0 0 12px rgba(0, 229, 255, 0.3) !important;
-    }
-
-    div[data-baseweb="input"] > input {
-        border-radius: 18px !important;
-    }
-
-    /* Alert / Status Callouts */
-    .stAlert {
-        border-radius: 22px !important;
-        backdrop-filter: blur(10px) !important;
-    }
-
-    /* Glowing Titles & Section Headers */
-    h1 {
-        text-shadow: 0 0 24px rgba(0, 255, 136, 0.35);
-    }
-    h2, h3 {
-        text-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
-    }
-
-    /* Executive Justification Card & Pills */
-    .justification-card {
-        background: linear-gradient(135deg, rgba(16, 26, 46, 0.85) 0%, rgba(10, 16, 30, 0.95) 100%);
-        border: 1px solid rgba(0, 229, 255, 0.25);
-        border-radius: 18px;
-        padding: 18px 22px;
-        margin-bottom: 16px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-    }
-    .justification-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        padding-bottom: 8px;
-    }
-    .justification-title {
-        color: #00E5FF;
-        font-size: 0.92rem;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-    }
-    .justification-text {
-        color: #F0F6FC;
-        font-size: 0.92rem;
-        line-height: 1.7;
-        letter-spacing: 0.3px;
-        margin-bottom: 14px;
-    }
-    .metric-pill {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 14px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        margin-right: 8px;
-        margin-bottom: 6px;
-    }
-    .metric-pill-cyan {
-        background: rgba(0, 229, 255, 0.12);
-        border: 1px solid rgba(0, 229, 255, 0.35);
-        color: #00E5FF;
-    }
-    .metric-pill-green {
-        background: rgba(0, 255, 136, 0.12);
-        border: 1px solid rgba(0, 255, 136, 0.35);
-        color: #00FF88;
-    }
-    .metric-pill-gold {
-        background: rgba(255, 214, 0, 0.12);
-        border: 1px solid rgba(255, 214, 0, 0.35);
-        color: #FFD600;
-    }
-    .metric-pill-coral {
-        background: rgba(255, 46, 99, 0.12);
-        border: 1px solid rgba(255, 46, 99, 0.35);
-        color: #FF2E63;
-    }
-
-    /* Mobile Responsive Optimizations (Smartphones & Tablets) */
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
-            padding-top: 1.0rem !important;
-        }
-        .stHorizontalBlock {
-            flex-direction: column !important;
-            gap: 0.6rem !important;
-        }
-        div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
-        }
-        .metric-card {
-            padding: 12px 14px !important;
-            margin-bottom: 8px !important;
-        }
-        .metric-value {
-            font-size: 1.15rem !important;
-        }
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 4px !important;
-            overflow-x: auto !important;
-            flex-wrap: nowrap !important;
-        }
-        .stTabs [data-baseweb="tab"] {
-            padding: 6px 10px !important;
-            font-size: 0.76rem !important;
-        }
-        .justification-card {
-            padding: 14px 16px !important;
-        }
-        .justification-title {
-            font-size: 0.85rem !important;
-        }
-        .justification-text {
-            font-size: 0.85rem !important;
-            line-height: 1.55 !important;
-        }
-        .metric-pill {
-            display: inline-block !important;
-            margin-bottom: 5px !important;
-            font-size: 0.72rem !important;
-            padding: 3px 8px !important;
-        }
-        .stButton>button {
-            width: 100% !important;
-            min-height: 42px !important;
-            font-size: 0.84rem !important;
-        }
-    /* Intelligent Traffic Light Verdict Card & Presets */
-    .verdict-card {
-        background: linear-gradient(135deg, rgba(16, 26, 46, 0.95) 0%, rgba(10, 16, 30, 0.98) 100%);
-        border-radius: 18px;
-        padding: 18px 22px;
-        margin-bottom: 18px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    }
-    .strategy-preset-card {
-        background: rgba(16, 26, 46, 0.65);
-        border: 1px solid rgba(0, 229, 255, 0.25);
-        border-radius: 14px;
-        padding: 12px 16px;
-        margin-bottom: 14px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 st.title("Quant Monitor")
 
@@ -793,13 +511,13 @@ is_forex = "Forex" in market_choice
 # Live Market Status & Session Schedule
 if is_forex:
     forex_status = get_forex_session_status()
-    status_color = "#00FF88" if forex_status.is_market_open else "#FF2E63"
+    status_color = "#036340" if forex_status.is_market_open else "#BD5B5B"
     st.sidebar.markdown(
         f"""
-        <div style="background: rgba(16, 26, 46, 0.85); border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
+        <div style="background: #FFFFFF; border: 1px solid rgba(25, 29, 35, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
             <div style="font-weight: 700; font-size: 0.84rem; color: {status_color};">{forex_status.status_headline}</div>
-            <div style="font-size: 0.76rem; color: #8B949E; margin-top: 4px;">🕒 {forex_status.current_utc_time}</div>
-            <div style="font-size: 0.74rem; color: #00E5FF; margin-top: 3px;">📌 {forex_status.weekend_reopen_info}</div>
+            <div style="font-size: 0.76rem; color: #717782; margin-top: 4px;">🕒 {forex_status.current_utc_time}</div>
+            <div style="font-size: 0.74rem; color: #8A7A56; margin-top: 3px;">📌 {forex_status.weekend_reopen_info}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -810,9 +528,9 @@ if is_forex:
 else:
     st.sidebar.markdown(
         """
-        <div style="background: rgba(16, 26, 46, 0.85); border: 1px solid rgba(0, 255, 136, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
-            <div style="font-weight: 700; font-size: 0.84rem; color: #00FF88;">🟢 Mercado Cripto Abierto 24/7</div>
-            <div style="font-size: 0.76rem; color: #8B949E; margin-top: 4px;">Operaciones continuas los 365 días del año sin cierres</div>
+        <div style="background: #FFFFFF; border: 1px solid rgba(3, 99, 64, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 0.84rem; color: #036340;">🟢 Mercado Cripto Abierto 24/7</div>
+            <div style="font-size: 0.76rem; color: #717782; margin-top: 4px;">Operaciones continuas los 365 días del año sin cierres</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -976,6 +694,108 @@ REGIME_LABELS = {
     "RANGING_CONSOLIDATION": "Sin tendencia",
     "HIGH_VOLATILITY_EXPANSION": "Expansión de volatilidad",
 }
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_funding(funding_symbol):
+    """Latest funding for the header card, or the reason it is not available."""
+    try:
+        series = FundingSource(provider_from_env()).fetch(funding_symbol, limit=300)
+    except (FundingUnavailableError, requests.RequestException) as exc:
+        return {"error": str(exc)}
+    return funding_snapshot(series)
+
+
+def _level_tag(percentile, high_label, low_label):
+    if percentile is None:
+        return "Sin dato", ""
+    if percentile >= AGITATED_PERCENTILE:
+        return high_label, "bad"
+    if percentile <= CALM_PERCENTILE:
+        return low_label, "good"
+    return "Normal", ""
+
+
+def _today_cards(figures, conditions):
+    """Four meters built only from engine figures; a gap stays visible as N/D."""
+    volatility = conditions.get("volatility_percentile")
+    v_status, v_tone = _level_tag(volatility, "Agitado", "Tranquilo")
+    cards = [
+        meter_card(
+            "Volatilidad",
+            None if volatility is None else f"{volatility:.0f}",
+            v_status,
+            f"Percentil frente a su historia. ATR {figures['atr_pct']:.2f} % del precio.",
+            tone=v_tone,
+            gauge=gauge_html(volatility),
+        )
+    ]
+
+    cost = conditions.get("spread_percentile")
+    c_status, c_tone = _level_tag(cost, "Caro", "Barato")
+    spread = figures["spread_pct"]
+    cards.append(
+        meter_card(
+            "Costo de operar",
+            None if spread is None else f"{spread:.3f} %",
+            c_status,
+            "Spread frente al movimiento típico."
+            if spread is not None
+            else "Este proveedor no da spread.",
+            tone=c_tone,
+            bar=cost,
+        )
+    )
+
+    position = value_area_position(figures["price"], figures["val"], figures["vah"])
+    if position is None:
+        z_status = "Sin dato"
+    elif position > 100:
+        z_status = "Encima"
+    elif position < 0:
+        z_status = "Debajo"
+    else:
+        z_status = "Dentro"
+    cards.append(
+        meter_card(
+            "Zona de valor",
+            format_price(figures["price"]),
+            z_status,
+            f"Entre {format_price(figures['val'])} y {format_price(figures['vah'])}.",
+            dot=position,
+        )
+    )
+
+    if symbol.endswith("=X"):
+        change = figures["change_24h_pct"]
+        cards.append(
+            meter_card(
+                "Cambio 24 h",
+                None if change is None else f"{change:+.2f} %",
+                "Sin dato" if change is None else "Precio",
+                "Respecto al cierre de hace 24 horas.",
+            )
+        )
+    else:
+        funding = _load_funding(symbol)
+        if "error" in funding:
+            cards.append(
+                meter_card("Apalancamiento", None, "Sin dato", funding["error"])
+            )
+        else:
+            f_status, f_tone = _level_tag(funding["size_percentile"], "Alto", "Bajo")
+            cards.append(
+                meter_card(
+                    "Apalancamiento",
+                    f"{funding['rate_pct']:+.4f} %",
+                    f_status,
+                    f"Funding frente a {funding['records']} registros recientes.",
+                    tone=f_tone,
+                    bar=funding["size_percentile"],
+                )
+            )
+    return '<div class="meter-grid">' + "".join(cards) + "</div>"
+
 
 with tab_risk:
     st.subheader("¿Cuánto puedo operar sin arriesgar de más?")
@@ -1153,7 +973,10 @@ with tab_radar:
                 f"esté en el {radar_result.alpha * 100:.2f} % más extremo."
             )
         for radar_alert in radar_result.alerts:
-            st.warning(f"**{radar_alert.market}.** {radar_alert.text}")
+            st.markdown(
+                alert_row(radar_alert.market, radar_alert.text),
+                unsafe_allow_html=True,
+            )
         if radar_result.alpha is not None and not radar_result.alerts:
             st.success("Nada fuera de lo normal en este momento.")
         for radar_market, radar_reason in radar_result.failed.items():
@@ -1336,10 +1159,22 @@ with tab_live:
         symbol, df, analysis, profile, RegimeClassifier().classify(df).regime
     )
     with today_summary:
-        st.subheader("¿Qué está pasando hoy?")
-        for summary_line in summary["lines"]:
-            st.write(summary_line)
         conditions = market_conditions(df)
+        st.markdown(
+            f'<div class="eyebrow">Mercado de hoy / <b>{escape(symbol)} · '
+            f"{escape(interval)}</b></div>",
+            unsafe_allow_html=True,
+        )
+        st.subheader("¿Qué está pasando hoy?")
+        st.markdown(
+            _today_cards(summary["figures"], conditions), unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div class="panel">'
+            + "".join(f"<p>{escape(line)}</p>" for line in summary["lines"])
+            + "</div>",
+            unsafe_allow_html=True,
+        )
         conditions_box = {
             "VERDE": st.success,
             "AMARILLO": st.warning,
@@ -1480,10 +1315,10 @@ with tab_live:
             low=df_chart["low"],
             close=df_chart["close"],
             name="Precio",
-            increasing_line_color="#00FF88",
-            increasing_fillcolor="#00FF88",
-            decreasing_line_color="#FF2E63",
-            decreasing_fillcolor="#FF2E63",
+            increasing_line_color="#036340",
+            increasing_fillcolor="#036340",
+            decreasing_line_color="#BD5B5B",
+            decreasing_fillcolor="#BD5B5B",
         )
     )
 
@@ -1494,7 +1329,7 @@ with tab_live:
                 x=df_chart["timestamp"],
                 y=df_chart["ema_50"],
                 name="EMA 50",
-                line={"color": "#00E5FF", "width": 2},
+                line={"color": "#8A7A56", "width": 2},
             )
         )
     if "ema_200" in df.columns:
@@ -1518,36 +1353,36 @@ with tab_live:
     if profile.get("vah"):
         fig_live.add_hline(
             y=profile["vah"],
-            line={"color": "#00FF88", "width": 1.5, "dash": "dot"},
+            line={"color": "#036340", "width": 1.5, "dash": "dot"},
             annotation_text="VAH",
-            annotation_font_color="#00FF88",
+            annotation_font_color="#036340",
         )
     if profile.get("val"):
         fig_live.add_hline(
             y=profile["val"],
-            line={"color": "#FF2E63", "width": 1.5, "dash": "dot"},
+            line={"color": "#BD5B5B", "width": 1.5, "dash": "dot"},
             annotation_text="VAL",
-            annotation_font_color="#FF2E63",
+            annotation_font_color="#BD5B5B",
         )
 
     fig_live.update_layout(
         height=620,
         margin={"l": 20, "r": 20, "t": 40, "b": 20},
         xaxis_rangeslider_visible=False,
-        template="plotly_dark",
-        paper_bgcolor="#07090E",
-        plot_bgcolor="#07090E",
+        template="plotly_white",
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
         font={
             "family": "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto",
-            "color": "#E6EDF3",
+            "color": "#191D23",
         },
         xaxis={
             "gridcolor": "rgba(255, 255, 255, 0.06)",
-            "linecolor": "rgba(0, 229, 255, 0.2)",
+            "linecolor": "rgba(25, 29, 35, 0.2)",
         },
         yaxis={
             "gridcolor": "rgba(255, 255, 255, 0.06)",
-            "linecolor": "rgba(0, 229, 255, 0.2)",
+            "linecolor": "rgba(25, 29, 35, 0.2)",
         },
     )
     st.plotly_chart(fig_live, width="stretch")
@@ -1609,7 +1444,7 @@ with tab_live:
         )
         st.markdown(
             f"""
-            <div style="background: rgba(16, 26, 46, 0.6); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;">
+            <div style="background: #FFFFFF; border: 1px solid rgba(25, 29, 35, 0.2); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px;">
                 <span class="metric-pill metric-pill-gold">{market_badge_text}</span>
             </div>
             """,
@@ -2331,7 +2166,7 @@ with tab_backtest:
     )
     st.markdown(
         f"""
-        <div style="background: rgba(16, 26, 46, 0.65); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.86rem; color: #E6EDF3;">
+        <div style="background: #FFFFFF; border: 1px solid rgba(25, 29, 35, 0.25); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.86rem; color: #191D23;">
             {market_advice}
         </div>
         """,
@@ -2432,8 +2267,8 @@ with tab_backtest:
         st.markdown(
             f"""
             <div class="strategy-preset-card">
-                <strong style="color: #00E5FF;">{chosen_strategy_info["name"]}</strong><br/>
-                <span style="color: #F0F6FC; font-size: 0.88rem; line-height: 1.5;">{chosen_strategy_info["description"]}</span>
+                <strong style="color: #8A7A56;">{chosen_strategy_info["name"]}</strong><br/>
+                <span style="color: #191D23; font-size: 0.88rem; line-height: 1.5;">{chosen_strategy_info["description"]}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2576,12 +2411,12 @@ with tab_backtest:
             <div class="verdict-card" style="border: 1px solid {verdict["color"]};">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <span style="color: {verdict["color"]}; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.5px;">{verdict["badge"]}</span>
-                    <span style="color: #8B949E; font-size: 0.80rem;">{symbol} • {interval}</span>
+                    <span style="color: #717782; font-size: 0.80rem;">{symbol} • {interval}</span>
                 </div>
-                <div style="color: #F0F6FC; font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
+                <div style="color: #191D23; font-size: 1.05rem; font-weight: 600; margin-bottom: 6px;">
                     {verdict["title"]}
                 </div>
-                <div style="color: #C9D1D9; font-size: 0.88rem; line-height: 1.6;">
+                <div style="color: #45474B; font-size: 0.88rem; line-height: 1.6;">
                     {verdict["description"]}
                 </div>
             </div>
@@ -2744,12 +2579,12 @@ with tab_backtest:
         with dir_c1:
             st.markdown(
                 f"""
-                <div style="background: rgba(0, 255, 136, 0.06); border: 1px solid rgba(0, 255, 136, 0.3); border-radius: 10px; padding: 12px 14px;">
-                    <div style="font-weight: 700; color: #00FF88; font-size: 0.95rem;">🟢 Operaciones de Compra (LONG)</div>
-                    <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
+                <div style="background: rgba(3, 99, 64, 0.06); border: 1px solid rgba(3, 99, 64, 0.3); border-radius: 10px; padding: 12px 14px;">
+                    <div style="font-weight: 700; color: #036340; font-size: 0.95rem;">🟢 Operaciones de Compra (LONG)</div>
+                    <div style="color: #191D23; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
                         • <strong>{long_count}</strong> operaciones ejecutadas<br/>
                         • Tasa de Acierto: <strong>{long_wr:.1f}%</strong> ({long_wins} ganadas)<br/>
-                        • Retorno Acumulado: <strong style="color: {"#00FF88" if long_pnl >= 0 else "#FF2E63"};">${long_pnl:+,.2f}</strong>
+                        • Retorno Acumulado: <strong style="color: {"#036340" if long_pnl >= 0 else "#BD5B5B"};">${long_pnl:+,.2f}</strong>
                     </div>
                 </div>
                 """,
@@ -2758,12 +2593,12 @@ with tab_backtest:
         with dir_c2:
             st.markdown(
                 f"""
-                <div style="background: rgba(255, 46, 99, 0.06); border: 1px solid rgba(255, 46, 99, 0.3); border-radius: 10px; padding: 12px 14px;">
-                    <div style="font-weight: 700; color: #FF2E63; font-size: 0.95rem;">🔴 Operaciones de Venta (SHORT)</div>
-                    <div style="color: #F0F6FC; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
+                <div style="background: rgba(189, 91, 91, 0.06); border: 1px solid rgba(189, 91, 91, 0.3); border-radius: 10px; padding: 12px 14px;">
+                    <div style="font-weight: 700; color: #BD5B5B; font-size: 0.95rem;">🔴 Operaciones de Venta (SHORT)</div>
+                    <div style="color: #191D23; font-size: 0.88rem; margin-top: 4px; line-height: 1.6;">
                         • <strong>{short_count}</strong> operaciones ejecutadas<br/>
                         • Tasa de Acierto: <strong>{short_wr:.1f}%</strong> ({short_wins} ganadas)<br/>
-                        • Retorno Acumulado: <strong style="color: {"#00FF88" if short_pnl >= 0 else "#FF2E63"};">${short_pnl:+,.2f}</strong>
+                        • Retorno Acumulado: <strong style="color: {"#036340" if short_pnl >= 0 else "#BD5B5B"};">${short_pnl:+,.2f}</strong>
                     </div>
                 </div>
                 """,
@@ -2852,7 +2687,7 @@ with tab_backtest:
                     x=eq_df["timestamp"],
                     y=eq_df["equity"],
                     name="Equity ($)",
-                    line={"color": "#00FF88", "width": 2.5},
+                    line={"color": "#036340", "width": 2.5},
                 ),
                 row=1,
                 col=1,
@@ -2864,8 +2699,8 @@ with tab_backtest:
                     y=-eq_df["drawdown_pct"],
                     name="Drawdown (%)",
                     fill="tozeroy",
-                    fillcolor="rgba(255, 46, 99, 0.25)",
-                    line={"color": "#FF2E63", "width": 1.5},
+                    fillcolor="rgba(189, 91, 91, 0.25)",
+                    line={"color": "#BD5B5B", "width": 1.5},
                 ),
                 row=2,
                 col=1,
@@ -2873,9 +2708,9 @@ with tab_backtest:
 
             fig_eq.update_layout(
                 height=520,
-                template="plotly_dark",
-                paper_bgcolor="#07090E",
-                plot_bgcolor="#07090E",
+                template="plotly_white",
+                paper_bgcolor="#FFFFFF",
+                plot_bgcolor="#FFFFFF",
                 margin={"l": 20, "r": 20, "t": 40, "b": 20},
                 xaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
                 yaxis={"gridcolor": "rgba(255, 255, 255, 0.06)"},
@@ -2918,7 +2753,7 @@ with tab_backtest:
                             marker={
                                 "size": 9,
                                 "color": [
-                                    "#00FF88" if t.get("net_pnl", 0) > 0 else "#FF2E63"
+                                    "#036340" if t.get("net_pnl", 0) > 0 else "#BD5B5B"
                                     for t in exact_rows
                                 ],
                             },
@@ -2933,9 +2768,9 @@ with tab_backtest:
                         xaxis_title="MAE exacta bajo OHLC (%)",
                         yaxis_title="MFE exacta bajo OHLC (%)",
                         height=360,
-                        template="plotly_dark",
-                        paper_bgcolor="#07090E",
-                        plot_bgcolor="#07090E",
+                        template="plotly_white",
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
                         margin={"l": 20, "r": 20, "t": 30, "b": 20},
                     )
                     st.plotly_chart(fig_mfe, width="stretch")

@@ -82,6 +82,8 @@ def market_conditions(df: pd.DataFrame) -> dict[str, Any]:
             "level": "NO_DISPONIBLE",
             "text": "No hay historia suficiente para medir las condiciones.",
             "spread_checked": False,
+            "volatility_percentile": None,
+            "spread_percentile": None,
         }
     spread = None
     if "spread" in df.columns:
@@ -98,7 +100,13 @@ def market_conditions(df: pd.DataFrame) -> dict[str, Any]:
         text = "Sin condiciones elevadas frente a la historia de este mercado."
     if spread is None:
         text += " Este proveedor no da spread: no se midió ese costo."
-    return {"level": level, "text": text, "spread_checked": spread is not None}
+    return {
+        "level": level,
+        "text": text,
+        "spread_checked": spread is not None,
+        "volatility_percentile": volatility,
+        "spread_percentile": spread,
+    }
 
 
 def _change_24h_pct(df: pd.DataFrame) -> float | None:
