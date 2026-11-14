@@ -143,3 +143,28 @@ def test_built_interface_is_served_without_hiding_the_api(tmp_path, monkeypatch)
     assert "Quant Monitor" in c.get("/").text
     assert c.get("/api/v1/metodos").status_code == 200
     reset_security_config()
+
+
+def test_radar_reports_tests_and_failures(monkeypatch, client):
+    c, _ = client
+    df = _df(700)  # the radar needs at least 500 bars of history per measure
+
+    def load(symbol, interval, bars=0):
+        if symbol == "ETHUSDT":
+            raise market_service.MarketDataError("sin datos de ETHUSDT")
+        return df
+
+    monkeypatch.setattr(market_service, "load_candles", load)
+    monkeypatch.setattr(
+        market_service,
+        "markets",
+        lambda: {
+            "crypto": [{"symbol": "BTCUSDT"}, {"symbol": "ETHUSDT"}],
+            "other": [],
+            "other_error": None,
+        },
+    )
+    body = c.get("/api/v1/radar").json()
+    assert body["failed"] == {"ETHUSDT": "sin datos de ETHUSDT"}
+    assert body["tests"] >= 1
+    assert body["alpha"] == pytest.approx(0.05 / body["tests"])

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api, type Markets } from './api'
 import { Hoy } from './screens/Hoy'
+import { Probar } from './screens/Probar'
+import { Radar } from './screens/Radar'
+import { Riesgo } from './screens/Riesgo'
 
 const SCREENS = [
   { id: 'hoy', label: 'Hoy' },
@@ -78,14 +81,10 @@ export default function App() {
           </div>
         </div>
 
-        {screen === 'hoy' ? (
-          <Hoy symbol={symbol} interval={interval} />
-        ) : (
-          <div className="panel empty soft">
-            Esta pantalla se construye en la fase 4. Mientras tanto sigue disponible en la versión
-            de Streamlit.
-          </div>
-        )}
+        {screen === 'hoy' && <Hoy symbol={symbol} interval={interval} />}
+        {screen === 'riesgo' && <Riesgo symbol={symbol} interval={interval} />}
+        {screen === 'probar' && <Probar symbol={symbol} interval={interval} />}
+        {screen === 'radar' && <Radar interval={interval} />}
         <footer className="page-foot">
           Datos de Binance, OANDA y OKX. Gráficos:{' '}
           <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">

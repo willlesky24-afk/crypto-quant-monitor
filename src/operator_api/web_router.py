@@ -40,6 +40,7 @@ from src.position_sizing import (
     quote_to_usd,
     stop_from_atr,
 )
+from src.unusual_radar import build_markets, run_radar
 
 router = APIRouter(
     prefix="/api/v1",
@@ -202,3 +203,40 @@ def explicar(body: ExplainRequest) -> dict[str, Any]:
         ) from exc
     text, used_ai = explanation_or_facts(raw, body.result)
     return {"text": text, "used_ai": used_ai}
+
+
+RADAR_PAIRS = [
+    ("BTCUSDT", "ETHUSDT"),
+    ("XAUUSD=X", "XAGUSD=X"),
+    ("AUDUSD=X", "NZDUSD=X"),
+    ("EURUSD=X", "GBPUSD=X"),
+    ("SPX500=X", "NAS100=X"),
+]
+RADAR_INDICES = ["SPX500=X", "NAS100=X", "US30=X"]
+
+
+@router.get("/radar")
+def radar(interval: str = "1h") -> dict[str, Any]:
+    """Scan every market against its own history; failures are listed, not hidden."""
+    listed = market_service.markets()
+    crypto = [m["symbol"] for m in listed["crypto"]]
+    other = [m["symbol"] for m in listed["other"]]
+    # Downloads run in parallel; a market that fails is listed, never dropped.
+    loaded, failed = build_markets(
+        lambda s: market_service.load_candles(s, interval), crypto + other
+    )
+    if listed["other_error"]:
+        failed["Forex"] = listed["other_error"]
+    groups = [
+        crypto,
+        [s for s in other if s not in RADAR_INDICES],
+        [s for s in other if s in RADAR_INDICES],
+    ]
+    result = run_radar(loaded, groups, RADAR_PAIRS, failed)
+    return {
+        "interval": interval,
+        "tests": result.tests,
+        "alpha": result.alpha,
+        "alerts": [alert.__dict__ for alert in result.alerts],
+        "failed": result.failed,
+    }
