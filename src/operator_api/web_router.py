@@ -61,6 +61,11 @@ def _candles(symbol: str, interval: str):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@router.get("/mercados")
+def mercados() -> dict[str, Any]:
+    return market_service.markets()
+
+
 @router.get("/hoy")
 def hoy(symbol: str = "BTCUSDT", interval: str = "1h") -> dict[str, Any]:
     df = _candles(symbol, interval)

@@ -63,3 +63,34 @@ def test_funding_is_only_for_crypto_and_errors_are_reported():
         raise OSError("sin red")
 
     assert funding_for("BTCUSDT", fetch=failing) == {"error": "sin red"}
+
+
+def test_candles_are_reused_for_a_minute_and_errors_are_not_cached(monkeypatch):
+    from src import market_service
+
+    market_service._CACHE.clear()
+    calls = []
+
+    def fetch(symbol, interval, bars):
+        calls.append(symbol)
+        if symbol == "BAD":
+            raise market_service.MarketDataError("sin red")
+        return _df(60)
+
+    monkeypatch.setattr(market_service, "_fetch_candles", fetch)
+    market_service.load_candles("BTCUSDT", "1h")
+    market_service.load_candles("BTCUSDT", "1h")
+    assert calls == ["BTCUSDT"]
+    for _ in range(2):
+        with pytest.raises(market_service.MarketDataError):
+            market_service.load_candles("BAD", "1h")
+    assert calls == ["BTCUSDT", "BAD", "BAD"]
+    market_service._CACHE.clear()
+
+
+def test_markets_lists_crypto_without_emojis():
+    from src.market_service import markets
+
+    m = markets()
+    assert m["crypto"][0] == {"symbol": "BTCUSDT", "label": "BTC / USDT"}
+    assert "1h" in m["intervals"]

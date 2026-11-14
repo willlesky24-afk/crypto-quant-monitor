@@ -14,3 +14,7 @@ signals.db
 *.bak
 .streamlit/secrets.toml
 
+
+# Web interface
+web/node_modules/
+web/dist/

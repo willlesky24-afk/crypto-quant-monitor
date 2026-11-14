@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.operator_api.config import APISecurityConfig
 from src.operator_api.dependencies import (
@@ -13,6 +18,11 @@ from src.operator_api.observability.middleware import RequestTraceMiddleware
 from src.operator_api.router import router
 from src.operator_api.web_router import router as web_router
 from src.operator_service.service import OperatorService
+
+_ROOT = Path(__file__).resolve().parents[2]
+WEB_DIST = _ROOT / "web" / "dist"
+if not os.getenv("CQM_SKIP_DOTENV"):  # tests must never read real credentials
+    load_dotenv(_ROOT / ".env")  # an explicit process variable wins
 
 
 def create_app(
@@ -62,6 +72,10 @@ def create_app(
 
     application.include_router(router)
     application.include_router(web_router)
+    # The built web interface, if present, is served from the same address as
+    # the API. Mounted last so API routes always win.
+    if WEB_DIST.is_dir():
+        application.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
     return application
 
 

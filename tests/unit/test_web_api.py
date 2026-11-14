@@ -127,3 +127,19 @@ def test_security_applies_to_the_new_routes():
     )
     assert TestClient(app).get("/api/v1/metodos").status_code == 401
     reset_security_config()
+
+
+def test_built_interface_is_served_without_hiding_the_api(tmp_path, monkeypatch):
+    import importlib
+
+    app_module = importlib.import_module("src.operator_api.app")
+
+    (tmp_path / "index.html").write_text("<h1>Quant Monitor</h1>", encoding="utf-8")
+    monkeypatch.setattr(app_module, "WEB_DIST", tmp_path)
+    reset_security_config()
+    c = TestClient(
+        app_module.create_app(config=APISecurityConfig(security_enabled=False))
+    )
+    assert "Quant Monitor" in c.get("/").text
+    assert c.get("/api/v1/metodos").status_code == 200
+    reset_security_config()

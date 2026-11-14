@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import math
 import os
+import re
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -52,9 +54,28 @@ def source_name(symbol: str) -> str:
     return "BINANCE"
 
 
+_CACHE: dict[tuple[str, str, int], tuple[float, pd.DataFrame]] = {}
+CACHE_SECONDS = 60
+
+
 def load_candles(
     symbol: str, interval: str, bars: int = LIVE_HISTORY_BARS
 ) -> pd.DataFrame:
+    """Closed candles with indicators, reused for 60 s.
+
+    A closed candle does not change, and each download takes seconds. Errors are
+    not cached, so a failed load is retried on the next call.
+    """
+    key = (symbol, interval, bars)
+    hit = _CACHE.get(key)
+    if hit is not None and time.monotonic() - hit[0] < CACHE_SECONDS:
+        return hit[1].copy()
+    df = _fetch_candles(symbol, interval, bars)
+    _CACHE[key] = (time.monotonic(), df)
+    return df.copy()
+
+
+def _fetch_candles(symbol: str, interval: str, bars: int) -> pd.DataFrame:
     """Closed candles from the configured provider, with indicators."""
     try:
         if symbol.endswith("=X"):
@@ -181,3 +202,38 @@ def funding_for(
     except (FundingUnavailableError, OSError, ValueError) as exc:
         return {"error": str(exc)}
     return {"provider": provider_from_env().upper(), **funding_snapshot(series)}
+
+
+CRYPTO_MARKETS = [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "LINKUSDT",
+]
+_EMOJI = re.compile("[🌀-🫿☀-➿️🇦-🇿]+ ?")
+
+
+def markets() -> dict[str, Any]:
+    """Markets the interface can offer; forex depends on the configured provider."""
+    from .forex_data_loader import ForexDataError, ForexDataLoader
+
+    try:
+        other = ForexDataLoader().available_pairs()
+        error = None
+    except ForexDataError as exc:
+        other, error = {}, str(exc)
+    return {
+        "crypto": [
+            {"symbol": s, "label": s.replace("USDT", " / USDT")} for s in CRYPTO_MARKETS
+        ],
+        "other": [
+            {"symbol": sym, "label": _EMOJI.sub("", label).strip()}
+            for label, sym in other.items()
+        ],
+        "other_error": error,
+        "intervals": ["15m", "1h", "4h", "1d"],
+    }
