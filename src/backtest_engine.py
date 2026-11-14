@@ -312,14 +312,20 @@ class BacktestEngine:
         raw_equity_curve: list[dict[str, Any]] = []
 
         total_bars = len(candles)
+        # Columns are read once as plain lists: reading a pandas row per bar was
+        # most of the run time. Same values, same order; no formula changes.
+        ts_col = candles["timestamp"].tolist()
+        open_col = candles["open"].astype(float).tolist()
+        high_col = candles["high"].astype(float).tolist()
+        low_col = candles["low"].astype(float).tolist()
+        close_col = candles["close"].astype(float).tolist()
 
         for i in range(total_bars):
-            bar = candles.iloc[i]
-            bar_ts = bar["timestamp"]
-            bar_open = float(bar["open"])
-            bar_high = float(bar["high"])
-            bar_low = float(bar["low"])
-            bar_close = float(bar["close"])
+            bar_ts = ts_col[i]
+            bar_open = open_col[i]
+            bar_high = high_col[i]
+            bar_low = low_col[i]
+            bar_close = close_col[i]
             half_spread = half_spreads[i]
 
             # -----------------------------------------------------------------

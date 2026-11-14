@@ -95,3 +95,22 @@ def make_synthetic_candles() -> Callable[..., pd.DataFrame]:
         )
 
     return _build
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _journal_never_real(tmp_path_factory):
+    """The real data/diario.db is never touched by tests (one file per session)."""
+    path = tmp_path_factory.mktemp("journal") / "diario.db"
+    previous = os.environ.get("CQM_JOURNAL_DB")
+    os.environ["CQM_JOURNAL_DB"] = str(path)
+    yield
+    if previous is None:
+        os.environ.pop("CQM_JOURNAL_DB", None)
+    else:
+        os.environ["CQM_JOURNAL_DB"] = previous
+
+
+@pytest.fixture
+def fresh_journal(tmp_path, monkeypatch):
+    """A new, empty journal for tests that count attempts or trades."""
+    monkeypatch.setenv("CQM_JOURNAL_DB", str(tmp_path / "diario.db"))

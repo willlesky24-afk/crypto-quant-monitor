@@ -1,11 +1,33 @@
-# Crypto Quant Monitor
+# Quant Monitor
 
-Crypto Quant Monitor es un sistema de análisis cuantitativo para mercados de
-criptomonedas. Combina indicadores técnicos, perfil de volumen, evaluación de
-riesgo, generación de señales y una capa de decisión presentada mediante
-Streamlit.
+Herramienta personal para operar con disciplina en cripto, forex, metales e
+índices. **No da señales ni promete ganancias.** La versión 3.0 probó con un
+protocolo fijado de antemano que sus estrategias no tenían ventaja estadística
+(`docs/INFORME_EVIDENCIA_V3.md`); desde entonces el producto mide, calcula
+riesgo, verifica ideas con escepticismo y registra tu conducta.
 
-## Versión actual
+## Qué hace hoy (v5, interfaz web)
+
+| Pantalla | Para qué sirve |
+|---|---|
+| **Hoy** | Lectura del mercado: precio, volatilidad por percentil, costo de operar, zona de valor, apalancamiento. Descripción, no recomendación. |
+| **Mi riesgo** | Tamaño de posición por % de riesgo y stop en ATR, con costos. Guarda el plan en tu diario. Avisa si estás fuera de tus reglas. |
+| **Probar mi idea** | Prueba una de 8 reglas con costos reales contra cientos de entradas al azar, con el listón que sube con cada intento y una confirmación única con el 20 % de datos reservados. Nunca dice "funciona". |
+| **Diario** | Planes abiertos y cerrados, R por operación, cumplimiento del plan, costos y tus propias reglas de disciplina. Local: `data/diario.db`. |
+| **Radar** | Mediciones estadísticamente raras frente a la propia historia de cada mercado. Un aviso no indica qué hacer. |
+
+Arranque y uso desde el teléfono: `docs/GUIA_TELEFONO.md`. Planes:
+`docs/PLAN_V4_INTERFAZ.md`, `docs/PLAN_V5_DIARIO.md`. Evaluación externa:
+`docs/EVALUACION_PRODUCTO_2026-11-14.md`.
+
+Lo que NO es: un sistema de señales, un robot de trading ni asesoría de
+inversión. Los módulos de señales y puntuación de versiones anteriores siguen
+en el código como historia y para la evidencia v3.0; la interfaz web no los usa.
+
+## Historial de versiones anteriores
+
+> Lo que sigue describe versiones previas (v2.x), cuando el proyecto aún
+> generaba señales. Se conserva como registro.
 
 ### v2.3 — Simulador completo (Tag: `v2.3`)
 

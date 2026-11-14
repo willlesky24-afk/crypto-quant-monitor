@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import market_service
-from src.operator_api import web_auth, web_router
+from src.operator_api import web_auth
 from src.operator_api.app import create_app
 from src.operator_api.config import APISecurityConfig
 from src.operator_api.dependencies import reset_security_config
@@ -46,7 +46,6 @@ def test_session_token_expires_and_rejects_tampering():
 @pytest.fixture
 def app_client(monkeypatch):
     reset_security_config()
-    web_router.reset_attempts()
     web_auth.reset_failures()
     monkeypatch.delenv("WEB_LOGIN_DISABLED", raising=False)
     monkeypatch.setenv(

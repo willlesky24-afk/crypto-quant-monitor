@@ -9,7 +9,7 @@ counted on the server per client, so reloading the page does not reset them.
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,7 +30,17 @@ from src.idea_verifier import (
     IdeaVerifierError,
     load_history,
     past_story,
+    spec_key,
+    verify_holdout,
     verify_idea,
+)
+from src.journal_store import (
+    Journal,
+    JournalError,
+    Trade,
+    breaches,
+    summary,
+    week_start,
 )
 from src.operator_api.dependencies import verify_security
 from src.operator_api.security import get_client_identifier
@@ -49,11 +59,10 @@ router = APIRouter(
     dependencies=[Depends(verify_security), Depends(require_session)],
 )
 
-_attempts: dict[str, int] = defaultdict(int)
 
-
-def reset_attempts() -> None:
-    _attempts.clear()
+def journal() -> Journal:
+    """The owner's local journal (path from CQM_JOURNAL_DB or data/diario.db)."""
+    return Journal()
 
 
 def _candles(symbol: str, interval: str):
@@ -133,6 +142,28 @@ class VerifyRequest(BaseModel):
     tp_atr: float = Field(gt=0)
     max_bars: int = Field(gt=0)
     capital: float = Field(default=1000.0, gt=0)
+    risk_pct: float = Field(default=1.0, gt=0, le=100)
+
+
+def _spec(body: VerifyRequest) -> IdeaSpec:
+    return IdeaSpec(
+        body.symbol,
+        body.interval,
+        body.entry,
+        body.side,
+        body.sl_atr,
+        body.tp_atr,
+        body.max_bars,
+    )
+
+
+def _public(result: dict[str, Any], source: str) -> dict[str, Any]:
+    out = {
+        k: (str(v) if k in ("first_entry", "last_entry") else v)
+        for k, v in result.items()
+    }
+    out.pop("r_values", None)
+    return {**out, "story": past_story(result), "data_source": source}
 
 
 @router.post("/verificar")
@@ -142,26 +173,155 @@ def verificar(body: VerifyRequest, request: Request) -> dict[str, Any]:
     if df is None:
         df = _candles(body.symbol, body.interval)
         source = "datos en vivo (poca historia)"
-    client = get_client_identifier(request)
-    _attempts[client] += 1
-    spec = IdeaSpec(
-        body.symbol,
-        body.interval,
-        body.entry,
-        body.side,
-        body.sl_atr,
-        body.tp_atr,
-        body.max_bars,
-    )
+    spec = _spec(body)
+    store = journal()
+    attempt = store.next_attempt(get_client_identifier(request))
     try:
-        result = verify_idea(df, spec, _attempts[client], capital=body.capital)
+        result = verify_idea(
+            df, spec, attempt, capital=body.capital, risk_pct=body.risk_pct
+        )
     except IdeaVerifierError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    key = spec_key(spec)
+    if result["code"] == "MERECE_ESTUDIO" and source == "historia guardada":
+        store.mark_eligible(key)
+    available = store.is_eligible(key) and store.holdout_used_at(key) is None
+    return {**_public(result, source), "holdout_available": available}
+
+
+@router.post("/verificar/reservado")
+def verificar_reservado(body: VerifyRequest) -> dict[str, Any]:
+    """Spend the reserved 20 % once, only for a rule that deserved study."""
+    spec = _spec(body)
+    store = journal()
+    key = spec_key(spec)
+    if not store.is_eligible(key):
+        raise HTTPException(
+            409,
+            "Los datos reservados solo se usan con una regla que salió "
+            '"Merece más estudio" con historia guardada.',
+        )
+    df = load_history(body.symbol, body.interval)
+    if df is None:
+        raise HTTPException(409, "No hay historia guardada de este mercado.")
+    try:
+        store.use_holdout(key)
+    except JournalError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
+        result = verify_holdout(df, spec, capital=body.capital, risk_pct=body.risk_pct)
+    except IdeaVerifierError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _public(result, "datos reservados (una sola vez)")
+
+
+def _trade_json(t: Trade) -> dict[str, Any]:
     return {
-        **{k: (str(v) if k == "last_entry" else v) for k, v in result.items()},
-        "story": past_story(result),
-        "data_source": source,
+        "id": t.id,
+        "symbol": t.symbol,
+        "side": t.side,
+        "entry": t.entry,
+        "stop": t.stop,
+        "units": t.units,
+        "risk_usd": t.risk_usd,
+        "costs_usd": t.costs_usd,
+        "reason": t.reason,
+        "outside_rules": t.outside_rules,
+        "opened_at": t.opened_at,
+        "exit": t.exit,
+        "closed_at": t.closed_at,
+        "moved_stop": t.moved_stop,
+        "size_respected": t.size_respected,
+        "pnl_usd": t.pnl_usd,
+        "r": t.r,
+        "followed_plan": t.followed_plan,
+        "status": "abierta" if t.exit is None else "cerrada",
     }
+
+
+def _since(trades: list[Trade], start: datetime) -> list[Trade]:
+    return [
+        t
+        for t in trades
+        if t.closed_at and datetime.fromisoformat(t.closed_at) >= start
+    ]
+
+
+@router.get("/diario")
+def diario() -> dict[str, Any]:
+    store = journal()
+    trades = store.trades()
+    now = datetime.now(UTC)
+    rules = store.rules()
+    return {
+        "trades": [_trade_json(t) for t in trades],
+        "semana": summary(_since(trades, week_start(now))),
+        "mes": summary(_since(trades, now - timedelta(days=30))),
+        "total": summary(trades),
+        "rules": rules,
+        "breaches": breaches(trades, rules, now),
+    }
+
+
+class PlanRequest(BaseModel):
+    symbol: str
+    side: str
+    entry: float
+    stop: float
+    units: float
+    risk_usd: float
+    costs_usd: float = 0.0
+    reason: str
+    acknowledged: bool = False
+
+
+@router.post("/diario")
+def guardar_plan(body: PlanRequest) -> dict[str, Any]:
+    store = journal()
+    crossed = breaches(store.trades(), store.rules())
+    if crossed and not body.acknowledged:
+        raise HTTPException(409, {"breaches": crossed})
+    try:
+        trade = store.open_trade(
+            body.symbol,
+            body.side,
+            body.entry,
+            body.stop,
+            body.units,
+            body.risk_usd,
+            body.costs_usd,
+            body.reason,
+            outside_rules=bool(crossed),
+        )
+    except JournalError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _trade_json(trade)
+
+
+class CloseRequest(BaseModel):
+    exit: float
+    moved_stop: bool
+    size_respected: bool
+
+
+@router.post("/diario/{trade_id}/cerrar")
+def cerrar(trade_id: int, body: CloseRequest) -> dict[str, Any]:
+    try:
+        trade = journal().close_trade(
+            trade_id, body.exit, body.moved_stop, body.size_respected
+        )
+    except JournalError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return _trade_json(trade)
+
+
+@router.put("/diario/reglas")
+def reglas(body: dict[str, float | None]) -> dict[str, float]:
+    """Only the keys sent change; null removes a rule. No defaults are filled."""
+    try:
+        return journal().set_rules(dict(body))
+    except JournalError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 def _ask_ai(prompt: str) -> str:

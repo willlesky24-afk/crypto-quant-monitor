@@ -35,21 +35,21 @@ def _sample(mean, n=400):
 
 
 def test_too_few_trades():
-    assert verdict_from(_sample(0.5, 20), [0.0] * 5, 1)["code"] == "POCAS_OPERACIONES"
+    assert verdict_from(_sample(0.5, 20), [0.0] * 200, 1)["code"] == "POCAS_OPERACIONES"
     assert MIN_TRADES == 100
 
 
 def test_clear_loser():
     # Mean -0.5, se 1/20 = 0.05: the interval is entirely below 0.
-    assert verdict_from(_sample(-0.5), [0.0] * 5, 1)["code"] == "PIERDE"
+    assert verdict_from(_sample(-0.5), [0.0] * 200, 1)["code"] == "PIERDE"
 
 
 def test_near_zero_is_not_distinguishable():
-    assert verdict_from(_sample(0.01), [0.0] * 5, 1)["code"] == "NO_SE_DISTINGUE"
+    assert verdict_from(_sample(0.01), [0.0] * 200, 1)["code"] == "NO_SE_DISTINGUE"
 
 
 def test_positive_and_better_than_random_deserves_study():
-    assert verdict_from(_sample(0.5), [0.0] * 5, 1)["code"] == "MERECE_ESTUDIO"
+    assert verdict_from(_sample(0.5), [0.0] * 200, 1)["code"] == "MERECE_ESTUDIO"
 
 
 def test_positive_but_no_better_than_random_is_not_distinguishable():
@@ -58,12 +58,12 @@ def test_positive_but_no_better_than_random_is_not_distinguishable():
 
 def test_many_attempts_can_remove_a_result():
     # Mean 0.13, se 0.05, 2.6 sigmas: clears 95%, not 1 - 0.05/1000.
-    assert verdict_from(_sample(0.13), [0.0] * 5, 1)["code"] == "MERECE_ESTUDIO"
-    assert verdict_from(_sample(0.13), [0.0] * 5, 1000)["code"] == "NO_SE_DISTINGUE"
+    assert verdict_from(_sample(0.13), [0.0] * 200, 1)["code"] == "MERECE_ESTUDIO"
+    assert verdict_from(_sample(0.13), [0.0] * 200, 1000)["code"] == "NO_SE_DISTINGUE"
 
 
 def test_verdict_never_says_it_works():
-    text = verdict_from(_sample(0.5), [0.0] * 5, 1)["text"].lower()
+    text = verdict_from(_sample(0.5), [0.0] * 200, 1)["text"].lower()
     for word in ("funciona", "rentable", "compra", "vende"):
         assert word not in text
 
@@ -179,3 +179,96 @@ def test_final_capital_adds_the_trades_and_hold_uses_prices():
     expected = 500.0 * explore["close"].iloc[-1] / explore["close"].iloc[0]
     assert r["hold_final"] == pytest.approx(expected)
     assert r["capital"] == 500.0
+
+
+def test_detectable_edge_is_half_the_interval():
+    v = verdict_from(_sample(0.01), [0.0] * 200, 1)
+    low, high = v["ci"]
+    assert v["mde_r"] == pytest.approx((high - low) / 2)
+    # sd 1, n 400 -> se 0.05; a 95 % interval is about +/-1.96*0.05 = 0.098.
+    assert v["mde_r"] == pytest.approx(0.098, abs=0.01)
+
+
+def test_detectable_edge_absent_without_interval():
+    assert verdict_from(_sample(0.5, 20), [0.0], 1)["mde_r"] is None
+
+
+def test_risk_path_compounds_the_risk_per_trade_by_hand():
+    from src.idea_verifier import risk_path
+
+    # 1 % risk: +2R -> 1000*1.02 = 1020; -1R -> 1020*0.99 = 1009.80.
+    final, dd = risk_path(1000.0, [2.0, -1.0], 1.0)
+    assert final == pytest.approx(1009.80)
+    assert dd == pytest.approx(1.0)  # (1020 - 1009.8) / 1020
+    # A loss of more than the whole risk cannot push capital below zero silently.
+    assert risk_path(1000.0, [], 1.0) == (1000.0, 0.0)
+
+
+def test_story_uses_the_risk_per_trade():
+    df = _candles()
+    spec = IdeaSpec("BTCUSDT", "4h", "reversion_rsi", "LONG", 1.0, 2.0, 24)
+    r = verify_idea(df, spec, attempts=1, n_random=1, capital=1000.0, risk_pct=2.0)
+    from src.idea_verifier import risk_path
+
+    assert r["risk_pct"] == 2.0
+    assert r["final_capital"] == pytest.approx(risk_path(1000.0, r["r_values"], 2.0)[0])
+
+
+def test_empirical_p_by_hand():
+    from src.idea_verifier import empirical_p
+
+    # North, Curtis & Sham (2002): (1 + runs >= observed) / (runs + 1).
+    # Runs at or above 0.5: 0.6 and 0.5 -> (1 + 2) / (4 + 1) = 0.6
+    assert empirical_p(0.5, [0.6, 0.4, 0.5, 0.1]) == pytest.approx(0.6)
+    assert empirical_p(9.0, [0.0] * 199) == pytest.approx(1 / 200)
+
+
+def test_random_runs_grow_with_attempts():
+    from src.idea_verifier import random_runs_for
+
+    assert random_runs_for(1) == 200
+    assert random_runs_for(10) == 400  # 2 / (0.05 / 10)
+    assert random_runs_for(100) == 1000  # capped
+
+
+def test_matched_positions_are_spaced_and_reproducible():
+    from src.idea_verifier import matched_positions
+
+    pos = matched_positions(n_bars=1000, k=20, spacing=30, start=100, seed=7)
+    assert len(pos) == 20 and pos == sorted(pos)
+    assert min(b - a for a, b in zip(pos, pos[1:], strict=False)) >= 30
+    assert pos[0] >= 100 and pos[-1] < 1000
+    assert pos == matched_positions(1000, 20, 30, 100, seed=7)
+
+
+def test_spacing_shrinks_when_the_rule_trades_a_lot():
+    from src.idea_verifier import matched_positions
+
+    pos = matched_positions(n_bars=200, k=50, spacing=30, start=0, seed=1)
+    assert len(pos) == 50 and len(set(pos)) == 50
+
+
+def test_beating_the_interval_is_not_enough_without_beating_random():
+    # Interval clearly above zero, but half the random runs did as well.
+    rand = [0.6] * 100 + [0.0] * 100
+    assert verdict_from(_sample(0.5), rand, 1)["code"] == "NO_SE_DISTINGUE"
+    v = verdict_from(_sample(0.5), [0.0] * 200, 1)
+    assert v["code"] == "MERECE_ESTUDIO" and v["p_random"] == pytest.approx(1 / 201)
+
+
+def test_holdout_only_sees_the_reserved_part():
+    from src.idea_verifier import verify_holdout
+
+    df = _candles()
+    spec = IdeaSpec("BTCUSDT", "4h", "reversion_rsi", "LONG", 1.0, 2.0, 24)
+    r = verify_holdout(df, spec, n_random=2)
+    cut_ts = df["timestamp"].iloc[int(len(df) * EXPLORE_SHARE)]
+    assert r["first_entry"] is None or r["first_entry"] >= cut_ts
+    assert r["attempts"] == 1  # one confirmatory test, decided in advance
+
+
+def test_spec_key_is_stable():
+    from src.idea_verifier import spec_key
+
+    spec = IdeaSpec("BTCUSDT", "1h", "trend_ema", "LONG", 2.0, 6.0, 120)
+    assert spec_key(spec) == "BTCUSDT|1h|trend_ema|LONG|2|6|120"

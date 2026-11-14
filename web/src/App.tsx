@@ -5,12 +5,14 @@ import { Hoy } from './screens/Hoy'
 import { Probar } from './screens/Probar'
 import { Radar } from './screens/Radar'
 import { Riesgo } from './screens/Riesgo'
+import { Diario } from './screens/Diario'
 import { Splash } from './components/Splash'
 
 const SCREENS = [
   { id: 'hoy', label: 'Hoy' },
   { id: 'riesgo', label: 'Mi riesgo' },
   { id: 'probar', label: 'Probar mi idea' },
+  { id: 'diario', label: 'Diario' },
   { id: 'radar', label: 'Radar' },
 ] as const
 type ScreenId = (typeof SCREENS)[number]['id']
@@ -90,7 +92,7 @@ export default function App() {
             Mercado / <b>{SCREENS.find((s) => s.id === screen)?.label}</b>
           </div>
           <div className="controls">
-            {screen !== 'radar' && (
+            {screen !== 'radar' && screen !== 'diario' && (
             <select
               className="select"
               aria-label="Mercado"
@@ -130,6 +132,7 @@ export default function App() {
         {screen === 'riesgo' && <Riesgo symbol={symbol} interval={interval} />}
         {screen === 'probar' && <Probar symbol={symbol} interval={interval} />}
         {screen === 'radar' && <Radar interval={interval} />}
+        {screen === 'diario' && <Diario />}
         </div>
         <footer className="page-foot">
           Datos de Binance, OANDA y OKX. Gráficos:{' '}

@@ -7,7 +7,7 @@ La app corre en tu computadora. El teléfono la abre por una red privada (Tailsc
 En la carpeta del proyecto:
 
 ```bash
-.venv\Scripts\python.exe scripts\set_web_password.py
+.\.venv\Scripts\python.exe scripts\set_web_password.py
 ```
 
 Pide la contraseña dos veces (no se ve al escribir; mínimo 12 caracteres). En `.env` solo se guarda su huella cifrada, nunca la contraseña. Ejecutarlo otra vez la cambia y cierra todas las sesiones abiertas.
@@ -17,7 +17,7 @@ Sin este paso la interfaz muestra "Falta crear la contraseña" y no entrega dato
 ## 2. Arranca el servidor
 
 ```bash
-.venv\Scripts\python.exe -m uvicorn src.operator_api.app:app --host 127.0.0.1 --port 8010
+.\.venv\Scripts\python.exe -m uvicorn src.operator_api.app:app --host 127.0.0.1 --port 8010
 ```
 
 `127.0.0.1` significa que solo tu computadora lo ve directamente. Antes, compila la interfaz una vez con `npm run build` en la carpeta `web`.

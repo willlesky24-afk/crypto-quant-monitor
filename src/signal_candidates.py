@@ -153,18 +153,23 @@ def signals_to_events(
 ) -> list[SignalEvent]:
     """Non-flat bars after warm-up with a usable ATR become engine signals."""
     events = []
+    # Plain lists instead of per-bar pandas lookups (speed only, same values).
+    values = signal.astype(int).tolist()
+    atrs = df["atr"].astype(float).tolist()
+    closes = df["close"].astype(float).tolist()
+    stamps = df["timestamp"].tolist()
     for i in range(WARMUP_BARS, len(df)):
-        value = int(signal.iloc[i])
-        atr = float(df["atr"].iloc[i])
+        value = values[i]
+        atr = atrs[i]
         if value == 0 or not np.isfinite(atr) or atr <= 0:
             continue
-        price = float(df["close"].iloc[i])
+        price = closes[i]
         events.append(
             SignalEvent(
                 signal_id=f"cand-{symbol}-{interval}-{i}",
                 symbol=symbol,
                 timeframe=interval,
-                candle_timestamp=df["timestamp"].iloc[i],
+                candle_timestamp=stamps[i],
                 price_at_signal=price,
                 signal_state="SCREENING",
                 confidence=100.0,

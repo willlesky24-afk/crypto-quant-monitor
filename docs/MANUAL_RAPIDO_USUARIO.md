@@ -1,86 +1,49 @@
-# 📱 Guía Rápida de Uso — Crypto Quant Monitor
+# Manual rápido (v5, interfaz web)
 
-> **Concepto Clave**: Este sistema es tu **Copiloto Inteligente de Trading**.  
-> El sistema analiza el mercado con matemáticas avanzadas, detecta el régimen y riesgos con IA (Gemini), pero **TÚ tienes siempre el control absoluto**: el sistema nunca ejecuta operaciones automáticas ni toca tus fondos.
+Quant Monitor te ayuda a decidir **cuánto** arriesgar, a comprobar si una idea
+resiste los datos y a revisar si sigues tu plan. No te dice qué comprar ni
+cuándo entrar.
 
----
+## Antes de operar
 
-## 🚀 1. Cómo abrirlo en tu Teléfono (Móvil)
+1. **Hoy**: mira en 30 segundos cómo está el mercado (agitado o tranquilo,
+   caro o barato de operar, dónde se negoció la mayor parte del volumen).
+   Es una descripción; "debajo de la zona de valor" no es una orden.
+2. **Mi riesgo**: escribe tu capital, el % que aceptas perder y la distancia
+   del stop en ATR. Obtienes el tamaño, la pérdida si toca el stop y los costos.
+3. Escribe el **motivo** y pulsa **Guardar en mi diario**. Si estás fuera de
+   tus reglas, la app lo dice y te pide reconocerlo; queda registrado.
 
-**¡Sí! Puedes usarlo directamente desde tu teléfono.**  
-La interfaz web es 100% responsiva y se adapta a la pantalla de tu móvil.
+## Después de operar
 
-### Pasos para tu teléfono:
-1. Conecta tu teléfono a la **misma red Wi-Fi** que este ordenador.
-2. Abre el navegador de tu teléfono (Safari, Chrome, etc.).
-3. Escribe en la barra de direcciones:
-   ```text
-   http://192.168.1.240:8501
-   ```
-4. ¡Listo! Verás el panel en tiempo real en tu teléfono.  
-   *(Consejo: Puedes darle a "Añadir a la pantalla de inicio" en tu navegador para tenerlo como si fuera una App).*
+4. **Diario**: abre la operación, escribe el precio de salida y responde con
+   honestidad si moviste el stop en contra y si respetaste el tamaño.
+5. Revisa la semana: R medio, % de operaciones que cumplieron el plan,
+   resultado dentro y fuera del plan, costos pagados.
 
----
+## Tus reglas
 
-## 💻 2. Cómo abrirlo en este Ordenador
+En **Diario → Mis reglas** defines: capital de referencia, pérdida máxima del
+día y de la semana, riesgo abierto máximo y pausa tras N pérdidas seguidas.
+Ninguna viene puesta: si la dejas vacía, no existe.
 
-Abre tu navegador (Chrome, Edge, etc.) y entra a:
-```text
-http://localhost:8501
-```
+## Probar una idea
 
----
+- Elige un método o descríbelo con tus palabras (la IA lo traduce a una de las
+  8 reglas disponibles; revisa lo que propone).
+- El resultado puede ser: **Pocas operaciones**, **Pierde después de costos**,
+  **No se distingue del azar** o **Merece más estudio**. Nunca "funciona".
+- **Ventaja mínima detectable**: si sale "no se distingue", mira esta cifra:
+  con esos datos, una ventaja menor no se podría ver. No significa que la
+  idea no sirva; significa que estos datos no alcanzan para saberlo.
+- Cada intento sube el listón y el contador no se reinicia.
+- Si sale **Merece más estudio**, puedes confirmarla **una sola vez** con el
+  20 % de datos que la regla nunca vio.
+- La historia en dólares usa tu % de riesgo por operación. Describe el pasado.
+- Con velas de 1h la prueba puede tardar de 1 a 3 minutos.
 
-## 🧭 3. Qué verás en la pantalla (Las 4 Pestañas)
+## Radar
 
-### 📊 Pestaña 1: Monitor en Vivo
-- **Gráfico de Velas con Volume Profile**: Verás el precio actual y tres líneas clave:
-  - **POC (Línea Dorada)**: El precio donde más volumen e interés institucional ha habido.
-  - **VAH (Línea Verde)**: Techo del área de valor.
-  - **VAL (Línea Roja)**: Suelo del área de valor.
-- **Semáforo y Puntuación**:
-  - **Quant Score (0 a 100)**: Fortaleza técnica cuantitativa.
-  - **Régimen**: Te dice si el mercado está en tendencia alcista (`TRENDING_BULL`), bajista (`TRENDING_BEAR`) o lateral (`CONSOLIDATION`).
-
-### 🤖 Pestaña 2: Copiloto IA (Gemini)
-- **Escribe tu pregunta**: Hay una caja de texto donde puedes preguntar lo que quieras en lenguaje normal:
-  - *"¿Qué riesgos ves en BTC ahora mismo?"*
-  - *"¿Es buen momento para entrar o mejor esperar?"*
-  - *"Explícame el régimen actual."*
-- Haz clic en **"🔎 Submit Query to Copilot"** y Gemini te contestará analizando las métricas matemáticas actuales.
-- **Briefing Diario**: Resumen ejecutivo automático de la sesión.
-- **Alertas de Anomalías**: Te avisa si hay picos de volatilidad extraños o trampas de mercado.
-
-### 📈 Pestaña 3: Backtest
-- Simulación histórica para comprobar cómo habrían funcionado las estrategias en el pasado.
-
-### ⚙️ Pestaña 4: Notificaciones
-- Configura alertas directas a tu **Telegram** o Discord para que te lleguen avisos al móvil cuando se detecte una oportunidad de alta confianza.
-
----
-
-## ⚡ 4. Atajos rápidos desde la Terminal (Opcional)
-
-Si prefieres usar la consola de tu ordenador en lugar del navegador:
-
-- **Ver estado actual de Bitcoin**:
-  ```powershell
-  .\.venv\Scripts\python scripts/operator_cli.py status --symbol BTCUSDT
-  ```
-- **Hacerle una pregunta rápida al Copiloto**:
-  ```powershell
-  .\.venv\Scripts\python scripts/operator_cli.py ask "¿Cuál es la tendencia y soporte principal?" --symbol BTCUSDT
-  ```
-- **Generar un reporte completo**:
-  ```powershell
-  .\.venv\Scripts\python scripts/operator_cli.py report --symbol BTCUSDT
-  ```
-
----
-
-## 🛡️ 5. Tu flujo de trabajo diario recomendado
-
-1. **Revisa el panel por la mañana** en tu teléfono o PC (`http://192.168.1.240:8501`).
-2. **Mira el Régimen y el Quant Score**: Si el mercado está en rango o con score bajo, paciencia.
-3. **Pregúntale al Copiloto**: Si ves una señal, pregúntale a Gemini qué niveles de Stop Loss y riesgos vigilar.
-4. **Toma tu decisión**: Si estás de acuerdo con el análisis, ejecuta tu orden manualmente en tu exchange habitual.
+Pulsa **Escanear mercados** para ver qué está fuera de lo normal frente a la
+historia de cada mercado. Con muchos mercados el listón es muy exigente: en la
+práctica avisa de valores casi récord. Un aviso no dice qué hacer.

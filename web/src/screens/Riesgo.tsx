@@ -14,6 +14,43 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
   const [atrMultiple, setAtrMultiple] = useState(2)
   const [plan, setPlan] = useState<RiskPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [breaches, setBreaches] = useState<string[]>([])
+  const [reason, setReason] = useState('')
+  const [ack, setAck] = useState(false)
+  const [saveNote, setSaveNote] = useState<string | null>(null)
+
+  const refreshBreaches = () =>
+    api
+      .diario()
+      .then((d) => setBreaches(d.breaches))
+      .catch(() => setBreaches([]))
+  useEffect(() => {
+    refreshBreaches()
+  }, [])
+
+  const save = () => {
+    if (!plan) return
+    setSaveNote(null)
+    api
+      .guardarPlan({
+        symbol,
+        side,
+        entry: plan.entry_price,
+        stop: plan.stop_price,
+        units: plan.units,
+        risk_usd: plan.max_loss,
+        costs_usd: plan.costs,
+        reason,
+        acknowledged: ack,
+      })
+      .then(() => {
+        setSaveNote('Guardado en tu diario como operación abierta.')
+        setReason('')
+        setAck(false)
+        refreshBreaches()
+      })
+      .catch((e: Error) => setSaveNote(e.message))
+  }
 
   useEffect(() => {
     if (!marginMarket) setSide('LONG')
@@ -42,6 +79,15 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
           recomendación de entrar. Cuenta en USD, sin apalancamiento.
         </p>
       </header>
+
+      {breaches.length > 0 && (
+        <div className="breach" role="alert">
+          <b>Estás fuera de tus reglas</b>
+          {breaches.map((b) => (
+            <p key={b}>{b}</p>
+          ))}
+        </div>
+      )}
 
       <div className="grid">
         <section className="panel span-4 form" aria-label="Datos">
@@ -112,6 +158,26 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
                 </p>
               )}
               <p className="footnote">El stop no es una garantía: con un salto de precio la pérdida puede ser mayor.</p>
+              <div className="save-plan">
+                <Field label="Motivo de la operación" hint="Lo revisarás después: escribe por qué entras.">
+                  <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+                </Field>
+                {breaches.length > 0 && (
+                  <label className="check">
+                    <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> Entiendo que estoy
+                    fuera de mis reglas (quedará registrado)
+                  </label>
+                )}
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={save}
+                  disabled={reason.trim().length === 0 || (breaches.length > 0 && !ack)}
+                >
+                  Guardar en mi diario
+                </button>
+                {saveNote && <p className="note">{saveNote}</p>}
+              </div>
             </>
           )}
         </section>

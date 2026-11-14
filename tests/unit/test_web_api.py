@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from src import market_service
+from src import idea_verifier, market_service
 from src.indicators import TechnicalIndicators
 from src.operator_api import web_router
 from src.operator_api.app import create_app
@@ -32,11 +32,11 @@ def _df(n=400):
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, fresh_journal):
     reset_security_config()
-    web_router.reset_attempts()
     df = _df()
     monkeypatch.setenv("WEB_LOGIN_DISABLED", "true")  # login is tested in test_web_auth
+    monkeypatch.setattr(idea_verifier, "random_runs_for", lambda attempts: 4)  # speed
     monkeypatch.setattr(market_service, "load_candles", lambda s, i, bars=0: df)
     monkeypatch.setattr(market_service, "funding_for", lambda s, fetch=None: None)
     monkeypatch.setattr(web_router, "load_history", lambda s, i: None)

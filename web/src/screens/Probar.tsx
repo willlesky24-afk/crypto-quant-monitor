@@ -34,6 +34,9 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
   const [tp, setTp] = useState(6)
   const [bars, setBars] = useState(120)
   const [capital, setCapital] = useState(1000)
+  const [riskPct, setRiskPct] = useState(1)
+  const [holdout, setHoldout] = useState<Verdict | null>(null)
+  const [holdoutBusy, setHoldoutBusy] = useState(false)
   const [idea, setIdea] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -83,14 +86,25 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
     setError(null)
     setResult(null)
     setExplanation(null)
+    setHoldout(null)
     api
-      .verificar({ symbol, interval, entry, side, sl_atr: sl, tp_atr: tp, max_bars: bars, capital })
+      .verificar({ symbol, interval, entry, side, sl_atr: sl, tp_atr: tp, max_bars: bars, capital, risk_pct: riskPct })
       .then((v) => {
         setResult(v)
         window.setTimeout(() => document.querySelector('.verdict')?.scrollIntoView({ behavior: 'smooth' }), 50)
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
+  }
+
+  const confirm = () => {
+    setHoldoutBusy(true)
+    setError(null)
+    api
+      .reservado({ symbol, interval, entry, side, sl_atr: sl, tp_atr: tp, max_bars: bars, capital, risk_pct: riskPct })
+      .then(setHoldout)
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setHoldoutBusy(false))
   }
 
   const explain = () => {
@@ -185,11 +199,14 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
             <Field label="Capital de ejemplo">
               <NumberInput value={capital} onChange={setCapital} step={100} min={10} />
             </Field>
+            <Field label="Riesgo por operación (%)">
+              <NumberInput value={riskPct} onChange={setRiskPct} step={0.25} min={0.1} max={100} />
+            </Field>
           </div>
           <button className="btn" onClick={verify} disabled={busy} type="button">
             {busy ? 'Probando contra el azar…' : 'Verificar regla'}
           </button>
-          {busy && <p className="note">El resultado aparecerá debajo; tarda unos 20 segundos.</p>}
+          {busy && <p className="note">El resultado aparecerá debajo. Se comparan cientos de entradas al azar: puede tardar 1 a 3 minutos en 1h.</p>}
           {result && !busy && (
             <p className="note">
               Último resultado: <b>{VERDICT_TITLE[result.code]}</b> con {result.trades} operaciones. Está debajo.
@@ -212,12 +229,22 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
             <div className="panel stats">
               <Stat title="Operaciones" value={String(result.trades)} note="Mínimo para concluir: 100." />
               <Stat title="R neta media" value={r(result.mean_r)} note="Ganancia media por unidad de riesgo." />
-              <Stat title="Mejor azar (R)" value={r(result.random_best)} note="Entradas al azar, misma salida." />
+              <Stat
+                title="Azar igual o mejor"
+                value={result.p_random == null ? 'N/D' : `${(Number(result.p_random) * 100).toFixed(1)} %`}
+                note={`De ${result.random_runs ?? 'N/D'} corridas al azar con tus mismas salidas.`}
+              />
               <Stat title="Intento" value={String(result.attempts)} note="Cada intento exige más." />
             </div>
             <dl className="facts">
               <dt>Intervalo de la R media</dt>
               <dd className="mono">{result.ci ? `${r(result.ci[0])} a ${r(result.ci[1])}` : 'N/D'}</dd>
+              <dt>Ventaja mínima detectable</dt>
+              <dd>
+                {result.mde_r == null
+                  ? 'N/D'
+                  : `Con estos datos solo se distinguiría del azar una ventaja mayor a ±${Number(result.mde_r).toFixed(2)} R por operación.`}
+              </dd>
               <dt>Datos</dt>
               <dd>{result.data_source}</dd>
               {typeof result.final_capital === 'number' && (
@@ -227,6 +254,27 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
                 </>
               )}
             </dl>
+            {result.holdout_available === true && !holdout && (
+              <div className="callout">
+                <p>
+                  Puedes confirmarla <b>una sola vez</b> con el 20 % de datos reservados, que la regla nunca vio. Después
+                  no se puede repetir.
+                </p>
+                <button className="btn" type="button" onClick={confirm} disabled={holdoutBusy}>
+                  {holdoutBusy ? 'Probando con datos reservados…' : 'Confirmar con datos reservados'}
+                </button>
+              </div>
+            )}
+            {holdout && (
+              <div className="panel holdout">
+                <div className="panel-title">Confirmación con datos reservados (única)</div>
+                <h3 className="verdict-title">{VERDICT_TITLE[holdout.code]}</h3>
+                <p>{holdout.text}</p>
+                <p className="note">
+                  {holdout.trades} operaciones · R media {r(holdout.mean_r)} · {String(holdout.story ?? '')}
+                </p>
+              </div>
+            )}
             <button className="btn ghost" onClick={explain} type="button">
               Explicar con IA
             </button>
