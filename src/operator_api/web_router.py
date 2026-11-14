@@ -34,6 +34,7 @@ from src.idea_verifier import (
 )
 from src.operator_api.dependencies import verify_security
 from src.operator_api.security import get_client_identifier
+from src.operator_api.web_auth import require_session
 from src.position_sizing import (
     PositionSizingError,
     compute_position_plan,
@@ -45,7 +46,7 @@ from src.unusual_radar import build_markets, run_radar
 router = APIRouter(
     prefix="/api/v1",
     tags=["Interfaz web"],
-    dependencies=[Depends(verify_security)],
+    dependencies=[Depends(verify_security), Depends(require_session)],
 )
 
 _attempts: dict[str, int] = defaultdict(int)

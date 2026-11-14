@@ -16,6 +16,7 @@ from src.operator_api.dependencies import (
 )
 from src.operator_api.observability.middleware import RequestTraceMiddleware
 from src.operator_api.router import router
+from src.operator_api.web_auth import router as auth_router
 from src.operator_api.web_router import router as web_router
 from src.operator_service.service import OperatorService
 
@@ -71,6 +72,7 @@ def create_app(
     application.add_middleware(RequestTraceMiddleware)
 
     application.include_router(router)
+    application.include_router(auth_router)
     application.include_router(web_router)
     # The built web interface, if present, is served from the same address as
     # the API. Mounted last so API routes always win.

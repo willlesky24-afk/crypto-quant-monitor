@@ -70,13 +70,16 @@ export type Radar = {
   failed: Record<string, string>
 }
 
-async function call<T>(path: string, body?: unknown): Promise<T> {
+export type Session = { authenticated: boolean; configured: boolean }
+
+async function call<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const r = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   const data = await r.json().catch(() => ({}))
+  if (r.status === 401 && path !== '/api/v1/sesion') window.dispatchEvent(new Event('cqm-logout'))
   if (!r.ok) {
     const detail = Array.isArray(data.detail) ? data.detail.map((d: { msg: string }) => d.msg).join('; ') : data.detail
     throw new Error(detail ?? `Error ${r.status}`)
@@ -85,6 +88,9 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
+  sesion: () => call<Session>('/api/v1/sesion'),
+  entrar: (password: string) => call<Session>('/api/v1/sesion', { password }),
+  salir: () => call<Session>('/api/v1/sesion', undefined, 'DELETE'),
   hoy: (symbol: string, interval: string) =>
     call<Hoy>(`/api/v1/hoy?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
   mercados: () => call<Markets>('/api/v1/mercados'),

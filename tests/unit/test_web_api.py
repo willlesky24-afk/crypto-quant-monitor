@@ -36,6 +36,7 @@ def client(monkeypatch):
     reset_security_config()
     web_router.reset_attempts()
     df = _df()
+    monkeypatch.setenv("WEB_LOGIN_DISABLED", "true")  # login is tested in test_web_auth
     monkeypatch.setattr(market_service, "load_candles", lambda s, i, bars=0: df)
     monkeypatch.setattr(market_service, "funding_for", lambda s, fetch=None: None)
     monkeypatch.setattr(web_router, "load_history", lambda s, i: None)
@@ -136,6 +137,7 @@ def test_built_interface_is_served_without_hiding_the_api(tmp_path, monkeypatch)
 
     (tmp_path / "index.html").write_text("<h1>Quant Monitor</h1>", encoding="utf-8")
     monkeypatch.setattr(app_module, "WEB_DIST", tmp_path)
+    monkeypatch.setenv("WEB_LOGIN_DISABLED", "true")
     reset_security_config()
     c = TestClient(
         app_module.create_app(config=APISecurityConfig(security_enabled=False))

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api, type Markets } from './api'
+import { api, type Markets, type Session } from './api'
+import { Login } from './screens/Login'
 import { Hoy } from './screens/Hoy'
 import { Probar } from './screens/Probar'
 import { Radar } from './screens/Radar'
@@ -20,13 +21,32 @@ export default function App() {
   const [interval, setInterval] = useState('1h')
   const [markets, setMarkets] = useState<Markets | null>(null)
   const [ready, setReady] = useState(false)
+  const [session, setSession] = useState<Session | null>(null)
+
+  const checkSession = () =>
+    api
+      .sesion()
+      .then(setSession)
+      .catch(() => setSession({ authenticated: false, configured: true }))
 
   useEffect(() => {
+    checkSession()
+    const out = () => setSession((s) => (s ? { ...s, authenticated: false } : s))
+    window.addEventListener('cqm-logout', out)
+    return () => window.removeEventListener('cqm-logout', out)
+  }, [])
+
+  useEffect(() => {
+    if (session && !session.authenticated) setReady(true)
+  }, [session])
+
+  useEffect(() => {
+    if (!session?.authenticated) return
     api
       .mercados()
       .then(setMarkets)
       .catch(() => setMarkets(null))
-  }, [])
+  }, [session?.authenticated])
 
   useEffect(() => {
     const done = () => setReady(true)
@@ -41,6 +61,9 @@ export default function App() {
   return (
     <>
     <Splash ready={ready} />
+    {session && !session.authenticated ? (
+      <Login configured={session.configured} onDone={checkSession} />
+    ) : session && (
     <div className="shell">
       <nav className="nav" aria-label="Secciones">
         <div className="brand">
@@ -56,7 +79,9 @@ export default function App() {
             </li>
           ))}
         </ul>
-        <div className="foot">Sin recomendaciones de inversión.</div>
+        <div className="foot">
+          Sin recomendaciones de inversión.
+        </div>
       </nav>
 
       <main className="main">
@@ -112,9 +137,13 @@ export default function App() {
             TradingView Lightweight Charts
           </a>
           .
+        <button className="link" type="button" onClick={() => api.salir().then(checkSession)}>
+          Cerrar sesión
+        </button>
         </footer>
       </main>
     </div>
+    )}
     </>
   )
 }
