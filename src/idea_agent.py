@@ -74,10 +74,10 @@ def facts_text(result: dict[str, Any]) -> str:
     parts = [result["text"], f"Operaciones: {result['trades']}."]
     if "final_capital" in result:
         parts.append(
-            f"Capital inicial: {result['capital']:.0f}. "
-            f"Capital final en el pasado: {result['final_capital']:.0f}. "
+            f"Capital inicial: ${result['capital']:,.0f}. "
+            f"Capital final en el pasado: ${result['final_capital']:,.0f}. "
             f"Peor racha: {result['worst_streak']} perdidas. "
-            f"Solo mantener desde el inicio: {result['hold_final']:.0f}."
+            f"Solo mantener desde el inicio: ${result['hold_final']:,.0f}."
         )
     if result.get("mean_r") is not None:
         parts.append(f"R neta media: {result['mean_r']:+.3f}.")
@@ -88,7 +88,8 @@ def facts_text(result: dict[str, Any]) -> str:
 
 def explain_prompt(result: dict[str, Any]) -> str:
     return (
-        "Explica este resultado a un principiante en 3 frases en espanol. Usa solo "
+        "Explica este resultado a un principiante en 3 frases en espanol. Escribe las "
+        "cifras igual que aparecen, con su signo y separador de miles. Usa solo "
         "estas cifras, sin calcular otras. No recomiendes operar ni prometas nada.\n"
         f"{facts_text(result)}"
     )

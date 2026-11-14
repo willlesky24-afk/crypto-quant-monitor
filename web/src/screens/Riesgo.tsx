@@ -55,35 +55,43 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
             <NumberInput value={atrMultiple} onChange={setAtrMultiple} step={0.25} min={0} />
           </Field>
           <Field label="Tu idea">
-            <Choice
-              label="Lado"
-              value={side}
-              onChange={setSide}
-              options={
-                marginMarket
-                  ? [
-                      { value: 'LONG', label: 'Comprar' },
-                      { value: 'SHORT', label: 'Vender (corto)' },
-                    ]
-                  : [{ value: 'LONG', label: 'Comprar' }]
-              }
-            />
+            {marginMarket ? (
+              <Choice
+                label="Lado"
+                value={side}
+                onChange={setSide}
+                options={[
+                  { value: 'LONG', label: 'Comprar' },
+                  { value: 'SHORT', label: 'Vender (corto)' },
+                ]}
+              />
+            ) : (
+              <span className="field-hint">Solo compra: en cripto al contado no se vende en corto.</span>
+            )}
           </Field>
         </section>
 
-        <section className="span-8" aria-live="polite">
+        <section className="panel span-8 result" aria-live="polite">
           {error && (
-            <div className="panel error" role="alert">
+            <div className="error" role="alert">
               No se puede calcular: {error}
             </div>
           )}
-          {!plan && !error && <div className="panel empty soft">Calculando…</div>}
+          {!plan && !error && <div className="empty soft">Calculando…</div>}
           {plan && (
             <>
-              <div className="panel stats">
+              <div className="panel-title">Pérdida si toca el stop</div>
+              <div className="hero-figure">{money(plan.max_loss)}</div>
+              <div className="scale" aria-hidden="true">
+                <div className="fill" style={{ left: 0, width: `${Math.min(100, (plan.max_loss / capital) * 100 * 20)}%` }} />
+              </div>
+              <div className="scale-legend">
+                <span>{formatPct((plan.max_loss / capital) * 100)} de tu capital</span>
+                <span>5 %</span>
+              </div>
+              <div className="stats three">
                 <Stat title="Tamaño" value={plan.units.toLocaleString('en-US', { maximumFractionDigits: 4 })} note="Unidades del activo." />
                 <Stat title="Valor de la posición" value={money(plan.notional)} note={`De un capital de ${money(capital)}.`} />
-                <Stat title="Pérdida si toca el stop" value={money(plan.max_loss)} note="Incluye los costos." />
                 <Stat title="Costos incluidos" value={money(plan.costs)} note={plan.spread_included ? 'Spread y comisión.' : 'Comisión; el proveedor no da spread.'} />
               </div>
               <dl className="facts">
@@ -91,7 +99,8 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
                 <dd className="mono">{formatPrice(plan.entry_price)}</dd>
                 <dt>Stop</dt>
                 <dd className="mono">
-                  {formatPrice(plan.stop_price)} ({formatPct(plan.stop_distance_pct)} de la entrada)
+                  {formatPrice(plan.stop_price)}
+                  <span className="soft"> · {formatPct(plan.stop_distance_pct)} {side === 'SHORT' ? 'sobre' : 'bajo'} la entrada</span>
                 </dd>
                 <dt>Comisión por lado</dt>
                 <dd className="mono">{formatPct(plan.fee_pct, 3)}</dd>

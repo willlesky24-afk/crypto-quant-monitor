@@ -234,7 +234,9 @@ def run_radar(
 
 
 def build_markets(
-    fetch: Callable[[str], pd.DataFrame], symbols: list[str]
+    fetch: Callable[[str], pd.DataFrame],
+    symbols: list[str],
+    max_workers: int = MAX_DOWNLOADS,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
     """Fetch each market; a failure is reported, and the scan continues."""
     markets, failed = {}, {}
@@ -245,7 +247,7 @@ def build_markets(
         except Exception as exc:  # shown to the user, never dropped silently
             return symbol, None, str(exc)
 
-    with ThreadPoolExecutor(max_workers=MAX_DOWNLOADS) as pool:
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
         for symbol, frame, error in pool.map(attempt, symbols):
             if error is None:
                 markets[symbol] = frame

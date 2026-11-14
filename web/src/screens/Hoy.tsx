@@ -11,7 +11,12 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
   const load = useCallback(() => {
     setError(null)
     setData(null)
-    api.hoy(symbol, interval).then(setData).catch((e: Error) => setError(e.message))
+    api
+      .hoy(symbol, interval)
+      .then(setData)
+      .catch((e: Error) => setError(e.message))
+      // The intro waits for this signal; an error also ends it so the user sees it.
+      .finally(() => window.dispatchEvent(new Event('cqm-ready')))
   }, [symbol, interval])
 
   useEffect(load, [load])
@@ -120,7 +125,8 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
             <p key={line}>{withMinus(line)}</p>
           ))}
           <p className="state">
-            <b>Estado:</b> {data.conditions.text}
+            <span className="state-label">Estado</span>
+            <span>{data.conditions.text}</span>
           </p>
           <p className="footnote">Descripción del mercado, no una recomendación de operar.</p>
         </section>

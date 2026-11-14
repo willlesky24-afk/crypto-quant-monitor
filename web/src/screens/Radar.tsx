@@ -12,13 +12,17 @@ export function Radar({ interval }: { interval: string }) {
   const [data, setData] = useState<RadarData | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scannedAt, setScannedAt] = useState('')
 
   const scan = () => {
     setBusy(true)
     setError(null)
     api
       .radar(interval)
-      .then(setData)
+      .then((d) => {
+        setData(d)
+        setScannedAt(new Date().toISOString().slice(11, 16) + ' UTC')
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
   }
@@ -45,14 +49,28 @@ export function Radar({ interval }: { interval: string }) {
         )}
         {data && (
           <>
-            <p className="soft">
-              {data.alpha == null
-                ? 'Ningún mercado tiene historia suficiente para medir.'
-                : `Se hicieron ${data.tests} mediciones; solo se avisa lo que esté en el ${(data.alpha * 100).toFixed(2)} % más extremo.`}
-            </p>
-            {data.alerts.length === 0 && data.alpha != null && (
-              <p className="callout">Nada fuera de lo normal en este momento.</p>
-            )}
+            <div className="panel stats readout">
+              <div className="stat">
+                <div className="panel-title">Lectura</div>
+                <div className="figure">{data.alerts.length === 0 ? 'Sin avisos' : `${data.alerts.length} aviso${data.alerts.length > 1 ? 's' : ''}`}</div>
+                <p className="note">{data.alerts.length === 0 ? 'Nada fuera de lo normal en este momento.' : 'Cada aviso muestra qué pasó en casos parecidos.'}</p>
+              </div>
+              <div className="stat">
+                <div className="panel-title">Mediciones</div>
+                <div className="figure">{data.tests}</div>
+                <p className="note">Compresión, fuerza relativa, correlación y explosividad.</p>
+              </div>
+              <div className="stat">
+                <div className="panel-title">Listón</div>
+                <div className="figure">{data.alpha == null ? 'N/D' : `${(data.alpha * 100).toFixed(2)} %`}</div>
+                <p className="note">Solo se avisa lo más extremo; sube con cada medición.</p>
+              </div>
+              <div className="stat">
+                <div className="panel-title">Escaneado</div>
+                <div className="figure">{scannedAt}</div>
+                <p className="note">Velas de {data.interval}.</p>
+              </div>
+            </div>
             <ul className="alerts">
               {data.alerts.map((a) => (
                 <li key={`${a.market}-${a.measure}`}>
@@ -65,14 +83,22 @@ export function Radar({ interval }: { interval: string }) {
               ))}
             </ul>
             {Object.keys(data.failed).length > 0 && (
-              <dl className="facts failed">
-                {Object.entries(data.failed).map(([market, reason]) => (
-                  <div key={market}>
-                    <dt>{market} no se pudo revisar</dt>
-                    <dd>{reason}</dd>
-                  </div>
-                ))}
-              </dl>
+              <details className="failures">
+                <summary>
+                  {Object.keys(data.failed).length === 1
+                    ? '1 mercado sin datos en este escaneo'
+                    : `${Object.keys(data.failed).length} mercados sin datos en este escaneo`}
+                  : {Object.keys(data.failed).join(', ')}
+                </summary>
+                <dl className="facts">
+                  {Object.entries(data.failed).map(([market, reason]) => (
+                    <div key={market}>
+                      <dt>{market}</dt>
+                      <dd>El proveedor no respondió. Detalle técnico: {reason}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
             )}
           </>
         )}

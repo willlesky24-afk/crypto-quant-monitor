@@ -85,7 +85,10 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
     setExplanation(null)
     api
       .verificar({ symbol, interval, entry, side, sl_atr: sl, tp_atr: tp, max_bars: bars, capital })
-      .then(setResult)
+      .then((v) => {
+        setResult(v)
+        window.setTimeout(() => document.querySelector('.verdict')?.scrollIntoView({ behavior: 'smooth' }), 50)
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
   }
@@ -152,20 +155,20 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
             </select>
           </Field>
           <Field label="Lado">
-            <Choice
-              label="Lado"
-              value={side}
-              onChange={setSide}
-              options={
-                marginMarket
-                  ? [
-                      { value: 'AMBOS', label: 'Ambos' },
-                      { value: 'LONG', label: 'Compras' },
-                      { value: 'SHORT', label: 'Ventas' },
-                    ]
-                  : [{ value: 'LONG', label: 'Solo compras' }]
-              }
-            />
+            {marginMarket ? (
+              <Choice
+                label="Lado"
+                value={side}
+                onChange={setSide}
+                options={[
+                  { value: 'AMBOS', label: 'Ambos' },
+                  { value: 'LONG', label: 'Compras' },
+                  { value: 'SHORT', label: 'Ventas' },
+                ]}
+              />
+            ) : (
+              <span className="field-hint">Solo compras: en cripto al contado no se vende en corto.</span>
+            )}
           </Field>
           <div className="row3">
             <Field label="Stop (ATR)">
@@ -186,6 +189,12 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
           <button className="btn" onClick={verify} disabled={busy} type="button">
             {busy ? 'Probando contra el azar…' : 'Verificar regla'}
           </button>
+          {busy && <p className="note">El resultado aparecerá debajo; tarda unos 20 segundos.</p>}
+          {result && !busy && (
+            <p className="note">
+              Último resultado: <b>{VERDICT_TITLE[result.code]}</b> con {result.trades} operaciones. Está debajo.
+            </p>
+          )}
         </section>
       </div>
 
@@ -222,12 +231,12 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
               Explicar con IA
             </button>
             {explanation && (
-              <p className="explanation">
-                {explanation.text}
+              <div className="explanation">
                 {!explanation.used_ai && (
-                  <span className="note"> Se muestran los datos del motor: la IA no pasó el control.</span>
+                  <span className="tag">La IA no pasó el control de cifras: se muestran los datos del motor</span>
                 )}
-              </p>
+                <p>{explanation.text}</p>
+              </div>
             )}
             <p className="footnote">Resultado histórico, no una recomendación de operar.</p>
           </>

@@ -222,9 +222,16 @@ def radar(interval: str = "1h") -> dict[str, Any]:
     crypto = [m["symbol"] for m in listed["crypto"]]
     other = [m["symbol"] for m in listed["other"]]
     # Downloads run in parallel; a market that fails is listed, never dropped.
+    # OANDA refused several parallel requests in live scans, so forex, metals and
+    # indices are fetched two at a time; Binance takes the full parallel load.
     loaded, failed = build_markets(
-        lambda s: market_service.load_candles(s, interval), crypto + other
+        lambda s: market_service.load_candles(s, interval), crypto
     )
+    other_loaded, other_failed = build_markets(
+        lambda s: market_service.load_candles(s, interval), other, max_workers=2
+    )
+    loaded.update(other_loaded)
+    failed.update(other_failed)
     if listed["other_error"]:
         failed["Forex"] = listed["other_error"]
     groups = [
