@@ -11,6 +11,7 @@ from src.operator_api.dependencies import (
 )
 from src.operator_api.observability.middleware import RequestTraceMiddleware
 from src.operator_api.router import router
+from src.operator_api.web_router import router as web_router
 from src.operator_service.service import OperatorService
 
 
@@ -52,7 +53,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=list(active_config.cors_origins),
         allow_credentials=True,
-        allow_methods=["GET", "OPTIONS"],
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -60,6 +61,7 @@ def create_app(
     application.add_middleware(RequestTraceMiddleware)
 
     application.include_router(router)
+    application.include_router(web_router)
     return application
 
 

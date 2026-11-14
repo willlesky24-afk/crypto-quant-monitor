@@ -55,3 +55,28 @@ def test_conditions_expose_their_percentiles():
     c = market_conditions(df)
     assert c["volatility_percentile"] == pytest.approx(100.0)
     assert c["spread_percentile"] is None
+
+
+def test_sheet_row_marks_a_price_outside_the_range():
+    from src.ui_theme import sheet_row
+
+    row = sheet_row("Zona", "1 - 2", "Debajo", "nota", mark=-30.0)
+    assert "scale-mark" in row and "left:0.0%" in row
+
+
+def test_sheet_row_can_hide_the_value():
+    from src.ui_theme import sheet_row
+
+    row = sheet_row("Método", None, "", "Entra cuando...", show_value=False)
+    assert "N/D" not in row and "sheet-status" not in row
+
+
+def test_zone_scale_keeps_the_price_inside_the_drawing():
+    from src.ui_theme import zone_scale
+
+    # Area 100-110, price 90: scale 90..110 padded by 8 % of 20 = 1.6 each side.
+    span, mark = zone_scale(90.0, 100.0, 110.0)
+    assert mark == pytest.approx(100 * 1.6 / 23.2)
+    assert span[0] == pytest.approx(100 * 11.6 / 23.2)
+    assert span[1] == pytest.approx(100 * 21.6 / 23.2)
+    assert zone_scale(100.0, 110.0, 110.0) == (None, None)

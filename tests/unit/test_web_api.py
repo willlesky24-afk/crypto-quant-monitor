@@ -1,0 +1,129 @@
+"""v4 web API: same numbers as the engine, readable errors, server-side attempts."""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
+
+from src import market_service
+from src.indicators import TechnicalIndicators
+from src.operator_api import web_router
+from src.operator_api.app import create_app
+from src.operator_api.config import APISecurityConfig
+from src.operator_api.dependencies import reset_security_config
+
+
+def _df(n=400):
+    rng = np.random.default_rng(3)
+    close = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    raw = pd.DataFrame(
+        {
+            "timestamp": pd.date_range("2026-01-01", periods=n, freq="1h", tz="UTC"),
+            "open": close,
+            "high": close * 1.004,
+            "low": close * 0.996,
+            "close": close,
+            "volume": rng.uniform(50, 150, n),
+        }
+    )
+    return TechnicalIndicators().calculate_all(raw).reset_index(drop=True)
+
+
+@pytest.fixture
+def client(monkeypatch):
+    reset_security_config()
+    web_router.reset_attempts()
+    df = _df()
+    monkeypatch.setattr(market_service, "load_candles", lambda s, i, bars=0: df)
+    monkeypatch.setattr(market_service, "funding_for", lambda s, fetch=None: None)
+    monkeypatch.setattr(web_router, "load_history", lambda s, i: None)
+    app = create_app(config=APISecurityConfig(security_enabled=False))
+    yield TestClient(app), df
+    reset_security_config()
+
+
+def test_hoy_returns_engine_figures(client):
+    c, df = client
+    r = c.get("/api/v1/hoy", params={"symbol": "BTCUSDT", "interval": "1h"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["price"] == pytest.approx(float(df["close"].iloc[-1]))
+    assert body["cost"]["spread_pct"] is None
+
+
+def test_load_failure_is_a_readable_502(monkeypatch, client):
+    c, _ = client
+
+    def fail(s, i, bars=0):
+        raise market_service.MarketDataError("No se pudo cargar X: sin red")
+
+    monkeypatch.setattr(market_service, "load_candles", fail)
+    r = c.get("/api/v1/hoy")
+    assert r.status_code == 502
+    assert "sin red" in r.json()["detail"]
+
+
+def test_riesgo_risks_the_requested_amount(client):
+    c, df = client
+    r = c.post(
+        "/api/v1/riesgo",
+        json={"symbol": "BTCUSDT", "capital": 1_000_000, "risk_pct": 1.0},
+    )
+    assert r.status_code == 200
+    # Large capital so the size is not capped: the loss equals 1 % of capital.
+    assert r.json()["max_loss"] == pytest.approx(10_000.0)
+    assert r.json()["entry_price"] == pytest.approx(float(df["close"].iloc[-1]))
+
+
+def test_riesgo_rejects_invalid_side(client):
+    c, _ = client
+    r = c.post(
+        "/api/v1/riesgo",
+        json={"symbol": "BTCUSDT", "capital": 1000, "risk_pct": 1.0, "side": "X"},
+    )
+    assert r.status_code == 422
+
+
+def test_metodos_lists_the_gallery(client):
+    c, _ = client
+    assert len(c.get("/api/v1/metodos").json()["methods"]) == 4
+
+
+def test_verify_counts_attempts_on_the_server(client):
+    c, _ = client
+    body = {
+        "symbol": "BTCUSDT",
+        "interval": "1h",
+        "entry": "reversion_rsi",
+        "sl_atr": 1.0,
+        "tp_atr": 2.0,
+        "max_bars": 24,
+    }
+    first = c.post("/api/v1/verificar", json=body).json()
+    second = c.post("/api/v1/verificar", json=body).json()
+    assert (first["attempts"], second["attempts"]) == (1, 2)
+    assert first["data_source"].startswith("datos en vivo")
+    assert "habría" in first["story"] or "habrías" in first["story"]
+
+
+def test_unknown_entry_is_422(client):
+    c, _ = client
+    body = {
+        "symbol": "BTCUSDT",
+        "entry": "magia",
+        "sl_atr": 1.0,
+        "tp_atr": 2.0,
+        "max_bars": 24,
+    }
+    assert c.post("/api/v1/verificar", json=body).status_code == 422
+
+
+def test_security_applies_to_the_new_routes():
+    reset_security_config()
+    app = create_app(
+        config=APISecurityConfig(api_key="clave-de-prueba", security_enabled=True)
+    )
+    assert TestClient(app).get("/api/v1/metodos").status_code == 401
+    reset_security_config()

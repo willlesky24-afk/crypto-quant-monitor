@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 import os
+import re
 import sys
 from html import escape
 from pathlib import Path
@@ -100,10 +101,12 @@ try:
     from src.ui_theme import (
         THEME_CSS,
         alert_row,
-        gauge_html,
+        market_header,
         meter_card,
-        method_card,
+        sheet_row,
+        state_line,
         value_area_position,
+        zone_scale,
     )
     from src.unusual_radar import build_markets, run_radar
     from src.volume_profile import VolumeProfile
@@ -175,17 +178,30 @@ except ImportError:
     from ui_theme import (
         THEME_CSS,
         alert_row,
-        gauge_html,
+        market_header,
         meter_card,
+        sheet_row,
+        state_line,
         value_area_position,
+        zone_scale,
     )
     from unusual_radar import build_markets, run_radar
     from volume_profile import VolumeProfile
 
 
+_EMOJI = re.compile(
+    "[\U0001f300-\U0001faff\u2600-\u27bf\ufe0f\U0001f1e6-\U0001f1ff]+ ?"
+)
+
+
+def _plain_label(label):
+    """Selector labels without emojis; the underlying keys stay the same."""
+    return _EMOJI.sub("", label).strip()
+
+
 st.set_page_config(
     page_title="Quant Monitor",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
 )
 
@@ -202,7 +218,7 @@ st.title("Quant Monitor")
 st.sidebar.subheader("Mercado Activo")
 market_choice = st.sidebar.radio(
     "Selecciona el Mercado:",
-    ["🪙 Criptomonedas (24/7)", "💱 Divisas Forex (Lun - Vie)"],
+    ["Criptomonedas (24/7)", "Forex, metales e índices (lun–vie)"],
     index=0,
 )
 
@@ -214,22 +230,22 @@ if is_forex:
     status_color = "#036340" if forex_status.is_market_open else "#BD5B5B"
     st.sidebar.markdown(
         f"""
-        <div style="background: #FFFFFF; border: 1px solid rgba(25, 29, 35, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
+        <div style="background: #FFFFFF; border: 1px solid rgba(25, 29, 35, 0.35); border-radius: 2px; padding: 12px 14px; margin-bottom: 12px;">
             <div style="font-weight: 700; font-size: 0.84rem; color: {status_color};">{forex_status.status_headline}</div>
-            <div style="font-size: 0.76rem; color: #717782; margin-top: 4px;">🕒 {forex_status.current_utc_time}</div>
-            <div style="font-size: 0.74rem; color: #8A7A56; margin-top: 3px;">📌 {forex_status.weekend_reopen_info}</div>
+            <div style="font-size: 0.76rem; color: #717782; margin-top: 4px;">{forex_status.current_utc_time}</div>
+            <div style="font-size: 0.74rem; color: #8A7A56; margin-top: 3px;">{forex_status.weekend_reopen_info}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    with st.sidebar.expander("🕒 Horarios de Sesiones Bancarias (UTC)", expanded=False):
+    with st.sidebar.expander("Horarios de Sesiones Bancarias (UTC)", expanded=False):
         for s_name, s_time in forex_status.session_details.items():
             st.caption(f"**{s_name}:** {s_time}")
 else:
     st.sidebar.markdown(
         """
-        <div style="background: #FFFFFF; border: 1px solid rgba(3, 99, 64, 0.35); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px;">
-            <div style="font-weight: 700; font-size: 0.84rem; color: #036340;">🟢 Mercado Cripto Abierto 24/7</div>
+        <div class="side-state">
+            <div style="font-weight: 700; font-size: 0.84rem; color: #036340;">Mercado Cripto Abierto 24/7</div>
             <div style="font-size: 0.76rem; color: #717782; margin-top: 4px;">Operaciones continuas los 365 días del año sin cierres</div>
         </div>
         """,
@@ -239,17 +255,17 @@ else:
 st.sidebar.header("Parámetros de Selección")
 
 POPULAR_PAIRS = {
-    "🥇 BTC / USDT (Bitcoin)": "BTCUSDT",
-    "🥈 ETH / USDT (Ethereum)": "ETHUSDT",
-    "⚡ SOL / USDT (Solana)": "SOLUSDT",
-    "🪙 BNB / USDT (Binance Coin)": "BNBUSDT",
-    "💧 XRP / USDT (Ripple)": "XRPUSDT",
-    "🐕 DOGE / USDT (Dogecoin)": "DOGEUSDT",
-    "🔷 ADA / USDT (Cardano)": "ADAUSDT",
-    "🔺 AVAX / USDT (Avalanche)": "AVAXUSDT",
-    "🔗 LINK / USDT (Chainlink)": "LINKUSDT",
-    "💶 EUR / USDT (Euro / Dólar)": "EURUSDT",
-    "✍️ Escribir otro par personalizado...": "CUSTOM",
+    "BTC / USDT (Bitcoin)": "BTCUSDT",
+    "ETH / USDT (Ethereum)": "ETHUSDT",
+    "SOL / USDT (Solana)": "SOLUSDT",
+    "BNB / USDT (Binance Coin)": "BNBUSDT",
+    "XRP / USDT (Ripple)": "XRPUSDT",
+    "DOGE / USDT (Dogecoin)": "DOGEUSDT",
+    "ADA / USDT (Cardano)": "ADAUSDT",
+    "AVAX / USDT (Avalanche)": "AVAXUSDT",
+    "LINK / USDT (Chainlink)": "LINKUSDT",
+    "EUR / USDT (Euro / Dólar)": "EURUSDT",
+    "Escribir otro par personalizado...": "CUSTOM",
 }
 
 if is_forex:
@@ -261,6 +277,7 @@ if is_forex:
     selected_label = st.sidebar.selectbox(
         "Forex, metales e índices",
         options=list(forex_pairs.keys()),
+        format_func=_plain_label,
         index=0,
     )
     symbol = forex_pairs[selected_label]
@@ -268,6 +285,7 @@ else:
     selected_label = st.sidebar.selectbox(
         "Par de Criptomoneda",
         options=list(POPULAR_PAIRS.keys()),
+        format_func=_plain_label,
         index=0,
     )
     if POPULAR_PAIRS[selected_label] == "CUSTOM":
@@ -293,7 +311,7 @@ st.caption("Antes de arriesgar tu dinero, compruébalo.")
 advanced_options = st.sidebar.expander("Opciones avanzadas", expanded=False)
 sim_mode = advanced_options.radio(
     "Fuente de Parámetros",
-    ["🕹️ Manual (Simulador de Escenarios)", "🟢 Automático (En Vivo)"],
+    ["Manual (Simulador de Escenarios)", "Automático (En Vivo)"],
     index=1,
 )
 
@@ -401,44 +419,45 @@ def _level_tag(percentile, high_label, low_label):
     if percentile is None:
         return "Sin dato", ""
     if percentile >= AGITATED_PERCENTILE:
-        return high_label, "bad"
+        # Bronze, not red: high volatility is a condition, not a loss.
+        return high_label, "warn"
     if percentile <= CALM_PERCENTILE:
         return low_label, "good"
     return "Normal", ""
 
 
-def _today_cards(figures, conditions):
-    """Four meters built only from engine figures; a gap stays visible as N/D."""
+def _today_sheet(figures, conditions):
+    """The market as a technical sheet: each row from the engine, gaps read N/D."""
     volatility = conditions.get("volatility_percentile")
     v_status, v_tone = _level_tag(volatility, "Agitado", "Tranquilo")
-    cards = [
-        meter_card(
+    rows = [
+        sheet_row(
             "Volatilidad",
-            None if volatility is None else f"{volatility:.0f}",
+            None if volatility is None else f"{volatility:.0f} / 100",
             v_status,
-            f"Percentil frente a su historia. ATR {figures['atr_pct']:.2f} % del precio.",
+            f"Barra: percentil 0–100 frente a su propia historia. ATR "
+            f"{figures['atr_pct']:.2f} % del precio.",
             tone=v_tone,
-            gauge=gauge_html(volatility),
+            fill=volatility,
         )
     ]
-
     cost = conditions.get("spread_percentile")
     c_status, c_tone = _level_tag(cost, "Caro", "Barato")
     spread = figures["spread_pct"]
-    cards.append(
-        meter_card(
+    rows.append(
+        sheet_row(
             "Costo de operar",
             None if spread is None else f"{spread:.3f} %",
-            c_status,
-            "Spread frente al movimiento típico."
+            c_status if spread is not None else "Sin dato",
+            "Barra: percentil 0–100 del spread frente al movimiento típico."
             if spread is not None
             else "Este proveedor no da spread.",
             tone=c_tone,
-            bar=cost,
+            fill=cost,
         )
     )
-
     position = value_area_position(figures["price"], figures["val"], figures["vah"])
+    zone_span, zone_mark = zone_scale(figures["price"], figures["val"], figures["vah"])
     if position is None:
         z_status = "Sin dato"
     elif position > 100:
@@ -447,45 +466,44 @@ def _today_cards(figures, conditions):
         z_status = "Debajo"
     else:
         z_status = "Dentro"
-    cards.append(
-        meter_card(
+    rows.append(
+        sheet_row(
             "Zona de valor",
-            format_price(figures["price"]),
+            f"{format_price(figures['val'])} – {format_price(figures['vah'])}",
             z_status,
-            f"Entre {format_price(figures['val'])} y {format_price(figures['vah'])}.",
-            dot=position,
+            (
+                f"Precio {format_price(figures['price'])}, "
+                + (
+                    "por debajo del rango. "
+                    if position is not None and position < 0
+                    else "por encima del rango. "
+                    if position is not None and position > 100
+                    else "dentro del rango. "
+                )
+                + "Rango donde se negoció el 70 % del volumen reciente."
+            ),
+            span=zone_span,
+            mark=zone_mark,
         )
     )
-
-    if symbol.endswith("=X"):
-        change = figures["change_24h_pct"]
-        cards.append(
-            meter_card(
-                "Cambio 24 h",
-                None if change is None else f"{change:+.2f} %",
-                "Sin dato" if change is None else "Precio",
-                "Respecto al cierre de hace 24 horas.",
-            )
-        )
-    else:
+    if not symbol.endswith("=X"):
         funding = _load_funding(symbol)
         if "error" in funding:
-            cards.append(
-                meter_card("Apalancamiento", None, "Sin dato", funding["error"])
-            )
+            rows.append(sheet_row("Apalancamiento", None, "Sin dato", funding["error"]))
         else:
             f_status, f_tone = _level_tag(funding["size_percentile"], "Alto", "Bajo")
-            cards.append(
-                meter_card(
+            rows.append(
+                sheet_row(
                     "Apalancamiento",
                     f"{funding['rate_pct']:+.4f} %",
                     f_status,
-                    f"Funding frente a {funding['records']} registros recientes.",
+                    f"Funding de {provider_from_env().upper()} frente a "
+                    f"{funding['records']} registros recientes "
+                    f"(mayor que el {funding['size_percentile']:.0f} % de ellos).",
                     tone=f_tone,
-                    bar=funding["size_percentile"],
                 )
             )
-    return '<div class="meter-grid">' + "".join(cards) + "</div>"
+    return '<div class="sheet">' + "".join(rows) + "</div>"
 
 
 with tab_risk:
@@ -755,30 +773,30 @@ with tab_verifier:
             raise IdeaAgentError(response.content)
         return response.content
 
-    st.markdown("##### Elige un método")
+    st.markdown('<div class="label-head">Elige un método</div>', unsafe_allow_html=True)
     st.caption("Métodos conocidos entre traders. Elegir uno no significa que funcione.")
-    gallery_cols = st.columns(2)
-    for gallery_index, gallery_method in enumerate(METHODS):
-        with gallery_cols[gallery_index % 2]:
-            st.markdown(
-                method_card(
-                    gallery_method["name"],
-                    gallery_method["idea"],
-                    gallery_method["suffers"],
-                ),
-                unsafe_allow_html=True,
-            )
-            if st.button("Usar este método", key=f"use_{gallery_method['entry']}"):
-                st.session_state.update(
-                    v_entry=gallery_method["entry"],
-                    v_side="LONG",
-                    v_sl=gallery_method["sl_atr"],
-                    v_tp=gallery_method["tp_atr"],
-                    v_bars=gallery_method["max_bars"],
-                )
-                st.rerun()
+    gallery_choice = st.radio(
+        "Método",
+        [m["name"] for m in METHODS],
+        captions=[f"{m['idea']} Sufre cuando {m['suffers']}" for m in METHODS],
+        label_visibility="collapsed",
+        key="gallery_choice",
+    )
+    if st.button("Cargar este método en la regla"):
+        gallery_method = next(m for m in METHODS if m["name"] == gallery_choice)
+        st.session_state.update(
+            v_entry=gallery_method["entry"],
+            v_side="LONG",
+            v_sl=gallery_method["sl_atr"],
+            v_tp=gallery_method["tp_atr"],
+            v_bars=gallery_method["max_bars"],
+        )
+        st.rerun()
 
-    st.markdown("##### O escribe tu propia regla")
+    st.markdown(
+        '<div class="label-head">O escribe tu propia regla</div>',
+        unsafe_allow_html=True,
+    )
     v_text = st.text_area(
         "Describe tu idea (opcional)",
         placeholder="Quiero entrar cuando rompa el máximo de 20 velas, con stop amplio",
@@ -936,29 +954,33 @@ with tab_live:
     )
     with today_summary:
         conditions = market_conditions(df)
+        source_name = (
+            os.getenv("FOREX_PROVIDER", "yahoo").upper() if is_forex else "BINANCE"
+        )
+        last_close_time = pd.Timestamp(df["timestamp"].iloc[-1]).strftime(
+            "%Y-%m-%d %H:%M UTC"
+        )
         st.markdown(
-            f'<div class="eyebrow">Mercado de hoy / <b>{escape(symbol)} · '
-            f"{escape(interval)}</b></div>",
+            market_header(
+                symbol,
+                format_price(summary["figures"]["price"]),
+                summary["figures"]["change_24h_pct"],
+                (f"{source_name} · {interval}", f"vela cerrada {last_close_time}"),
+            ),
             unsafe_allow_html=True,
         )
-        st.subheader("¿Qué está pasando hoy?")
         st.markdown(
-            _today_cards(summary["figures"], conditions), unsafe_allow_html=True
+            _today_sheet(summary["figures"], conditions), unsafe_allow_html=True
         )
         st.markdown(
-            '<div class="panel">'
+            '<div class="reading"><div class="reading-title">En palabras</div>'
             + "".join(f"<p>{escape(line)}</p>" for line in summary["lines"])
-            + "</div>",
+            + "</div>"
+            + state_line(conditions["level"], conditions["text"])
+            + '<div class="footnote">Descripción del mercado, no una recomendación '
+            "de operar.</div>",
             unsafe_allow_html=True,
         )
-        conditions_box = {
-            "VERDE": st.success,
-            "AMARILLO": st.warning,
-            "ROJO": st.error,
-            "NO_DISPONIBLE": st.info,
-        }[conditions["level"]]
-        conditions_box(conditions["text"])
-        st.caption("Descripción del mercado, no una recomendación de operar.")
     intel_engine = MarketIntelligence()
     intel = intel_engine.evaluate(analysis)
     quant_score_engine = QuantScore()
@@ -1049,7 +1071,7 @@ with tab_live:
 
     if is_manual_mode:
         st.warning(
-            f"🕹️ **Modo Simulación Manual Activo:** Régimen forzado a `{manual_regime.value}` • "
+            f"**Modo Simulación Manual Activo:** Régimen forzado a `{manual_regime.value}` • "
             f"Predictive Score: `{manual_pred_score:.2f}` • TP: `{manual_tp_mult:.2f}x ATR` • SL: `{manual_sl_mult:.2f}x ATR`."
         )
 
@@ -1263,8 +1285,8 @@ with tab_copilot:
             ).upper()
 
             st.caption(
-                f"🧠 Modelo: **{provider_name}** (`{model_name}`) | "
-                f"🎯 Par en Conversación: **`{active_sym_display}`** ({active_tf_display}) | "
+                f"Modelo: **{provider_name}** (`{model_name}`) | "
+                f"Par en Conversación: **`{active_sym_display}`** ({active_tf_display}) | "
                 f"Memoria Conversacional Activa"
             )
 
@@ -1285,7 +1307,7 @@ with tab_copilot:
                     {
                         "role": "assistant",
                         "content": (
-                            f"👋 **Hola, soy tu copiloto de mercado.**\n\n"
+                            f"**Hola, soy tu copiloto de mercado.**\n\n"
                             f"Puedo responder todas tus inquietudes sobre el mercado de **{market_label}** en **lenguaje cotidiano** y con datos cuantitativos en tiempo real:\n"
                             f"- Pregúntame qué significa algo que ves en el mercado.\n"
                             f"- Puedes **adjuntar una foto o captura de pantalla de un gráfico** abajo para que lo analice visualmente.\n"
@@ -1296,7 +1318,7 @@ with tab_copilot:
 
             # File/Image Uploader
             with st.expander(
-                "📎 Adjuntar Gráficos o Archivos para Análisis Multimodal (Fotos, TradingView o CSV)",
+                "Adjuntar Gráficos o Archivos para Análisis Multimodal (Fotos, TradingView o CSV)",
                 expanded=False,
             ):
                 uploaded_files = st.file_uploader(
@@ -1318,18 +1340,18 @@ with tab_copilot:
                             with img_cols[idx % len(img_cols)]:
                                 st.image(
                                     img_file,
-                                    caption=f"📷 {img_file.name}",
+                                    caption=f"{img_file.name}",
                                     width="stretch",
                                 )
                     for of in other_files:
-                        st.info(f"📄 Archivo cargado: {of.name} ({of.size} bytes)")
+                        st.info(f"Archivo cargado: {of.name} ({of.size} bytes)")
 
             # Render Chat Messages
             chat_container = st.container()
             with chat_container:
                 for msg in st.session_state["copilot_chat_history"]:
                     with st.chat_message(
-                        msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"
+                        msg["role"], avatar="" if msg["role"] == "assistant" else ""
                     ):
                         st.markdown(msg["content"])
                         if msg.get("images"):
@@ -1339,7 +1361,7 @@ with tab_copilot:
                                     st.image(
                                         img_info["bytes"],
                                         caption=img_info.get(
-                                            "name", f"📷 Gráfico {idx + 1}"
+                                            "name", f"Gráfico {idx + 1}"
                                         ),
                                         width="stretch",
                                     )
@@ -1520,7 +1542,7 @@ with tab_settings:
             "Verifica si tu Bot de Telegram o Webhook de Discord responde correctamente."
         )
         if st.button(
-            "🔔 Enviar Notificación de Prueba",
+            "Enviar Notificación de Prueba",
             type="secondary",
             width="stretch",
         ):
@@ -1546,7 +1568,7 @@ with tab_settings:
 
             if not test_channels:
                 st.warning(
-                    "⚠️ Configura y activa al menos un canal (Telegram o Discord) arriba."
+                    "Configura y activa al menos un canal (Telegram o Discord) arriba."
                 )
             else:
                 dispatcher = NotificationDispatcher(
@@ -1592,8 +1614,8 @@ with tab_guide:
 
     g_tab1, g_tab2 = st.tabs(
         [
-            "📚 Glosario de Siglas y Métricas",
-            "🕹️ Manual: Si tocas esto, obtienes esto",
+            "Glosario de Siglas y Métricas",
+            "Manual: Si tocas esto, obtienes esto",
         ]
     )
 
@@ -1604,7 +1626,7 @@ with tab_guide:
 
         with g_col1:
             st.markdown("""
-            #### 🎯 Niveles de Volume Profile y Liquidez
+            #### Niveles de Volume Profile y Liquidez
             - **`POC` (Point of Control / Punto de Control):**  
               *Significado:* Nivel de precio exacto donde se transó el mayor volumen de operaciones durante el período analizado.  
               *Uso táctico:* Funciona como un poderoso imán de liquidez y soporte/resistencia gravitacional.
@@ -1617,7 +1639,7 @@ with tab_guide:
               *Significado:* Límite inferior del rango de precios que concentra el 70% del volumen negociado.  
               *Uso táctico:* Soporte institucional. Si el precio pierde el VAL con volumen, indica desequilibrio bajista (*descuento* vendedor).
 
-            #### 🛡️ Gestión de Riesgo y Operativa
+            #### Gestión de Riesgo y Operativa
             - **`ATR` (Average True Range / Rango Verdadero Promedio):**  
               *Significado:* Métrica matemática de la volatilidad real del mercado expresada en dólares.  
               *Uso táctico:* Permite definir objetivos de ganancia y límites de pérdida dinámicos que se expanden en mercados volátiles y se comprimen en mercados tranquilos.
@@ -1632,7 +1654,7 @@ with tab_guide:
 
         with g_col2:
             st.markdown("""
-            #### 🧠 Modelos Predictivos y Regímenes
+            #### Modelos Predictivos y Regímenes
             - **`P(Cont)` (Probabilidad de Continuación):**  
               *Significado:* Cálculo estocástico derivado del modelo de Markov que estima la probabilidad de que la siguiente vela mantenga la dirección predominante.
             
@@ -1649,7 +1671,7 @@ with tab_guide:
               - **`HIGH_VOLATILITY`:** Expansión violenta de rango y riesgo elevado.
               - **`COMPRESSION`:** Rango estrecho que precede a movimientos explosivos.
 
-            #### 📈 Métricas de Backtest y Rendimiento
+            #### Métricas de Backtest y Rendimiento
             - **`Win Rate`:** Porcentaje de operaciones cerradas en ganancia frente al total.
             - **`Profit Factor`:** Ganancia bruta dividida entre pérdida bruta de la muestra simulada; no predice el desempeño futuro.
             - **`Expectativa bruta/neta (R)`:** Media de R por operación matemáticamente verificable; la neta incorpora los costes simulados. N/A indica que no hay riesgo inicial verificable. La cobertura indica cuántas operaciones se excluyeron.
@@ -1668,14 +1690,14 @@ with tab_guide:
         | **Barra Lateral** | **Temporalidad** | Seleccionas 15m, 1h, 4h o 1d | Cambia el horizonte temporal. Verás cómo el régimen de mercado y las medias móviles se adaptan al marco temporal elegido. |
         | **Barra Lateral** | **Velas Históricas** | Mueves el deslizador (250 a 1000 velas) | Amplía o reduce el historial cargado en memoria (ej. 300 velas en 1d = ~10 meses). |
         | **Barra Lateral** | **Modo de Análisis** | Alternas entre *Automático* y *Manual* | Activa el simulador *What-If* para forzar regímenes, probabilidades y multiplicadores a tu criterio. |
-        | **📡 Live Monitor** | **🧠 Diagnóstico** | Pulsas la sub-pestaña | Muestra la decisión ejecutiva (LONG, SHORT o ESPERAR), justificación matemática y confluencias favorables/alertas. |
-        | **📡 Live Monitor** | **📋 Plan de riesgo** | Pulsas la sub-pestaña | Muestra estado, entrada propuesta, SL, TP, distancias y R bruto cuando hay datos válidos. Una candidata no equivale a una entrada activada. |
-        | **📡 Live Monitor** | **🎯 Niveles** | Pulsas la sub-pestaña | Entrega los precios clave del Área de Valor (POC, VAH, VAL) e indica si el precio está en zona de sobrecompra o descuento. |
-        | **📡 Live Monitor** | **🔮 Predicción** | Pulsas la sub-pestaña | Muestra la probabilidad matemática de que la tendencia continúe y el desglose del modelo predictivo. |
-        | **📡 Live Monitor** | **🛠️ Datos** | Pulsas la sub-pestaña | Expande la carga técnica en JSON para auditoría cuantitativa o conexión a sistemas externos. |
-        | **🤖 AI Copilot** | **💬 Chat AI** | Escribes una duda y pulsas *Enviar Consulta* | Gemini analiza el contexto actual y te responde con explicación de mercado, riesgos y telemetría de latencia. |
-        | **🤖 AI Copilot** | **📋 Briefing** | Pulsas la sub-pestaña | Genera un informe diario institucional estructurado con análisis de volatilidad y señales fuertes. |
-        | **🤖 AI Copilot** | **🚨 Anomalías** | Pulsas la sub-pestaña | Evalúa si existen divergencias estructurales o anomalías severas de volatilidad en el activo actual. |
-        | **📈 Backtest** | **🚀 Ejecutar Backtest** | Pulsas el botón con tus parámetros elegidos | Simula vela por vela la estrategia en el pasado sin repintado y grafica la Curva de Capital, Drawdown y dispersión MAE vs MFE. |
-        | **⚙️ Configuración** | **🔔 Notificación de Prueba** | Pulsas el botón de prueba | Envía un ping marcado TEST, sin dirección ni niveles de operación, al canal configurado. |
+        | **Live Monitor** | **Diagnóstico** | Pulsas la sub-pestaña | Muestra la decisión ejecutiva (LONG, SHORT o ESPERAR), justificación matemática y confluencias favorables/alertas. |
+        | **Live Monitor** | **Plan de riesgo** | Pulsas la sub-pestaña | Muestra estado, entrada propuesta, SL, TP, distancias y R bruto cuando hay datos válidos. Una candidata no equivale a una entrada activada. |
+        | **Live Monitor** | **Niveles** | Pulsas la sub-pestaña | Entrega los precios clave del Área de Valor (POC, VAH, VAL) e indica si el precio está en zona de sobrecompra o descuento. |
+        | **Live Monitor** | **Predicción** | Pulsas la sub-pestaña | Muestra la probabilidad matemática de que la tendencia continúe y el desglose del modelo predictivo. |
+        | **Live Monitor** | **Datos** | Pulsas la sub-pestaña | Expande la carga técnica en JSON para auditoría cuantitativa o conexión a sistemas externos. |
+        | **AI Copilot** | **Chat AI** | Escribes una duda y pulsas *Enviar Consulta* | Gemini analiza el contexto actual y te responde con explicación de mercado, riesgos y telemetría de latencia. |
+        | **AI Copilot** | **Briefing** | Pulsas la sub-pestaña | Genera un informe diario institucional estructurado con análisis de volatilidad y señales fuertes. |
+        | **AI Copilot** | **Anomalías** | Pulsas la sub-pestaña | Evalúa si existen divergencias estructurales o anomalías severas de volatilidad en el activo actual. |
+        | **Backtest** | **Ejecutar Backtest** | Pulsas el botón con tus parámetros elegidos | Simula vela por vela la estrategia en el pasado sin repintado y grafica la Curva de Capital, Drawdown y dispersión MAE vs MFE. |
+        | **Configuración** | **Notificación de Prueba** | Pulsas el botón de prueba | Envía un ping marcado TEST, sin dirección ni niveles de operación, al canal configurado. |
         """)
