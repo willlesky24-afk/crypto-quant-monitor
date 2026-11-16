@@ -170,3 +170,37 @@ def test_radar_reports_tests_and_failures(monkeypatch, client):
     assert body["failed"] == {"ETHUSDT": "sin datos de ETHUSDT"}
     assert body["tests"] >= 1
     assert body["alpha"] == pytest.approx(0.05 / body["tests"])
+
+
+def test_copilot_shows_ai_only_with_engine_numbers(monkeypatch, client):
+    c, df = client
+    seen = {}
+
+    def fake_ai(prompt):
+        seen["prompt"] = prompt
+        return "El mercado describe una volatilidad normal para su historia."
+
+    monkeypatch.setattr(web_router, "_ask_ai", fake_ai)
+    body = {"symbol": "BTCUSDT", "interval": "1h", "question": "¿Cómo está el mercado?"}
+    r = c.post("/api/v1/copiloto", json=body).json()
+    assert r["used_ai"] is True and "volatilidad" in r["text"]
+    assert "¿Cómo está el mercado?" in seen["prompt"]
+
+    monkeypatch.setattr(web_router, "_ask_ai", lambda p: "Te recomiendo comprar ya.")
+    r = c.post("/api/v1/copiloto", json=body).json()
+    assert r["used_ai"] is False and "Precio" in r["text"]
+
+
+def test_copilot_without_ai_shows_the_facts(monkeypatch, client):
+    c, _ = client
+
+    def broken(prompt):
+        raise web_router.IdeaAgentError("No hay un proveedor de IA configurado.")
+
+    monkeypatch.setattr(web_router, "_ask_ai", broken)
+    r = c.post(
+        "/api/v1/copiloto",
+        json={"symbol": "BTCUSDT", "interval": "1h", "question": "hola, ¿qué ves?"},
+    ).json()
+    assert r["used_ai"] is False and r["ai_error"].startswith("No hay")
+    assert "Precio" in r["text"]

@@ -205,3 +205,14 @@ a:hover { text-decoration-color: var(--ink); }
 .watch span.off { border-style: dashed; color: var(--ink-soft); background: transparent; }
 .ci-scale { margin: var(--s4) 0; max-width: 560px; }
 .radar .panel { margin-top: var(--s4); }
+
+/* Copilot (Preguntar) */
+.chat { display: flex; flex-direction: column; gap: var(--s3); max-width: 760px; min-height: 240px; }
+.suggest { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.turn { max-width: 88%; padding: var(--s3) var(--s4); border-radius: var(--r-panel); }
+.turn p { margin: 0; white-space: pre-line; line-height: 1.6; }
+.turn.user { align-self: flex-end; background: rgba(25, 29, 35, 0.06); }
+.turn.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.turn .tag { margin-bottom: var(--s2); }
+.ask { display: flex; gap: var(--s2); max-width: 760px; margin-top: var(--s4); }
+.ask .input { flex: 1; }

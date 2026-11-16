@@ -104,6 +104,8 @@ export type PlanBody = {
   acknowledged?: boolean
 }
 
+export type CopilotAnswer = { text: string; used_ai: boolean; ai_error: string | null }
+
 export type Rule = { entry: string; side: string; sl_atr: number; tp_atr: number; max_bars: number }
 
 export type RadarAlert = { market: string; measure: string; text: string }
@@ -155,5 +157,7 @@ export const api = {
     call<Trade>(`/api/v1/diario/${id}/cerrar`, body),
   reglas: (body: Record<string, number | null>) => call<Rules>('/api/v1/diario/reglas', body, 'PUT'),
   reservado: (body: Record<string, unknown>) => call<Verdict>('/api/v1/verificar/reservado', body),
+  copiloto: (body: { symbol: string; interval: string; question: string; history: { role: string; text: string }[] }) =>
+    call<CopilotAnswer>('/api/v1/copiloto', body),
   radar: (interval: string) => call<Radar>(`/api/v1/radar?interval=${interval}`),
 }

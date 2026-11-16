@@ -42,6 +42,7 @@ from src.journal_store import (
     summary,
     week_start,
 )
+from src.market_copilot import answer_or_facts, copilot_prompt, facts_from
 from src.operator_api.dependencies import verify_security
 from src.operator_api.security import get_client_identifier
 from src.operator_api.web_auth import require_session
@@ -408,3 +409,30 @@ def radar(interval: str = "1h") -> dict[str, Any]:
         "alerts": [alert.__dict__ for alert in result.alerts],
         "failed": result.failed,
     }
+
+
+class ChatTurn(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    text: str = Field(max_length=2000)
+
+
+class CopilotRequest(BaseModel):
+    symbol: str
+    interval: str = "1h"
+    question: str = Field(min_length=2, max_length=500)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
+
+
+@router.post("/copiloto")
+def copiloto(body: CopilotRequest) -> dict[str, Any]:
+    """Plain-language answer about one market; numbers only from the engine."""
+    facts = facts_from(hoy(body.symbol, body.interval))
+    prompt = copilot_prompt(
+        body.question, facts, [(t.role, t.text) for t in body.history]
+    )
+    try:
+        raw = _ask_ai(prompt)
+    except IdeaAgentError as exc:
+        return {"text": facts.text, "used_ai": False, "ai_error": str(exc)}
+    text, used_ai = answer_or_facts(raw, facts)
+    return {"text": text, "used_ai": used_ai, "ai_error": None}
