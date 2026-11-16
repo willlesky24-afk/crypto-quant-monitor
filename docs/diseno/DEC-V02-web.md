@@ -91,3 +91,18 @@ Nada se repite en bucle. Se retiran la moneda dorada, las barras de la intro y e
 **Marca:** el símbolo ₿ sale del logo, porque el producto cubre cuatro clases de activos. En su lugar va un índice sobre una escala, el mismo motivo de firma, en tinta y bronce.
 
 **Carga:** esqueletos con la forma de cada dato, en tinta al 6 %, y una línea honesta, por ejemplo "Leyendo BTCUSDT · Binance". Si pasan más de 8 s, se dice qué ocurre y se ofrece reintentar.
+
+## Estado: CONGELADO (2026-11-16)
+
+Aprobado por el dueño sobre capturas el 2026-11-16, tras tres rondas de auditoría independiente (58 → 72 → 80/100) y el cierre de los pendientes menores. Las actas están en `docs/diseno/auditoria-fable-2026-11-14.md`.
+
+Desde aquí, cualquier cambio de tokens, motivo de firma, movimiento o marca es una decisión del dueño y se registra como una nueva enmienda. Los ajustes que solo usan los tokens existentes no requieren enmienda.
+
+**Lo que este diseño no hace, a propósito:**
+- No tiene modo oscuro (queda para más adelante).
+- No usa color para premiar operar.
+- No tiene animaciones en bucle.
+- No muestra el símbolo de un activo como marca.
+- No inventa cifras para llenar pantallas vacías.
+
+**Pendiente sin evidencia:** el efecto al pasar el cursor, porque la herramienta de capturas no lo registra.
