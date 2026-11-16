@@ -63,7 +63,7 @@ export function CandleChart({
       },
       localization: { priceFormatter: (p: number) => formatPrice(p) },
       grid: { vertLines: { visible: false }, horzLines: { color: GRID } },
-      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 }, minimumWidth: 78, ensureEdgeTickMarksVisible: false },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 }, minimumWidth: 78, entireTextOnly: true },
       timeScale: {
         borderVisible: false,
         timeVisible: true,

@@ -9,6 +9,10 @@ export function Login({ configured, onDone }: { configured: boolean; onDone: () 
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (password.length === 0) {
+      setError('Escribe tu contraseña.')
+      return
+    }
     setBusy(true)
     setError(null)
     api
@@ -46,7 +50,7 @@ export function Login({ configured, onDone }: { configured: boolean; onDone: () 
                 {error}
               </p>
             )}
-            <button className="btn" type="submit" disabled={busy || password.length === 0}>
+            <button className="btn" type="submit" disabled={busy}>
               {busy ? 'Entrando…' : 'Entrar'}
             </button>
           </form>

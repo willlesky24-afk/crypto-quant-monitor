@@ -8,6 +8,14 @@ const MEASURE: Record<string, string> = {
   explosividad: 'Explosividad',
 }
 
+// Forex, metals and indices trade from Sunday 22:00 to Friday 21:00 UTC (approx.,
+// New York 17:00 close). Used only to explain a missing market, never to hide one.
+function forexClosedNow(now = new Date()): boolean {
+  const day = now.getUTCDay()
+  const hour = now.getUTCHours()
+  return day === 6 || (day === 5 && hour >= 21) || (day === 0 && hour < 22)
+}
+
 export function Radar({ interval }: { interval: string }) {
   const [data, setData] = useState<RadarData | null>(null)
   const [busy, setBusy] = useState(false)
@@ -35,7 +43,7 @@ export function Radar({ interval }: { interval: string }) {
       .then((d) => {
         setData(d)
         const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
-        setScannedAt(stamp.slice(11))
+        setScannedAt(stamp)
         setLastScan(stamp)
         try {
           localStorage.setItem('cqm-last-scan', stamp)
@@ -105,7 +113,8 @@ export function Radar({ interval }: { interval: string }) {
               </div>
               <div className="stat">
                 <div className="panel-title">Escaneado</div>
-                <div className="figure">{scannedAt}</div>
+                <div className="figure">{scannedAt.slice(11)}</div>
+                <p className="note">{scannedAt.slice(0, 10)}</p>
                 <p className="note">Velas de {data.interval}.</p>
               </div>
             </div>
@@ -120,19 +129,41 @@ export function Radar({ interval }: { interval: string }) {
                 </li>
               ))}
             </ul>
+            {markets && (
+              <section className="panel" aria-label="Mercados revisados">
+                <div className="panel-title">Mercados revisados</div>
+                <div className="watch">
+                  {[...markets.crypto, ...markets.other].map((m) => {
+                    const failed = m.symbol in data.failed
+                    const flagged = data.alerts.some((a) => a.market.split('/').includes(m.symbol))
+                    return (
+                      <span key={m.symbol} className={failed ? 'off' : flagged ? 'flag' : ''}>
+                        {m.label} · {failed ? 'sin datos' : flagged ? 'aviso' : 'normal'}
+                      </span>
+                    )
+                  })}
+                </div>
+                {Object.keys(data.failed).length > 0 && (
+                  <p className="note">
+                    Sin datos: el proveedor no respondió.
+                    {forexClosedNow() && ' Es fin de semana: el mercado de divisas, metales e índices está cerrado.'}
+                  </p>
+                )}
+              </section>
+            )}
             {Object.keys(data.failed).length > 0 && (
               <details className="failures">
                 <summary>
                   {Object.keys(data.failed).length === 1
                     ? '1 mercado sin datos en este escaneo'
                     : `${Object.keys(data.failed).length} mercados sin datos en este escaneo`}
-                  : {Object.keys(data.failed).join(', ')}
+                  {' '}(detalle técnico)
                 </summary>
                 <dl className="facts">
                   {Object.entries(data.failed).map(([market, reason]) => (
                     <div key={market}>
                       <dt>{market}</dt>
-                      <dd>El proveedor no respondió. Detalle técnico: {reason}</dd>
+                      <dd>{reason}</dd>
                     </div>
                   ))}
                 </dl>

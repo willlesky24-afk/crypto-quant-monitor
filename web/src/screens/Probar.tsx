@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type Method, type Verdict } from '../api'
 import { Choice, Field, NumberInput, Stat } from '../components/Fields'
+import { Scale } from '../components/Panels'
 import { formatPrice } from '../lib/format'
 
 const ENTRY_LABELS: Record<string, string> = {
@@ -236,6 +237,27 @@ export function Probar({ symbol, interval }: { symbol: string; interval: string 
               />
               <Stat title="Intento" value={String(result.attempts)} note="Cada intento exige más." />
             </div>
+            {result.ci && result.mean_r != null && (() => {
+              // Symmetric range around zero, so the centre major tick is exactly 0 R.
+              const [lo, hi] = result.ci
+              const m = Math.max(Math.abs(lo), Math.abs(hi), Math.abs(result.mean_r)) * 1.25
+              const pos = (v: number) => 50 + (v / m) * 50
+              return (
+                <div className="ci-scale">
+                  <div className="panel-title">Dónde cae la R media (marca central = 0)</div>
+                  <Scale span={[pos(lo), pos(hi)]} mark={pos(result.mean_r)} legend={[`−${m.toFixed(2)} R`, `+${m.toFixed(2)} R`]} />
+                  <p className="note">
+                    {lo <= 0 && hi >= 0
+                      ? 'El tramo bronce cruza el cero: con estos datos no se puede descartar que la ventaja sea nula.'
+                      : hi < 0
+                        ? 'Todo el tramo queda bajo cero: pierde con margen.'
+                        : 'Todo el tramo queda sobre cero.'}
+                    {result.code === 'NO_SE_DISTINGUE' && result.p_random != null && Number(result.p_random) < 0.05 &&
+                      ' Superó a casi todas las entradas al azar, pero eso no basta: el intervalo también debe quedar sobre cero.'}
+                  </p>
+                </div>
+              )
+            })()}
             <dl className="facts">
               <dt>Intervalo de la R media</dt>
               <dd className="mono">{result.ci ? `${r(result.ci[0])} a ${r(result.ci[1])}` : 'N/D'}</dd>

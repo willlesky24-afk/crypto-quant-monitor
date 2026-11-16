@@ -316,3 +316,16 @@ Puntajes: Originalidad 16/20 · Tipografía 16/20 · Composición 16/20 · Color
 Preguntas: 1) finanzas, instrumento de medición sereno y preciso; "caro" en Hoy y Riesgo, no en Radar ni Probar 2) señales cripto: ninguno; cuatro tarjetas: eco leve en las tiras de cifras; TradingView saturado: ninguno 3) la franja blanca vacía bajo el gráfico en 1440
 Veredicto: APROBADO CON CAMBIOS: últimos cortes del eje del gráfico; Radar tras escanear con retícula, fecha, nombres legibles y motivo de lo que falta; intervalo de R dibujado en la escala; botón "Entrar" en tinta; evidencia de hover y de carga sin salto.
 ```
+
+## Cierre de los pendientes menores de la ronda 3 (2026-11-16, equipo)
+
+Capturas en `docs/diseno/capturas-web/cierre/`.
+
+1. **Eje del gráfico:** las cifras que no caben enteras ya no se dibujan (`entireTextOnly`), y el gráfico llena su panel. Las fechas de los extremos en teléfono siguen dependiendo de la librería.
+2. **Radar después de escanear:** muestra cada mercado revisado con su estado ("normal", "aviso" o "sin datos"), nombres legibles, fecha y hora, y el motivo de los que faltan. Si es fin de semana, lo dice.
+3. **Probar mi idea:** el intervalo de la R media se dibuja en la escala de firma, con el cero en la marca central. Una frase aclara por qué superar al azar no basta si el intervalo cruza el cero.
+4. **Botón "Entrar":** siempre en tinta. Si la contraseña está vacía, se avisa al pulsarlo.
+5. **Evidencia:**
+   - El efecto al pasar el cursor sigue sin poder capturarse con la herramienta.
+   - La marca negra suelta no reapareció en las capturas siguientes.
+   - El paso de las siluetas de carga al dato no se volvió a medir.
