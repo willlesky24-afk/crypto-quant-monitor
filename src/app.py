@@ -205,6 +205,15 @@ st.set_page_config(
     layout="wide",
 )
 
+# Retired on 2026-11-16 in favour of the web interface (FastAPI + React). It
+# stays available only for the copilot chat and file attachments, which the web
+# does not have yet; nothing new is added here.
+st.warning(
+    "Interfaz retirada: la herramienta principal es la web "
+    "(docs/GUIA_TELEFONO.md). Esta versión queda solo para la copiloto y los "
+    "archivos adjuntos, y no recibe cambios."
+)
+
 # =====================================================================
 # CUSTOM NEON CYBER FINANCE THEME & STYLING
 # =====================================================================

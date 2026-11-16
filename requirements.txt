@@ -57,3 +57,5 @@ uvicorn==0.53.0
 watchdog==6.0.0
 websockets==16.1.1
 yarl==1.25.1
+# Block bootstrap for the verifier interval (Politis-White, plan v5 C13)
+arch==9.0.0

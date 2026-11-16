@@ -182,11 +182,14 @@ def test_final_capital_adds_the_trades_and_hold_uses_prices():
 
 
 def test_detectable_edge_is_half_the_interval():
-    v = verdict_from(_sample(0.01), [0.0] * 200, 1)
+    # Independent trades (the iid theory below only holds without dependence;
+    # _sample alternates +1/-1, an extreme dependence the block interval sees).
+    sample = list(np.random.default_rng(9).normal(0.01, 1.0, 400))
+    v = verdict_from(sample, [0.0] * 200, 1)
     low, high = v["ci"]
     assert v["mde_r"] == pytest.approx((high - low) / 2)
     # sd 1, n 400 -> se 0.05; a 95 % interval is about +/-1.96*0.05 = 0.098.
-    assert v["mde_r"] == pytest.approx(0.098, abs=0.01)
+    assert v["mde_r"] == pytest.approx(0.098, abs=0.02)
 
 
 def test_detectable_edge_absent_without_interval():
@@ -272,3 +275,36 @@ def test_spec_key_is_stable():
 
     spec = IdeaSpec("BTCUSDT", "1h", "trend_ema", "LONG", 2.0, 6.0, 120)
     assert spec_key(spec) == "BTCUSDT|1h|trend_ema|LONG|2|6|120"
+
+
+def _ar1(phi, n=600, seed=11):
+    rng = np.random.default_rng(seed)
+    e = rng.normal(0, 1, n)
+    x = np.zeros(n)
+    for i in range(1, n):
+        x[i] = phi * x[i - 1] + e[i]
+    return x
+
+
+def test_block_interval_matches_iid_when_trades_are_independent():
+    from src.evidence_evaluation import bootstrap_mean_ci
+    from src.idea_verifier import block_mean_ci
+
+    x = list(np.random.default_rng(5).normal(0.1, 1.0, 600))
+    lo_b, hi_b = block_mean_ci(x, 0.95)
+    lo_i, hi_i = bootstrap_mean_ci(x, level=0.95)
+    # Independent data: the dependent bootstrap should not change the width much.
+    assert (hi_b - lo_b) / (hi_i - lo_i) == pytest.approx(1.0, abs=0.25)
+
+
+def test_block_interval_widens_with_dependence():
+    from src.evidence_evaluation import bootstrap_mean_ci
+    from src.idea_verifier import block_mean_ci
+
+    # AR(1) with phi = 0.8: long-run variance factor (1+phi)/(1-phi) = 9, so the
+    # honest interval is about sqrt(9) = 3 times wider than the iid one.
+    x = list(_ar1(0.8))
+    lo_b, hi_b = block_mean_ci(x, 0.95)
+    lo_i, hi_i = bootstrap_mean_ci(x, level=0.95)
+    ratio = (hi_b - lo_b) / (hi_i - lo_i)
+    assert 1.8 < ratio < 4.5

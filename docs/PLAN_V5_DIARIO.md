@@ -59,6 +59,6 @@ Las decisiones marcadas **[APROBAR]** cambian fórmulas o el comportamiento del 
 ## Estado (2026-11-14)
 
 - **Hecho:** A (diario), B (reglas y revisión), C8, C9, C10, C11, C12 y D. Aprobados por el dueño el 2026-11-14.
-- **C13 pendiente:** no se pudo instalar la librería `arch`, que implementa la regla de Politis y White (2004) con la corrección de Patton, Politis y White (2009). Sin esa implementación o el artículo a la vista, la regla no se programa a mano.
+- **C13 hecho (2026-11-16):** con `arch` 9.0.0 (instalado con autorización del dueño). En datos reales el intervalo sale entre un 3 % y un 13 % más ancho (bloques de 1,2 a 2,5 operaciones). Nota anterior: no se pudo instalar la librería `arch`, que implementa la regla de Politis y White (2004) con la corrección de Patton, Politis y White (2009). Sin esa implementación o el artículo a la vista, la regla no se programa a mano.
 - **Velocidad:** el motor leía los datos fila por fila. Ahora los lee como listas, sin cambiar ninguna fórmula; se comparó la salida antes y después sobre datos reales de BTC y EUR/USD y es idéntica. Cada corrida al azar bajó de unos 15 s a alrededor de 1 s.
 - **Tiempo de espera:** con 200 corridas, "Probar mi idea" tarda unos 2–3 minutos en 1h y menos de 1 minuto en 4h.

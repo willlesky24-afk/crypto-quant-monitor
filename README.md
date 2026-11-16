@@ -137,7 +137,12 @@ Para desarrollo y pruebas:
 python -m pip install -r requirements-dev.txt
 ```
 
-## Ejecutar el dashboard
+## Ejecutar la interfaz
+
+La interfaz principal es la web: instrucciones en `docs/GUIA_TELEFONO.md`.
+
+La interfaz antigua en Streamlit está **retirada** desde el 2026-11-16. Solo se
+conserva para la copiloto y los archivos adjuntos, que la web aún no tiene:
 
 ```powershell
 streamlit run src/app.py

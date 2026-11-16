@@ -31,7 +31,7 @@ import pandas as pd
 
 from .backtest_engine import BacktestEngine
 from .backtest_models import BacktestConfig
-from .evidence_evaluation import PERIODS, bootstrap_mean_ci
+from .evidence_evaluation import PERIODS
 from .indicators import TechnicalIndicators
 from .parquet_store import ParquetStore
 from .signal_candidates import CANDIDATES, WARMUP_BARS, signals_to_events
@@ -150,6 +150,31 @@ def config_for(symbol: str, side: str, **exits: Any) -> BacktestConfig:
     return BacktestConfig(**exits)
 
 
+BLOCK_REPS = 5000
+BLOCK_SEED = 20261101
+
+
+def block_mean_ci(values: list[float], level: float) -> tuple[float, float]:
+    """Percentile interval of the mean that respects runs of related trades.
+
+    Approved 2026-11-14 (plan v5, C13). Trades in the same market regime are
+    not independent, so resampling them one by one gives an interval that is
+    too narrow. The stationary bootstrap (Politis and Romano 1994) resamples
+    blocks; the block length follows Politis and White (2004, Econometric
+    Reviews 23(1):53-70) with the correction of Patton, Politis and White
+    (2009, Econometric Reviews 28(4):372-375), as implemented in the `arch`
+    package (arch.bootstrap.optimal_block_length).
+    """
+    from arch.bootstrap import StationaryBootstrap, optimal_block_length
+
+    data = np.asarray(values, dtype=float)
+    block = max(1.0, float(optimal_block_length(data)["stationary"].iloc[0]))
+    rng = np.random.default_rng(BLOCK_SEED)
+    boot = StationaryBootstrap(block, data, seed=rng)
+    low, high = boot.conf_int(np.mean, reps=BLOCK_REPS, method="percentile", size=level)
+    return float(low[0]), float(high[0])
+
+
 MIN_RANDOM_RUNS = 200
 MAX_RANDOM_RUNS = 1000
 
@@ -242,7 +267,7 @@ def verdict_from(
             "mde_r": None,
             "p_random": None,
         }
-    low, high = bootstrap_mean_ci(r_values, level=ci_level(attempts))
+    low, high = block_mean_ci(r_values, ci_level(attempts))
     mean = float(np.mean(r_values))
     p_random = empirical_p(mean, random_means) if random_means else None
     if high < 0:
