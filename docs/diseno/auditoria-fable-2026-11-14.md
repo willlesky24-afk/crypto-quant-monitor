@@ -145,3 +145,174 @@ Para una fase posterior, no ahora: un tema oscuro (la DEC ya nombra el "Oscuro d
 ## 7. Veredicto final
 
 **Aprobado con cambios** (por rúbrica: devuelto, 58/100, lista negra con dos ítems): la dirección, la estructura y el texto son buenos y no hay que rehacerlos; lo que falla es que la idea de "instrumento" no está dibujada, no hay profundidad y la intro y el logo contradicen al producto. Los cambios 1 a 4 y la intro son condición para una segunda ronda, que debe traer capturas en 768 px y de los estados con resultados.
+
+---
+
+# Ronda 2 (2026-11-15)
+
+- **Auditor:** el mismo agente independiente de la ronda 1 (no diseñó la interfaz; juzga solo capturas, sin leer código).
+- **Material visto:** 12 capturas de `docs/diseno/capturas-web/ronda2/`, la DEC-V02 con su Enmienda 1, la rúbrica y la lista negra.
+
+## Límites de esta ronda
+
+1. **Ya están los tres anchos** (1440, 768 y 390 px). Esta vez sí es auditoría formal.
+2. **Las capturas llegan más reducidas que en la ronda 1** (1440 → 634 px; antes 800). El grano del fondo, el color exacto del bronce, el grosor de las marcas de escala y el dibujo del logo no se pueden afirmar con certeza. Donde dudo, lo digo.
+3. **Siguen sin verse** las dos pantallas que pedí como condición: el Radar después de escanear y el resultado de "Probar mi idea". Tampoco hay captura del inicio de sesión, ni de hover, foco o movimiento. Lo que no vi, no lo puntúo a favor.
+4. La intro se evalúa por descripción, no por imagen.
+
+## 1. Qué cambió frente a la ronda 1
+
+| # | Cambio pedido | Estado | Qué veo y dónde |
+|---|---|---|---|
+| 1 | Gráfico propio | **Resuelto, con defectos de acabado** | `hoy-1440`, `hoy-768`, `hoy-390`: banda de la zona de valor sobre el precio, leyenda de la vela en mono arriba a la izquierda, volumen gris al pie, etiqueta del último precio en tinta, sin indicadores añadidos, y una nota al pie que explica la banda. Defectos: la primera y la última cifra del eje de precios salen cortadas por arriba y por abajo (`hoy-1440`, `hoy-768`); la última fecha sigue cortada ("16 n", `hoy-1440` y `hoy-390`); la banda casi no se distingue en 1440; el cierre de la leyenda va en rojo. |
+| 2 | Escalas graduadas (la firma) | **Parcial** | Existe y es el mismo motivo en Volatilidad, Zona de valor y Riesgo: pista fina, marcas e índice triangular (`hoy-390-medidores` es donde mejor se ve; `riesgo-768`). Pero: (a) en 1440, que es la pantalla principal, las tarjetas son tan angostas que la escala queda diminuta y apenas se percibe (`hoy-1440`); (b) Apalancamiento escribe su posición ("mayor que el 9 % de 293 registros") en vez de dibujarla en la misma escala; (c) en 768 la escala a todo el ancho se lee como una línea con tres marcas: las menores casi no se ven. La firma existe, pero habla en voz muy baja. |
+| 3 | Dos planos reales | **Resuelto** | Fondo tibio y paneles blancos con sombra corta: ahora hay delante y detrás (`hoy-1440`, `diario-1440`). Duda: los paneles de formulario (Riesgo, Probar, "Mis reglas") parecen llevar la misma sombra que los de datos; la Enmienda dice que van planos. Verificar. |
+| 4 | Navegación atenuada | **Resuelto** | El bloque negro desapareció; el ítem activo es un fondo tenue con barra lateral (`hoy-1440`). El precio vuelve a mandar. Queda un bloque negro pequeño: el intervalo activo "1h", que compite con los botones de acción. |
+| 5 | Líneas más suaves | **Resuelto** | Radios mayores sin llegar a píldora (todas). |
+| 6 | Dar temperatura | **Resuelto en el fondo; el bronce no es verificable** | El gris frío desapareció; fondo y filetes conversan (todas). El bronce sigue siendo escasísimo y con esta reducción no puedo confirmar ni su tono ni el contraste AA de la miga. Medirlo con herramienta. |
+| 7 | Vacíos y carga diseñados | **Parcial** | Carga: resuelto, esqueletos con la forma del dato y la línea "Leyendo BTCUSDT · 1h…" (`hoy-1440-cargando`, `hoy-390-cargando`). Radar en reposo: mejor, muestra los 25 mercados que revisará como etiquetas "sin escanear" (`radar-1440-reposo`), pero sin fecha del último escaneo y con más de la mitad de la pantalla vacía. Riesgo: ya no termina a media altura (`riesgo-1440`); el esquema vertical de entrada y stop no se hizo, y no hace falta insistir. Observación: al pasar de carga a dato las cuatro tarjetas cambian de alto, así que la página da un salto. |
+| 8 | Vida en el dato | **No verificable** | No hay capturas en movimiento. No veo indicador de "mercado cerrado" (con BTC no puede aparecer; falta una captura con forex o un índice fuera de horario). |
+| 9 | Reparar lo roto | **Parcial** | Enlace azul: resuelto, ahora en tinta subrayada (`hoy-1440-cargando`, `probar-1440`). Hueco de la cabecera móvil: resuelto (`hoy-390`). "Cerrar sesión" fuera del pie: resuelto a medias; ahora es un botón "Salir" gris que parece deshabilitado, y en `diario-390` queda huérfano, solo en su renglón. Etiqueta de eje cortada: **no resuelto** ("16 n"). Botón "Entrar": sin captura, no verificable. |
+| 10 | Grano en el fondo | **No verificable** | A 634 px no se distingue. Tampoco ensucia, que era el riesgo. |
+| — | Intro y marca | **Resuelto por descripción** | Menos de 1 s, una vez por sesión, con el motivo propio (escala e índice): es lo que pedí. La moneda y el símbolo de bitcoin ya no aparecen en ninguna captura. El logo nuevo se ve como un cuadro oscuro con marcas (`hoy-768`, `hoy-390`); a ese tamaño el dibujo es apenas legible. |
+
+**Resumen:** de 10 cambios, 5 resueltos (1, 3, 4, 5, 6), 3 parciales (2, 7, 9) y 2 que no se pueden juzgar con este material (8, 10). La intro, resuelta.
+
+## 2. Lista negra: **LIMPIA, con tres observaciones**
+
+Los dos ítems de la ronda 1 desaparecieron: ya no hay acentos compitiendo (ítem 4) ni símbolo ajeno como marca (ítem 19).
+
+| Ítem | Estado | Evidencia |
+|---|---|---|
+| 7. Todo en tarjetas | Pasa, al límite | `diario-1440` y `diario-390`: cinco cajas blancas apiladas, y dos de ellas solo contienen una frase de vacío ("Sin operaciones cerradas", "Ninguna abierta"). El título y el aviso van sin caja, por eso pasa. Una caja más y no pasa. |
+| 9. Sombra idéntica en todo | Dudoso | Los formularios parecen llevar la misma sombra que los paneles de datos (`riesgo-768`, `probar-1440`). Si es así, incumple la Enmienda 1 y se acerca a este ítem. Verificar. |
+| 5. Tarjetas iguales | Pasa con observación | Las cuatro tarjetas 2×2 de `hoy-1440` siguen siendo del mismo tamaño; el contenido es distinto y dos llevan escala. |
+| 1, 2, 3, 4, 8, 12, 15, 17, 19 | Limpio | Sin morado, sin vidrio, un solo acento, radios moderados, Plex, sin emojis, marca propia. |
+
+## 3. Rúbrica
+
+| Criterio | Ronda 1 | Ronda 2 | Evidencia |
+|---|---|---|---|
+| Originalidad / firma (crítico) | 11 | **14 / 20** | Ya hay una idea dibujada: la escala con índice, repetida en tres medidores, y la zona de valor sobre el precio. Pero tapando el logo en `hoy-1440`, la firma ocupa unos pocos píxeles dentro de tarjetas angostas; lo que se reconoce es "panel claro bien hecho", no todavía "instrumento". En móvil (`hoy-390-medidores`) sí se reconoce. |
+| Tipografía (crítico) | 14 | **15 / 20** | Precio, "91 / 100", "$10.00" y "−1.00 R" en mono mandan bien; los títulos en forma de pregunta tienen voz. Persiste el amontonamiento de etiquetas y notas en dos tamaños casi iguales, y en 1440 las notas de las tarjetas se parten en tres y cuatro renglones de pocas palabras. |
+| Composición (crítico) | 12 | **15 / 20** | "Hoy" tiene ahora orden claro: precio, gráfico, medidores. Riesgo ya llena su página. Fallan: tarjetas de medidor demasiado angostas en 1440; Radar en reposo con más de media pantalla vacía; Diario como pila de cajas sin que una mande; "Salir" huérfano en `diario-390`. |
+| Color | 9 | **11 / 15** | Paleta cerrada y por fin con temperatura; los intrusos se fueron; el rojo del aviso es estado real y está contenido. El bronce sigue casi ausente y su contraste como texto está sin medir. |
+| Imagen | 7 | **11 / 15** | El gráfico dejó de ser el de fábrica y los medidores están dibujados. Restan: cifras del eje cortadas, banda casi invisible en 1440, escalas muy tenues. |
+| Detalle y acabado | 5 | **6 / 10** | Suman los esqueletos y el enlace corregido. Restan: fecha del eje aún cortada, cifras del eje cortadas, "Salir" con aspecto de deshabilitado, salto de la página al terminar la carga, y hover y foco otra vez sin evidencia. |
+| **Total** | 58 | **72 / 100** | Umbral: 80 y ningún crítico bajo 12. Ningún crítico bajo el mínimo, pero **no alcanza 80**. |
+
+### Las tres preguntas
+
+1. **Sin leer el texto, ¿sector y sensación?** Finanzas; sensación de herramienta seria, tibia y ordenada. Cumple "sereno" y ahora también "preciso". "Instrumento caro" se cumple en móvil y a medias en escritorio.
+2. **¿Parecido con las anti-referencias?** (1) App de señales cripto: ninguno. (2) SaaS de cuatro tarjetas iguales: parecido parcial que persiste en el bloque 2×2 de "Hoy" y en la pila de cajas del Diario. (3) TradingView saturado: ninguno.
+3. **¿Qué quitaría?** Las cajas alrededor de los estados vacíos del Diario. Una frase de vacío no necesita panel ni sombra.
+
+## 4. Lo que aún falta, priorizado
+
+| # | Cambio | Concreto | Riesgo para la elegancia |
+|---|---|---|---|
+| 1 | **Que la firma se vea en 1440.** | Dar más ancho a los medidores de "Hoy": o la columna derecha pasa a una sola columna de cuatro medidores horizontales, o el reparto gráfico/medidores pasa de aprox. 70/30 a 60/40. Meta: escala de al menos 280 px reales. Marcas mayores de 10 px al 60 % de tinta, menores de 5 px al 30 %; índice en bronce pleno. Dibujar Apalancamiento en la misma escala (su posición 9 de 100 ya la calcula el motor). Costo sigue en "N/D" sin escala: correcto. | Bajo. No añadir color ni un segundo motivo. Si las marcas pasan del 60 % empiezan a parecer regla escolar. |
+| 2 | **Mostrar lo que falta por ver.** | Capturas del Radar con resultados, del resultado de "Probar mi idea", del inicio de sesión, de un mercado cerrado, y de hover y foco. Deben usar el mismo motivo de escala, no inventar otro. | Ninguno; es evidencia. Sin esto no puedo aprobar aunque el puntaje suba. |
+| 3 | **Terminar el gráfico.** | Margen arriba y abajo para que no se corten la primera y la última cifra del eje; margen derecho para la última fecha; banda de la zona de valor al 12–14 % o con bordes al 50 % para que se vea en escritorio; cierre de la leyenda en tinta. | Ninguno. No subir la banda de 15 %: se vuelve mancha. |
+| 4 | **Diario: menos cajas, una que mande.** | Estados vacíos como renglón sin caja; "Últimos 30 días" como bloque principal con sus tres cifras más grandes; el resto subordinado. | Bajo. No compensar el vacío con más métricas. |
+| 5 | **"Salir" y el intervalo activo.** | "Salir" como botón de contorno en tinta suave (que no parezca deshabilitado), al pie de la navegación en escritorio y en la misma línea de la marca en móvil. Intervalo activo "1h" con el mismo trato que la navegación activa (tinta al 6 % y peso 600), para reservar el negro a la acción principal. | Muy bajo. |
+| 6 | **Medir, no suponer.** | Contraste AA del bronce de texto con herramienta; confirmar que los formularios van sin sombra; igualar el alto de los esqueletos al de las tarjetas para que la página no salte; en el Radar en reposo, fecha del último escaneo. | Ninguno. |
+
+## 5. Veredicto
+
+**Devuelto**, a ronda 3 (la última que permite la rúbrica): 72/100, bajo el umbral de 80. La lista negra queda limpia y ningún criterio crítico está bajo 12, así que **no** corresponde volver a la Fase 0: la dirección es buena y la Enmienda 1 funcionó (subió 14 puntos). Lo que separa esto de la aprobación es acabado y evidencia, no rumbo: los puntos 1, 2 y 3 son condición; 4 a 6 suman los puntos que faltan.
+
+```
+AUDITORÍA VISUAL — Quant Monitor (web) — 2026-11-15 — Ronda 2
+Auditor: agente independiente (distinto del diseñador)
+Lista negra: LIMPIA (observaciones en ítems 5, 7 y 9)
+Puntajes: Originalidad 14/20 · Tipografía 15/20 · Composición 15/20 · Color 11/15 · Imagen 11/15 · Detalle 6/10 = 72/100
+Preguntas: 1) finanzas, herramienta seria y tibia; "instrumento caro" a medias en escritorio 2) señales cripto: ninguno; cuatro tarjetas: parcial; TradingView saturado: ninguno 3) las cajas de los estados vacíos del Diario
+Veredicto: DEVUELTO con cambios: firma visible en 1440; capturas de Radar con resultados, resultado de Probar, login, hover y foco; ejes del gráfico sin cortes y banda visible; Diario con menos cajas; "Salir" e intervalo activo; medir contraste y sombras.
+```
+
+---
+
+# Ronda 3 (2026-11-15)
+
+- **Auditor:** el mismo agente independiente de las rondas 1 y 2 (no diseñó la interfaz; juzga solo capturas, sin leer código).
+- **Material visto:** 13 capturas de `docs/diseno/capturas-web/ronda3/`, la DEC-V02 con su Enmienda 1, la rúbrica y la lista negra.
+- **Es la última ronda que permite la rúbrica.**
+
+## Límites de esta ronda
+
+1. **Tres anchos presentes.** Las de 768 y 390 px llegan a tamaño real. Las de 1440 siguen reducidas a 800 px de ancho (factor 0.56): en ellas el grano del fondo, el grosor de las marcas menores y el tono exacto del bronce no se pueden afirmar con certeza.
+2. **Hover no verificable.** `hoy-1440-hover.png` no muestra diferencia apreciable frente al estado normal. El equipo declara que es un límite de la herramienta de captura; lo acepto como límite, pero el estado hover queda **sin evidencia** y no suma puntos.
+3. **Datos declarados por el equipo, que no puedo ver:** contraste del bronce de texto `#6F6140` = 6.07 sobre blanco y 5.42 sobre el fondo `#F3F2EE` (ambos por encima del 4.5 de AA); formularios sin sombra por regla de estilo; escala de "Hoy" en 1440 = 427 px. Los tomo como dato declarado. Dos de ellos coinciden con lo que veo: la escala mide unos 240 px en la captura reducida (≈ 430 px reales) y los formularios se ven planos junto a paneles de datos con sombra (`riesgo-1440-foco`, `diario-1440`).
+4. **No hay captura de carga** en esta ronda: el salto de la página al pasar de esqueleto a dato no se puede juzgar.
+5. **"Mercado cerrado" no se implementó** (declarado por el equipo).
+
+## 1. Estado de los 6 pendientes de la ronda 2
+
+| # | Pendiente | Estado | Qué veo y dónde |
+|---|---|---|---|
+| 1 | Que la firma se vea en 1440 | **Resuelto** | `hoy-1440`, `hoy-1440-medidores`: los medidores pasaron a una sola columna de cuatro paneles anchos; la escala ocupa casi todo el ancho del panel (≈ 430 px reales), con marcas mayores en los extremos y el centro, menores intermedias e índice triangular en bronce. Apalancamiento ya está dibujado en la misma escala (índice cerca del 9). Zona de valor dibuja el rango como tramo bronce y el precio como índice fuera del tramo: se entiende "debajo" sin leer. Costo sigue en "N/D" sin escala: correcto. Las notas ya no se parten en tres o cuatro renglones. Reserva: a esta reducción las marcas menores siguen muy tenues. |
+| 2 | Mostrar lo que faltaba por ver | **Parcial** | Radar con escaneo real: visto (`radar-1440-escaneado`). Resultado de "Probar mi idea": visto, dos casos (`probar-1440-resultado`, `probar-1440-pocas-operaciones`). Inicio de sesión: visto (`login-1440`). Foco por teclado: visto, contorno bronce de 2 px con esquinas redondeadas sobre "Probar mi idea" (`riesgo-1440-foco`, y también en `radar` y `diario`). **Hover: sin evidencia. Mercado cerrado: no implementado.** Nota: ninguna de las pantallas nuevas inventa un motivo distinto (bien), pero tampoco usan la escala; Radar y Probar muestran cifras escritas, no dibujadas. |
+| 3 | Terminar el gráfico | **Parcial (casi resuelto)** | Resuelto: la banda de la zona de valor ahora se ve con claridad en 1440, 768 y 390; la cifra superior del eje ya no se corta (`hoy-1440`, `hoy-768`, `hoy-390`); el cierre de la leyenda va en tinta. Queda: la cifra inferior del eje sale cortada contra el eje de fechas en `hoy-1440-medidores` ("56,000.00" a medias); la última fecha sigue cortada en móvil al desplazar ("16 no", `hoy-390-medidores`), y la primera también ("nov"); la etiqueta del último precio se monta sobre la cifra del eje que tiene detrás (`hoy-768`, `hoy-390`). |
+| 4 | Diario: menos cajas, una que mande | **Resuelto** | `diario-1440`, `diario-390`: "Esta semana" y "Abiertas" son ahora renglones sin caja con un filete; "Últimos 30 días" manda, con tres cifras grandes en mono (1, −1.00 R, 100 %); la tabla de cerradas queda subordinada. De cinco cajas a tres. |
+| 5 | "Salir" y el intervalo activo | **Resuelto** | "Salir" es un botón de contorno legible, bajo la navegación en escritorio y en la línea de la marca en 768 y 390; ya no queda huérfano. El intervalo activo "1h" lleva fondo tenue y peso 600: el negro queda reservado a la acción principal ("Escanear mercados"). |
+| 6 | Medir, no suponer | **Parcial** | Contraste: medido y dentro de AA (dato declarado). Formularios sin sombra: declarado y coincide con lo que veo. Altura de esqueletos: sin captura, no verificable. Fecha del último escaneo en el Radar: aparece la hora ("01:36 UTC") tras escanear, sin fecha, y no hay captura del reposo. |
+
+**Resumen:** 3 resueltos (1, 4, 5) y 3 parciales (2, 3, 6). Ninguno queda en "no". Lo parcial es acabado y evidencia, no rumbo.
+
+## 2. Lista negra: **LIMPIA**
+
+| Ítem | Estado | Evidencia |
+|---|---|---|
+| 5. Tarjetas idénticas en fila | Pasa | Los cuatro medidores de `hoy-1440` son ahora una columna de paneles de alto distinto y contenido distinto (escala, N/D, rango, escala). Las tiras de cuatro cifras de Radar y Probar no llevan ícono ni son tarjetas separadas. |
+| 7. Todo en tarjetas | Pasa | `diario-1440`: los vacíos salieron de las cajas. Título, aviso, "En palabras" y "Fuentes y método" van sin caja. La observación de la ronda 2 queda cerrada. |
+| 9. Sombra idéntica en todo | Pasa | Los formularios (Riesgo, "Mis reglas") se ven planos y los paneles de datos con sombra corta (`riesgo-1440-foco`, `diario-1440`); coincide con lo declarado. La duda de las rondas 1 y 2 queda cerrada, con la salvedad de la reducción. |
+| 21. Hover que levanta todo | No verificable | Sin evidencia de hover. No lo marco presente: no lo vi. |
+| 1, 2, 3, 4, 6, 8, 10–20 | Limpio | Sin morado, sin vidrio, un solo acento, radios moderados, Plex, sin emojis, sin texto de relleno, marca propia. |
+
+## 3. Rúbrica
+
+| Criterio | R1 | R2 | Ronda 3 | Evidencia |
+|---|---|---|---|---|
+| Originalidad / firma (crítico) | 11 | 14 | **16 / 20** | Tapando el logo, `hoy-1440` ya se reconoce: precio en mono, banda de valor sobre el gráfico y una columna de cuatro escalas graduadas con índice. Riesgo repite el motivo. No sube más porque Radar y Probar, que son donde el producto entrega su resultado, son pantallas limpias pero sin firma: tapando el logo podrían ser de otro producto sobrio. |
+| Tipografía (crítico) | 14 | 15 | **16 / 20** | Las tres cifras del Diario y el veredicto como titular ("No se distingue del azar", "Pocas operaciones") dan jerarquía real; las notas de los medidores ya caben en un renglón. Persiste el amontonamiento de etiqueta, pastilla de estado y nota en dos tamaños casi iguales dentro de cada panel. |
+| Composición (crítico) | 12 | 15 | **16 / 20** | "Hoy", Riesgo, Probar y Diario tienen una cosa que manda. Fallan: el Radar tras escanear deja más de media pantalla vacía y no muestra qué revisó (`radar-1440-escaneado`); en 1440 la columna de medidores es más alta que el gráfico y deja una franja blanca muerta bajo la nota del gráfico (`hoy-1440-medidores`). |
+| Color | 9 | 11 | **13 / 15** | Paleta cerrada y tibia; el bronce por fin aparece donde debe (índices, tramo de la zona de valor, banda, foco, miga) sin dejar de ser escaso; contraste AA medido (declarado). El rojo queda en estado real. Resta: el botón "Entrar" en gris medio, un tono que no es ni tinta ni estado claro. |
+| Imagen | 7 | 11 | **12 / 15** | El gráfico es propio y la banda se lee; las escalas ya son imagen. Restan los cortes que quedan en el eje (cifra inferior en 1440, fechas en 390 desplazado) y la etiqueta del precio montada sobre el eje. |
+| Detalle y acabado | 5 | 6 | **7 / 10** | Suma el foco diseñado y visto, "Salir" y el intervalo. Restan: hover sin evidencia; fecha cortada en 390 (la rúbrica pide "nada roto en 390"); el Radar muestra los códigos crudos del proveedor ("EURUSD=X"); una marca negra suelta sobre la esquina del panel "Zona de valor" en `hoy-1440` (no aparece en las otras capturas: puede ser un defecto de la captura; verificar). |
+| **Total** | 58 | 72 | **80 / 100** | Umbral: 80 y ningún crítico bajo 12. **Alcanza el umbral, justo.** Críticos en 16, 16 y 16. |
+
+El 80 es exacto y sin margen: lo sostienen los tres criterios críticos, no el acabado. Si los pendientes menores de abajo se dejan sin cerrar, el diseño no retrocede, pero tampoco tiene colchón.
+
+### Las tres preguntas
+
+1. **Sin leer el texto, ¿sector y sensación?** Finanzas; herramienta de medición serena y precisa. "Instrumento" ya se cumple en "Hoy" y Riesgo, en escritorio y en móvil. "Caro" se cumple en esas dos pantallas; Radar y Probar se ven correctas, no caras.
+2. **¿Parecido con las anti-referencias?** (1) App de señales cripto con neón: ninguno. (2) SaaS de cuatro tarjetas iguales: ninguno ya en "Hoy" ni en el Diario; queda un eco leve en las tiras de cuatro cifras de Radar y Probar, sin íconos ni color. (3) TradingView saturado: ninguno.
+3. **¿Qué quitaría?** La franja blanca vacía bajo el gráfico en 1440: o el gráfico crece hasta la altura de los medidores, o el panel termina donde termina su contenido.
+
+## 4. Pendientes menores (máximo 5)
+
+Ninguno exige otra ronda de auditoría (no queda ninguna); se pueden cerrar y mostrar al dueño en capturas.
+
+| # | Pendiente | Concreto |
+|---|---|---|
+| 1 | **Últimos cortes del gráfico** | Margen inferior para la cifra más baja del eje en 1440; que la primera y la última fecha no se corten en 390; que la etiqueta del último precio tape por completo la cifra del eje que tiene detrás; y que el gráfico llene su panel en 1440. |
+| 2 | **Radar tras escanear** | Mostrar la retícula de mercados revisados con su estado (como en reposo), fecha además de hora, nombres legibles en vez de "EURUSD=X", y el motivo de los que faltan ("mercado cerrado" o "el proveedor no respondió"). Con eso se cubre también el indicador de mercado cerrado que no se hizo. |
+| 3 | **Resultado de Probar, dibujado** | El intervalo de la R media (−0.217 a +0.250) pide la escala de firma con el cero marcado: es la misma idea que la Zona de valor. Además, observación de lectura, no de cálculo: "Azar igual o mejor 0.5 %" junto al veredicto "No se distingue del azar" puede leerse como contradicción por alguien no técnico; conviene una frase que lo aclare. |
+| 4 | **Botón "Entrar"** | En tinta plena como "Escanear mercados". Si el gris es el estado "campo vacío", mostrar una captura con la contraseña escrita para comprobar el estado activo. |
+| 5 | **Evidencia que se debe** | Hover de los paneles de datos (aunque sea con una foto de pantalla), paso de esqueleto a dato sin salto, y confirmar que la marca negra sobre "Zona de valor" en `hoy-1440` es de la captura y no de la página. |
+
+## 5. Veredicto
+
+**Aprobado con cambios.** Lista negra limpia, 80/100 (umbral 80) y ningún criterio crítico bajo 12 (16, 16 y 16). La dirección de la DEC-V02 con su Enmienda 1 queda validada: en tres rondas pasó de 58 a 72 a 80, y lo que subió fue lo de fondo (firma, composición, color), no solo el pulido. No corresponde volver a la Fase 0.
+
+"Con cambios" significa: los cinco pendientes menores se cierran antes de congelar el diseño. Según la rúbrica, la aprobación final además exige la **aprobación del dueño sobre capturas** y el registro del diseño como **congelado** en la documentación; eso no lo decide el auditor.
+
+```
+AUDITORÍA VISUAL — Quant Monitor (web) — 2026-11-15 — Ronda 3
+Auditor: agente independiente (distinto del diseñador)
+Lista negra: LIMPIA (ítem 21 no verificable: sin evidencia de hover)
+Puntajes: Originalidad 16/20 · Tipografía 16/20 · Composición 16/20 · Color 13/15 · Imagen 12/15 · Detalle 7/10 = 80/100
+Preguntas: 1) finanzas, instrumento de medición sereno y preciso; "caro" en Hoy y Riesgo, no en Radar ni Probar 2) señales cripto: ninguno; cuatro tarjetas: eco leve en las tiras de cifras; TradingView saturado: ninguno 3) la franja blanca vacía bajo el gráfico en 1440
+Veredicto: APROBADO CON CAMBIOS: últimos cortes del eje del gráfico; Radar tras escanear con retícula, fecha, nombres legibles y motivo de lo que falta; intervalo de R dibujado en la escala; botón "Entrar" en tinta; evidencia de hover y de carga sin salto.
+```

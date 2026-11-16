@@ -29,6 +29,9 @@ export function Panel({
 // Positions are 0-100 along the track; values outside are clamped to the edge.
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 
+// The signature motif (DEC-V02 Enmienda 1): a graduated scale with a fine
+// triangular index, the same on every meter. "fill" places the index at a
+// value; "span" draws a bronze segment (a range) and "mark" the current value.
 export function Scale({
   fill,
   span,
@@ -40,17 +43,16 @@ export function Scale({
   mark?: number | null
   legend?: [string, string]
 }) {
+  const index = mark ?? fill
   return (
     <>
-      <div className="scale" aria-hidden="true">
-        {fill != null && <div className="fill" style={{ left: 0, width: `${clamp(fill)}%` }} />}
+      <div className="gauge" aria-hidden="true">
+        <div className="gauge-ticks" />
+        <div className="gauge-track" />
         {span && (
-          <div
-            className="fill"
-            style={{ left: `${clamp(span[0])}%`, width: `${clamp(span[1]) - clamp(span[0])}%` }}
-          />
+          <div className="gauge-span" style={{ left: `${clamp(span[0])}%`, width: `${clamp(span[1]) - clamp(span[0])}%` }} />
         )}
-        {mark != null && <div className="mark" style={{ left: `${clamp(mark)}%` }} />}
+        {index != null && <div className="gauge-index" style={{ left: `${clamp(index)}%` }} />}
       </div>
       {legend && (
         <div className="scale-legend">

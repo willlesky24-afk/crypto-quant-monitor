@@ -1,7 +1,7 @@
 // Types mirror src/market_service.py::today_payload. Numbers may be null:
 // a missing value is shown as N/D, never replaced by zero.
 export type Level = { status: string; tone: '' | 'warn' | 'good' }
-export type Candle = { time: number; open: number; high: number; low: number; close: number }
+export type Candle = { time: number; open: number; high: number; low: number; close: number; volume?: number | null }
 
 export type Hoy = {
   symbol: string

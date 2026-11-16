@@ -142,6 +142,8 @@ def today_payload(
             "high": float(row.high),
             "low": float(row.low),
             "close": float(row.close),
+            # Volume is drawn under the price; a missing value stays None.
+            "volume": float(row.volume) if pd.notna(row.volume) else None,
         }
         for row in tail.itertuples()
     ]

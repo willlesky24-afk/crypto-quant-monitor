@@ -56,3 +56,38 @@ Las cifras usan punto decimal y coma de miles (`66,755.66`), igual que las plata
 ## Atribución del gráfico
 
 El logo de TradingView se quita del área de datos y la atribución va como enlace en el pie de la navegación ("Gráficos: TradingView Lightweight Charts").
+
+## Enmienda 1 (2026-11-15, aprobada por el dueño tras la auditoría de Fable 58/100)
+
+Motivo: con "sombra: ninguna" y valores tan tímidos, la interfaz quedó en un solo plano ("luce muerta"). La idea de "instrumento" estaba escrita, pero no dibujada.
+
+| Token | Antes | Ahora | Por qué |
+|---|---|---|---|
+| `--bg` | `#F6F8F9` (gris frío) | `#F3F2EE` (perla tibia) | Conversa con el bronce y separa el fondo de los paneles blancos |
+| `--line` | tinta al 8 % | `rgba(60, 50, 30, 0.10)` | Filete tibio, más suave |
+| `--accent-ink` | — | `#6F6140` | Bronce para texto pequeño (AA). `--accent` queda para trazos y rellenos |
+| Radio | 10 / 6 px | 14 px paneles · 8 px controles · 4 px etiquetas | Líneas más suaves, sin llegar a píldora |
+| Sombra | ninguna | **Solo paneles de datos:** `0 1px 2px` al 5 % + `0 8px 24px -12px` al 10 %, en tinta, más una luz interior superior de 1 px | Dos planos reales. Formularios y texto siguen planos. |
+| Navegación activa | bloque negro | fondo de tinta al 6 %, barra bronce de 2 px y peso 600 | El precio manda, no el menú |
+| Textura | — | grano estático al 2,5 % solo en el fondo | Textura, sin ensuciar |
+
+**Motivo de firma: la escala graduada.** Todos los medidores (volatilidad, costo, zona de valor, riesgo) usan la misma escala: pista de 2 px, marcas menores cada 10 y mayores cada 50, y un índice triangular fino en lugar de una barra rellena. Es la única ornamentación del sistema.
+
+**Gráfico:**
+- Zona de valor dibujada como banda bronce al 9 % sobre el precio, con bordes de 1 px.
+- Volumen en gris al pie.
+- Leyenda de la vela (apertura, máximo, mínimo, cierre) en mono, arriba a la izquierda.
+- Etiqueta del último precio en tinta, no en rojo.
+- Sin indicadores añadidos.
+
+**Movimiento (sube de 3 a 4):**
+1. Panel de datos: la sombra crece al pasar el cursor, 200 ms.
+2. Medidor: el índice se asienta al cargar, 450 ms con frenado suave.
+3. Foco visible: contorno bronce de 2 px.
+4. Marca de arranque: las marcas de una escala se trazan y el índice se asienta, en 800 ms como máximo, solo en el primer arranque de la sesión.
+
+Nada se repite en bucle. Se retiran la moneda dorada, las barras de la intro y el punto que late. Con `prefers-reduced-motion` no hay animación.
+
+**Marca:** el símbolo ₿ sale del logo, porque el producto cubre cuatro clases de activos. En su lugar va un índice sobre una escala, el mismo motivo de firma, en tinta y bronce.
+
+**Carga:** esqueletos con la forma de cada dato, en tinta al 6 %, y una línea honesta, por ejemplo "Leyendo BTCUSDT · Binance". Si pasan más de 8 s, se dice qué ocurre y se ofrece reintentar.

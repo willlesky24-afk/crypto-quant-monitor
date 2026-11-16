@@ -15,8 +15,6 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
       .hoy(symbol, interval)
       .then(setData)
       .catch((e: Error) => setError(e.message))
-      // The intro waits for this signal; an error also ends it so the user sees it.
-      .finally(() => window.dispatchEvent(new Event('cqm-ready')))
   }, [symbol, interval])
 
   useEffect(load, [load])
@@ -32,7 +30,23 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
         </div>
       </div>
     )
-  if (!data) return <div className="panel empty soft">Cargando {symbol}…</div>
+  if (!data)
+    return (
+      <div className="loading" aria-busy="true">
+        <p className="soft">
+          Leyendo {symbol} · {interval}…
+        </p>
+        <div className="sk sk-price" />
+        <div className="grid">
+          <div className="sk sk-chart span-7" />
+          <div className="span-5 meters">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="sk sk-meter" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
 
   const change = data.change_24h_pct
   const zone = data.zone
@@ -57,11 +71,11 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
       </header>
 
       <div className="grid">
-        <Panel title="Precio" className="span-8">
-          <CandleChart candles={data.candles} />
+        <Panel title="Precio" className="span-7 chart-panel">
+          <CandleChart candles={data.candles} zoneVal={zone.val} zoneVah={zone.vah} />
         </Panel>
 
-        <div className="span-4 meters">
+        <div className="span-5 meters">
           <Panel title="Volatilidad" status={data.volatility.status} tone={data.volatility.tone}>
             <div className="figure">
               {data.volatility.percentile == null ? 'N/D' : Math.round(data.volatility.percentile)}
@@ -102,6 +116,9 @@ export function Hoy({ symbol, interval }: { symbol: string; interval: string }) 
               tone={!funding.error && (funding.size_percentile ?? 0) >= 80 ? 'warn' : ''}
             >
               <div className="figure">{funding.error ? 'N/D' : formatPct(funding.rate_pct, 4, true)}</div>
+              {!funding.error && funding.size_percentile != null && (
+                <Scale fill={funding.size_percentile} legend={['0', '100']} />
+              )}
               <p className="note">
                 {funding.error
                   ? funding.error

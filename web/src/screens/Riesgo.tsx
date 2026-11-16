@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type RiskPlan } from '../api'
 import { Choice, Field, NumberInput, Stat } from '../components/Fields'
+import { Scale } from '../components/Panels'
 import { formatPct, formatPrice } from '../lib/format'
 
 const money = (v: number) =>
@@ -128,13 +129,8 @@ export function Riesgo({ symbol, interval }: { symbol: string; interval: string 
             <>
               <div className="panel-title">Pérdida si toca el stop</div>
               <div className="hero-figure">{money(plan.max_loss)}</div>
-              <div className="scale" aria-hidden="true">
-                <div className="fill" style={{ left: 0, width: `${Math.min(100, (plan.max_loss / capital) * 100 * 20)}%` }} />
-              </div>
-              <div className="scale-legend">
-                <span>{formatPct((plan.max_loss / capital) * 100)} de tu capital</span>
-                <span>5 %</span>
-              </div>
+              <Scale fill={(plan.max_loss / capital) * 100 * 20} legend={['0 %', '5 % del capital']} />
+              <p className="note">{formatPct((plan.max_loss / capital) * 100)} de tu capital.</p>
               <div className="stats three">
                 <Stat title="Tamaño" value={plan.units.toLocaleString('en-US', { maximumFractionDigits: 4 })} note="Unidades del activo." />
                 <Stat title="Valor de la posición" value={money(plan.notional)} note={`De un capital de ${money(capital)}.`} />

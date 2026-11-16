@@ -7,6 +7,7 @@ import { Radar } from './screens/Radar'
 import { Riesgo } from './screens/Riesgo'
 import { Diario } from './screens/Diario'
 import { Splash } from './components/Splash'
+import { Mark } from './components/Mark'
 
 const SCREENS = [
   { id: 'hoy', label: 'Hoy' },
@@ -22,7 +23,6 @@ export default function App() {
   const [symbol, setSymbol] = useState('BTCUSDT')
   const [interval, setInterval] = useState('1h')
   const [markets, setMarkets] = useState<Markets | null>(null)
-  const [ready, setReady] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
 
   const checkSession = () =>
@@ -39,10 +39,6 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (session && !session.authenticated) setReady(true)
-  }, [session])
-
-  useEffect(() => {
     if (!session?.authenticated) return
     api
       .mercados()
@@ -50,27 +46,20 @@ export default function App() {
       .catch(() => setMarkets(null))
   }, [session?.authenticated])
 
-  useEffect(() => {
-    const done = () => setReady(true)
-    window.addEventListener('cqm-ready', done)
-    const cap = window.setTimeout(done, 15000) // never trap the user behind the intro
-    return () => {
-      window.removeEventListener('cqm-ready', done)
-      window.clearTimeout(cap)
-    }
-  }, [])
-
   return (
     <>
-    <Splash ready={ready} />
+    <Splash />
     {session && !session.authenticated ? (
       <Login configured={session.configured} onDone={checkSession} />
     ) : session && (
     <div className="shell">
       <nav className="nav" aria-label="Secciones">
         <div className="brand">
-          Quant Monitor
-          <small>Antes de arriesgar tu dinero, compruébalo.</small>
+          <Mark />
+          <div>
+            Quant Monitor
+            <small>Antes de arriesgar tu dinero, compruébalo.</small>
+          </div>
         </div>
         <ul>
           {SCREENS.map((s) => (
@@ -81,6 +70,9 @@ export default function App() {
             </li>
           ))}
         </ul>
+        <button className="btn quiet nav-exit" type="button" onClick={() => api.salir().then(checkSession)}>
+          Salir
+        </button>
         <div className="foot">
           Sin recomendaciones de inversión.
         </div>
@@ -117,6 +109,7 @@ export default function App() {
               )}
             </select>
             )}
+            {screen !== 'diario' && (
             <div className="segmented" role="group" aria-label="Temporalidad">
               {(markets?.intervals ?? ['15m', '1h', '4h', '1d']).map((iv) => (
                 <button key={iv} aria-pressed={interval === iv} onClick={() => setInterval(iv)}>
@@ -124,6 +117,7 @@ export default function App() {
                 </button>
               ))}
             </div>
+            )}
           </div>
         </div>
 
@@ -140,9 +134,6 @@ export default function App() {
             TradingView Lightweight Charts
           </a>
           .
-        <button className="link" type="button" onClick={() => api.salir().then(checkSession)}>
-          Cerrar sesión
-        </button>
         </footer>
       </main>
     </div>

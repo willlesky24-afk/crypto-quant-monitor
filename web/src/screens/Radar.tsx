@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { api, type Radar as RadarData } from '../api'
+import { useEffect, useState } from 'react'
+import { api, type Markets, type Radar as RadarData } from '../api'
 
 const MEASURE: Record<string, string> = {
   compresion: 'Compresión',
@@ -13,6 +13,19 @@ export function Radar({ interval }: { interval: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scannedAt, setScannedAt] = useState('')
+  const [markets, setMarkets] = useState<Markets | null>(null)
+  // Per-viewer convenience: when this browser last scanned (may be unavailable).
+  const [lastScan, setLastScan] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('cqm-last-scan')
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    api.mercados().then(setMarkets).catch(() => setMarkets(null))
+  }, [])
 
   const scan = () => {
     setBusy(true)
@@ -21,7 +34,14 @@ export function Radar({ interval }: { interval: string }) {
       .radar(interval)
       .then((d) => {
         setData(d)
-        setScannedAt(new Date().toISOString().slice(11, 16) + ' UTC')
+        const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
+        setScannedAt(stamp.slice(11))
+        setLastScan(stamp)
+        try {
+          localStorage.setItem('cqm-last-scan', stamp)
+        } catch {
+          // storage blocked: the date is simply not remembered
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false))
@@ -40,6 +60,24 @@ export function Radar({ interval }: { interval: string }) {
       <button className="btn" onClick={scan} disabled={busy} type="button">
         {busy ? 'Revisando mercados… puede tardar un minuto' : 'Escanear mercados'}
       </button>
+
+      {!data && !busy && markets && (
+        <section className="panel" aria-label="Mercados a revisar">
+          <div className="panel-title">
+            Sin escanear · revisará {markets.crypto.length + markets.other.length} mercados ·{' '}
+            {lastScan ? `último escaneo en este navegador: ${lastScan}` : 'ningún escaneo previo en este navegador'}
+          </div>
+          <div className="watch">
+            {[...markets.crypto, ...markets.other].map((m) => (
+              <span key={m.symbol}>{m.label}</span>
+            ))}
+          </div>
+          <p className="note">
+            Por cada mercado: compresión de la volatilidad, fuerza frente a su grupo, ruptura de correlación y
+            crecimiento explosivo. Tarda alrededor de un minuto.
+          </p>
+        </section>
+      )}
 
       <section aria-live="polite" className="radar">
         {error && (

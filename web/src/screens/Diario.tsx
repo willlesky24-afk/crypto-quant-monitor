@@ -16,13 +16,18 @@ const usd = (v: number | null) =>
   v == null ? 'N/D' : `${v < 0 ? '−' : ''}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = (v: number | null) => (v == null ? 'N/D' : `${v.toFixed(0)} %`)
 
-function SummaryStats({ title, s }: { title: string; s: Summary }) {
+function SummaryStats({ title, s, lead = false }: { title: string; s: Summary; lead?: boolean }) {
+  // An empty period is a line of text, not a box: there is nothing to frame.
+  if (s.closed === 0)
+    return (
+      <p className="empty-line">
+        <b>{title}:</b> sin operaciones cerradas.
+      </p>
+    )
   return (
-    <section className="panel" aria-label={title}>
+    <section className={`panel${lead ? ' lead' : ''}`} aria-label={title}>
       <div className="panel-title">{title}</div>
-      {s.closed === 0 ? (
-        <p className="soft">Sin operaciones cerradas.</p>
-      ) : (
+      {(
         <div className="stats three">
           <Stat title="Cerradas" value={String(s.closed)} note={s.worst_streak === 1 ? 'Peor racha: 1 pérdida.' : `Peor racha: ${s.worst_streak ?? 'N/D'} pérdidas.`} />
           <Stat title="R medio" value={rText(s.mean_r)} note={`Resultado: ${usd(s.pnl_usd)}.`} />
@@ -130,12 +135,16 @@ export function Diario() {
 
       <div className="grid">
         <div className="span-8 stack">
+          <SummaryStats title="Últimos 30 días" s={data.mes} lead />
           <SummaryStats title="Esta semana" s={data.semana} />
-          <SummaryStats title="Últimos 30 días" s={data.mes} />
 
+          {open.length === 0 ? (
+            <p className="empty-line">
+              <b>Abiertas:</b> ninguna. Guarda un plan desde Mi riesgo.
+            </p>
+          ) : (
           <section className="panel" aria-label="Abiertas">
             <div className="panel-title">Abiertas ({open.length})</div>
-            {open.length === 0 && <p className="soft">Ninguna abierta.</p>}
             {open.map((t) => (
               <details key={t.id} className="trade">
                 <summary>
@@ -149,12 +158,16 @@ export function Diario() {
               </details>
             ))}
           </section>
+          )}
 
+          {closed.length === 0 ? (
+            <p className="empty-line">
+              <b>Cerradas:</b> aún no cierras operaciones.
+            </p>
+          ) : (
           <section className="panel" aria-label="Cerradas">
             <div className="panel-title">Cerradas ({closed.length})</div>
-            {closed.length === 0 ? (
-              <p className="soft">Aún no cierras operaciones.</p>
-            ) : (
+            {(
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -183,6 +196,7 @@ export function Diario() {
               </div>
             )}
           </section>
+          )}
         </div>
 
         <section className="panel span-4 form" aria-label="Mis reglas">

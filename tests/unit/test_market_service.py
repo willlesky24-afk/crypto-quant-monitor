@@ -47,6 +47,7 @@ def test_payload_matches_the_engine_and_keeps_gaps_as_none():
     assert p["funding"] is None
     assert len(p["candles"]) == 300
     assert p["candles"][-1]["close"] == pytest.approx(float(df["close"].iloc[-1]))
+    assert p["candles"][-1]["volume"] == pytest.approx(float(df["volume"].iloc[-1]))
     assert p["source"] == "BINANCE"
 
 

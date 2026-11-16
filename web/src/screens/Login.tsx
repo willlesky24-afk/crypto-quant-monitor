@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { api } from '../api'
+import { Mark } from '../components/Mark'
 
 export function Login({ configured, onDone }: { configured: boolean; onDone: () => void }) {
   const [password, setPassword] = useState('')
@@ -21,8 +22,11 @@ export function Login({ configured, onDone }: { configured: boolean; onDone: () 
     <main className="login">
       <div className="login-card panel">
         <div className="brand">
-          Quant Monitor
-          <small>Antes de arriesgar tu dinero, compruébalo.</small>
+          <Mark />
+          <div>
+            Quant Monitor
+            <small>Antes de arriesgar tu dinero, compruébalo.</small>
+          </div>
         </div>
         {configured ? (
           <form onSubmit={submit}>

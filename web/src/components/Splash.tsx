@@ -1,43 +1,41 @@
 import { useEffect, useState } from 'react'
+import { Mark } from './Mark'
 
-// Intro shown on each page load: bars rise, shrink to the centre, and a BTC coin
-// spins until the first data arrives. Skipped entirely with reduced motion.
-const BARS = [38, 62, 48, 80, 56, 92, 70, 100, 64, 84]
-const MIN_MS = 2600
+// Start mark (DEC-V02 Enmienda 1): the scale draws itself and the index
+// settles, 800 ms at most, once per browser session. It never waits for data:
+// the screens show their own skeletons while they load.
+const DURATION_MS = 800
+const SEEN_KEY = 'cqm-mark-seen'
 
-export function Splash({ ready }: { ready: boolean }) {
+function alreadySeen(): boolean {
+  try {
+    return sessionStorage.getItem(SEEN_KEY) === '1'
+  } catch {
+    return false // storage blocked: show the mark, it is short
+  }
+}
+
+export function Splash() {
   const reduce =
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const [minDone, setMinDone] = useState(false)
-  const [gone, setGone] = useState(false)
+  const [gone, setGone] = useState(() => reduce || alreadySeen())
 
   useEffect(() => {
-    const id = window.setTimeout(() => setMinDone(true), MIN_MS)
+    if (gone) return
+    try {
+      sessionStorage.setItem(SEEN_KEY, '1')
+    } catch {
+      // storage blocked: the mark simply shows again next time
+    }
+    const id = window.setTimeout(() => setGone(true), DURATION_MS)
     return () => window.clearTimeout(id)
-  }, [])
+  }, [gone])
 
-  const leaving = ready && minDone
-  useEffect(() => {
-    if (!leaving) return
-    const id = window.setTimeout(() => setGone(true), 500)
-    return () => window.clearTimeout(id)
-  }, [leaving])
-
-  if (gone || reduce) return null
+  if (gone) return null
   return (
-    <div className={`splash${leaving ? ' leaving' : ''}`} role="status" aria-label="Cargando Quant Monitor">
-      <div className="splash-bars" aria-hidden="true">
-        {BARS.map((h, i) => (
-          <span key={i} style={{ height: `${h}%`, animationDelay: `${i * 60}ms` }} />
-        ))}
-      </div>
-      <div className="coin" aria-hidden="true">
-        <div className="coin-face">₿</div>
-      </div>
-      <div className="splash-name">
-        Quant Monitor
-        <small>{ready ? 'Listo' : 'Leyendo el mercado…'}</small>
-      </div>
+    <div className="splash" role="status" aria-label="Abriendo Quant Monitor">
+      <Mark size={72} animate />
+      <div className="splash-name">Quant Monitor</div>
     </div>
   )
 }
